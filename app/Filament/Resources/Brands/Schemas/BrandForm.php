@@ -1,8 +1,9 @@
 <?php
 
-namespace App\Filament\Resources\Categories\Schemas;
+namespace App\Filament\Resources\Brands\Schemas;
 
 use App\Filament\Resources\Common\HasStandardFields;
+use App\Models\Brand;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -13,17 +14,17 @@ use App\Models\Category;
 use Illuminate\Support\Str;
 use Filament\Forms\Set;
 
-class CategoryForm
+class BrandForm
 {
     use HasStandardFields;
-    
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
-            ->components([
-                Section::make('Información de Categoría')
-                    ->description('Configura los detalles principales de la categoría')
-                    ->schema(static::getStandardSchema(Category::class)),
-            ]);
+             ->components([
+                Section::make('Información de marca')
+                    ->description('Configura los detalles principales de la marca')
+                    ->schema(static::getStandardSchema(Brand::class))
+                ]);
     }
 }
