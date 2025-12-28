@@ -22,7 +22,9 @@ class BrandsTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable(),
-                ImageColumn::make('image'),
+                ImageColumn::make('image')
+                    ->visibility('public')
+                    ->disk('public'),
                 TextColumn::make('slug')
                     ->searchable(),
                 IconColumn::make('is_active')

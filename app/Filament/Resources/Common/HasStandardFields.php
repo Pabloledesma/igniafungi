@@ -23,7 +23,8 @@ trait HasStandardFields {
                 
             FileUpload::make('image')
                 ->image()
-                ->directory('uploads'),
+                ->directory('uploads')
+                ->disk('public'),
                 
             Toggle::make('is_active')
                 ->required()
