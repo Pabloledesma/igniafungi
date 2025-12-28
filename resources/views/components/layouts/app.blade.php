@@ -8,13 +8,15 @@
         @vite('resources/css/app.css')    
         @vite('resources/js/app.js')  
         @livewireStyles 
+        <script src="https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" type="module"></script>
     </head>
     <body class="bg-slate-200 dark:bg-slate-700">
+        @livewire('partials.navbar')
         <main id="app">
             {{ $slot }}
         </main>
 
-        
+        @livewire('partials.footer')
         @livewireScripts
     </body>
 </html>
