@@ -29,6 +29,9 @@ class ProductsPage extends Component
     #[Url]
     public $price_range = 1000000;
 
+    #[Url]
+    public $sort;
+
 
     public function render()
     {
@@ -59,6 +62,13 @@ class ProductsPage extends Component
             $query->whereBetween('price', [0, $this->price_range]);
         }
 
+        if($this->sort == 'latest') {
+            $query->latest();
+        }
+
+        if($this->sort == 'price') {
+            $query->orderBy('price');
+        }
 
         $attributes = ['id', 'name', 'slug'];
 
