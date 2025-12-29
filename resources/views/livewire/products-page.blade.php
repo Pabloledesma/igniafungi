@@ -23,7 +23,6 @@
               </li>
               @endforeach
             </ul>
-
           </div>
           <div class="p-4 mb-5 bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-900">
             <h2 class="text-2xl font-bold dark:text-gray-400">Brand</h2>
@@ -32,7 +31,12 @@
               @foreach($brands as $brand)
               <li class="mb-4" wire:key="{{ $brand->id }}">
                 <label for="{{ $brand->slug }}" class="flex items-center dark:text-gray-300">
-                  <input type="checkbox" class="w-4 h-4 mr-2" id="{{ $brand->slug }}" value="{{ $brand->id }}">>
+                  <input 
+                    id="{{ $brand->slug }}"
+                    wire:model.change="selected_brands" 
+                    type="checkbox" 
+                    class="w-4 h-4 mr-2" 
+                    value="{{ $brand->id }}">
                   <span class="text-lg dark:text-gray-400">{{ $brand->name }}</span>
                 </label>
               </li>
@@ -44,15 +48,23 @@
             <div class="w-16 pb-2 mb-6 border-b border-rose-600 dark:border-gray-400"></div>
             <ul>
               <li class="mb-4">
-                <label for="" class="flex items-center dark:text-gray-300">
-                  <input type="checkbox" class="w-4 h-4 mr-2">
-                  <span class="text-lg dark:text-gray-400">In Stock</span>
+                <label for="featured" class="flex items-center dark:text-gray-300">
+                  <input 
+                    id="featured" 
+                    type="checkbox" 
+                    wire:model.change="featured" 
+                    class="w-4 h-4 mr-2">
+                  <span class="text-lg dark:text-gray-400">Is Featured</span>
                 </label>
               </li>
               <li class="mb-4">
-                <label for="" class="flex items-center dark:text-gray-300">
-                  <input type="checkbox" class="w-4 h-4 mr-2">
-                  <span class="text-lg dark:text-gray-400">On Sale</span>
+                <label for="in_stock" class="flex items-center dark:text-gray-300">
+                  <input 
+                    id="in_stock"
+                    type="checkbox" 
+                    wire:model.change="in_stock" 
+                    class="w-4 h-4 mr-2">
+                  <span class="text-lg dark:text-gray-400">In stok</span>
                 </label>
               </li>
             </ul>
@@ -62,10 +74,17 @@
             <h2 class="text-2xl font-bold dark:text-gray-400">Price</h2>
             <div class="w-16 pb-2 mb-6 border-b border-rose-600 dark:border-gray-400"></div>
             <div>
-              <input type="range" class="w-full h-1 mb-4 bg-blue-100 rounded appearance-none cursor-pointer" max="500000" value="100000" step="100000">
               <div class="flex justify-between ">
-                <span class="inline-block text-lg font-bold text-blue-400 ">&#8377; 1000</span>
-                <span class="inline-block text-lg font-bold text-blue-400 ">&#8377; 500000</span>
+                <div class="finline-block text-sm text-blue-400">{{ Number::currency($price_range, 'COP') }}</div>
+              </div>
+              <input 
+                wire:model.change="price_range"
+                type="range" 
+                class="w-full h-1 mb-4 bg-blue-100 rounded appearance-none cursor-pointer" 
+                max="10000000" value="1000000" step="100000">
+              <div class="flex justify-between ">
+                <span class="inline-block text-sm font-bold text-blue-400">{{ Number::currency(100000, 'COP') }}</span>
+                <span class="inline-block text-sm font-bold text-blue-400">{{ Number::currency(10000000, 'COP') }}</span>
               </div>
             </div>
           </div>

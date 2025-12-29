@@ -50,6 +50,6 @@ class Product extends Model
             return 'public/storage/upload/Imagen-interrogante-2.png'; // Ruta relativa a public
         }
 
-        return 'storage/' . $this->images[0];
+        return $this->images[0];
     }
 }
