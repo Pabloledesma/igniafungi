@@ -2,17 +2,16 @@
 
 namespace App\Filament\Resources\Products\Schemas;
 
-use Filament\Forms\Form;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\Toggle;
+use Illuminate\Support\Str;
 use Filament\Schemas\Schema;
-use Filament\Schemas\Components\Section;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
-use Filament\Forms\Components\MarkdownEditor;
+use Filament\Forms\Components\TextInput;
+use Filament\Schemas\Components\Section;
 use Filament\Forms\Components\FileUpload;
-use Filament\Forms\Components\Select;
+use Filament\Forms\Components\MarkdownEditor;
 
 
 class ProductForm
@@ -42,7 +41,9 @@ class ProductForm
                         FileUpload::make('images')
                             ->multiple()
                             ->directory('products')
+                            ->disk('public')
                             ->maxFiles(5)
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
                             ->reorderable()
                             ->columnSpanFull()
                   
