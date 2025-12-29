@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 
 
 class Product extends Model
 {
+    use HasFactory;
     protected $fillable = [
         'category_id',
         'brand_id',
@@ -40,5 +42,14 @@ class Product extends Model
     public function orderItems(): HasMany
     {
         return $this->hasMany(OrderItem::class);
+    }
+
+    public function getFirstImageAttribute()
+    {
+        if (empty($this->images) || !is_array($this->images)) {
+            return 'public/storage/upload/Imagen-interrogante-2.png'; // Ruta relativa a public
+        }
+
+        return 'storage/' . $this->images[0];
     }
 }
