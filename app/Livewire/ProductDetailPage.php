@@ -2,6 +2,7 @@
 
 namespace App\Livewire;
 
+use App\Livewire\Traits\AddsToCart;
 use App\Models\Product;
 use Livewire\Component;
 use Livewire\Attributes\Title;
@@ -10,6 +11,21 @@ use Livewire\Attributes\Title;
 class ProductDetailPage extends Component
 {
     public $slug;
+    public $quantity = 1;
+
+    use AddsToCart;
+
+    public function decrementQuantity()
+    {
+        if ($this->quantity > 1) {
+            $this->quantity--;
+        }
+    }
+
+    public function incrementQuantity()
+    {
+        $this->quantity++;
+    }
 
     public function mount($slug)
     {

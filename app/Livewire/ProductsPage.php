@@ -9,14 +9,13 @@ use App\Models\Category;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
 use Livewire\Attributes\Title;
-use App\Helpers\CartManagement;
-use App\Livewire\Partials\Navbar;
-use Jantinnerezo\LivewireAlert\Facades\LivewireAlert;
+use App\Livewire\Traits\AddsToCart;
 
 #[Title('Products Page')]
 class ProductsPage extends Component
 {
     use WithPagination;
+    use AddsToCart;
     #[Url]
     public $selected_categories = [];
     
@@ -34,19 +33,6 @@ class ProductsPage extends Component
 
     #[Url]
     public $sort;
-
-    public function addToCart($product_id)
-    {
-        $count_items = CartManagement::addItemsToCart($product_id);
-        if($count_items > 0){
-            $this->dispatch('update-cart-count', total_count: $count_items)->to(Navbar::class);
-        }
-
-        LivewireAlert::title('Product added to the cart successfully!')
-            ->success()
-            ->show();
-
-    }
 
     public function render()
     {
