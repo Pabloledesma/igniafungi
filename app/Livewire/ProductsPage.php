@@ -9,6 +9,8 @@ use App\Models\Category;
 use Livewire\Attributes\Url;
 use Livewire\WithPagination;
 use Livewire\Attributes\Title;
+use App\Helpers\CartManagement;
+use App\Livewire\Partials\Navbar;
 
 #[Title('Products Page')]
 class ProductsPage extends Component
@@ -32,6 +34,13 @@ class ProductsPage extends Component
     #[Url]
     public $sort;
 
+    public function addToCart($product_id)
+    {
+        $count_items = CartManagement::addItemsToCart($product_id);
+        if($count_items > 0){
+            $this->dispatch('update-cart-count', total_count: $count_items)->to(Navbar::class);
+        }
+    }
 
     public function render()
     {
