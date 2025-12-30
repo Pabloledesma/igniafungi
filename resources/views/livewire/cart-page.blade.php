@@ -65,7 +65,7 @@
             <span class="font-semibold">{{ Number::currency($grand_total, 'COP') }}</span>
           </div>
           @if($cart_items)
-          <button class="bg-blue-500 text-white py-2 px-4 rounded-lg mt-4 w-full">Checkout</button>
+          <a href="/checkout" class="bg-blue-500 block text-center text-white py-2 px-4 rounded-lg mt-4 w-full">Checkout</a>
           @endif
         </div>
       </div>
