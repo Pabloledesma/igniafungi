@@ -7,9 +7,9 @@ use Jantinnerezo\LivewireAlert\Facades\LivewireAlert;
 
 trait AddsToCart
 {
-    public function addToCart($product_id)
+    public function addToCart($product_id, $quantity)
     {
-        $count_items = CartManagement::addItemsToCart($product_id);
+        $count_items = CartManagement::addItemsToCart($product_id, $quantity);
         if($count_items > 0){
             $this->dispatch('update-cart-count', total_count: $count_items)->to(Navbar::class);
         }

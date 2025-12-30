@@ -31,6 +31,27 @@ class CartManagementTest extends TestCase
     }
 
     /** @test */
+    public function it_can_add_a_new_product_with_quantity()
+    {
+        $product = Product::factory()->create(['name' => 'Test', 'price' => 100]);
+
+        // Ejecutamos la lógica: Agregamos 1 producto pero con 2 unidades
+        CartManagement::addItemsToCart($product->id, 2);
+
+        $cookie = Cookie::queued('cart_items');
+        $data = json_decode($cookie->getValue(), true);
+
+        // 1. Verificamos que solo hay 1 producto único en el carrito
+        $this->assertCount(1, $data, "Debe haber 1 producto único en el carrito");
+
+        // 2. Verificamos que la CANTIDAD de ese producto sea 2
+        $this->assertEquals(2, $data[0]['quantity'], "La cantidad del producto debería ser 2");
+
+        // 3. Verificamos que el total calculado sea correcto (100 * 2)
+        $this->assertEquals(200, $data[0]['total_amount'], "El total debería ser 200");
+    }
+
+    /** @test */
     public function it_increments_quantity_if_product_already_in_cart()
     {
         $product = Product::factory()->create(['price' => 50]);

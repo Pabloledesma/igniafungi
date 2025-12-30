@@ -8,41 +8,50 @@ use Illuminate\Support\Facades\Cookie;
 class CartManagement
 {
     //add item to cart
-    public static function addItemsToCart($product_id)
+    public static function addItemsToCart($product_id, $quantity = null)
     {
         $cart_items = self::getCartItemsFromCookie();
-        $existing_item = null;
+        $existing_item_key = null;
 
-        foreach($cart_items as $key => $item)
-        {
-            if($item['product_id'] == $product_id)
-            {
-                $existing_item = $key;
+        // Buscar si el producto ya existe en el carrito
+        foreach($cart_items as $key => $item) {
+            if($item['product_id'] == $product_id) {
+                $existing_item_key = $key;
                 break;
             }
         }
 
-        if($existing_item !== null){
-            $cart_items[$existing_item]['quantity']++;
-            $cart_items[$existing_item]['total_amount'] = $cart_items[$existing_item]['quantity'] * $cart_items[$existing_item]['unit_amount'];
+        if($existing_item_key !== null) {
+            // Lógica unificada: Incremento (+1) o Asignación directa
+            if ($quantity === null) {
+                $cart_items[$existing_item_key]['quantity']++;
+            } else {
+                $cart_items[$existing_item_key]['quantity'] = $quantity;
+            }
+            
+            $cart_items[$existing_item_key]['total_amount'] = 
+                $cart_items[$existing_item_key]['quantity'] * $cart_items[$existing_item_key]['unit_amount'];
+                
         } else {
-            $product = Product::where('id', $product_id)->first(['id', 'name', 'price', 'images']);
-            if($product){
+            // Nuevo ítem: si $quantity es null, empezamos en 1
+            $initial_qty = $quantity ?? 1;
+            $product = Product::find($product_id, ['id', 'name', 'price']);
+            
+            if($product) {
                 $cart_items[] = [
-                    'product_id' => $product->id,
-                    'name' => $product->name,
-                    'unit_amount' => $product->price,
-                    'quantity' => 1,
-                    'total_amount' => $product->price
+                    'product_id'   => $product->id,
+                    'name'         => $product->name,
+                    'image'        => $product->getFirstImageAttribute(),
+                    'unit_amount'  => $product->price,
+                    'quantity'     => $initial_qty,
+                    'total_amount' => $product->price * $initial_qty
                 ];
             }
         }
 
         self::addCartItemsToCookie($cart_items);
-
         return count($cart_items);
     }
-    //remove item from cart
 
     //add cart items to cookie
     public static function addCartItemsToCookie($cart_items)
