@@ -103,19 +103,16 @@ class CartManagement
     public static function decrementQuantityToCartItem($product_id)
     {
         $cart_items = self::getCartItemsFromCookie();
-        foreach($cart_items as $key => $item)
+        foreach($cart_items as &$item) 
         {
-            if($item['product_id'] == $product_id){
-                if($cart_items[$key]['quantity'] > 1){
-                    $cart_items[$key]['quantity']--;
-                    $cart_items[$key]['total_amount'] = $cart_items[$key]['quantity']*$cart_items[$key]['unit_amount'];
-                }
+            if($item['product_id'] == $product_id && $item['quantity'] > 1){
+                $item['quantity']--;
+                $item['total_amount'] = $item['quantity'] * $item['unit_amount'];
+                break; // Terminamos el bucle una vez encontrado
             }
         }
-
         self::addCartItemsToCookie($cart_items);
         return $cart_items;
-    
     }
 
     public static function calculateGrandTotal($items)

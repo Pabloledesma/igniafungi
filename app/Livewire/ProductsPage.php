@@ -11,6 +11,7 @@ use Livewire\WithPagination;
 use Livewire\Attributes\Title;
 use App\Helpers\CartManagement;
 use App\Livewire\Partials\Navbar;
+use Jantinnerezo\LivewireAlert\Facades\LivewireAlert;
 
 #[Title('Products Page')]
 class ProductsPage extends Component
@@ -40,6 +41,11 @@ class ProductsPage extends Component
         if($count_items > 0){
             $this->dispatch('update-cart-count', total_count: $count_items)->to(Navbar::class);
         }
+
+        LivewireAlert::title('Product added to the cart successfully!')
+            ->success()
+            ->show();
+
     }
 
     public function render()
