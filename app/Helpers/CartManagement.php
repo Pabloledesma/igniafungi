@@ -35,7 +35,7 @@ class CartManagement
         } else {
             // Nuevo ítem: si $quantity es null, empezamos en 1
             $initial_qty = $quantity ?? 1;
-            $product = Product::find($product_id, ['id', 'name', 'price']);
+            $product = Product::find($product_id, ['id', 'name', 'price', 'images']);
             
             if($product) {
                 $cart_items[] = [
@@ -48,7 +48,6 @@ class CartManagement
                 ];
             }
         }
-
         self::addCartItemsToCookie($cart_items);
         return count($cart_items);
     }

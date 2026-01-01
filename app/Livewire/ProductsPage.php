@@ -34,6 +34,8 @@ class ProductsPage extends Component
     #[Url]
     public $sort;
 
+    public $quantity = 1;
+
     public function render()
     {
         // Iniciamos el Query Builder (sin ejecutar get ni paginate aún)

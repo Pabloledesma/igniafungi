@@ -7,7 +7,7 @@ use Jantinnerezo\LivewireAlert\Facades\LivewireAlert;
 
 trait AddsToCart
 {
-    public function addToCart($product_id, $quantity)
+    public function addToCart($product_id, $quantity = null)
     {
         $count_items = CartManagement::addItemsToCart($product_id, $quantity);
         if($count_items > 0){

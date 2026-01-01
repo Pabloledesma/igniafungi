@@ -9,6 +9,8 @@
         @vite('resources/js/app.js')  
         @livewireStyles 
         <script src="https://cdn.jsdelivr.net/npm/@tailwindplus/elements@1" type="module"></script>
+        <script src="https://checkout.bold.co/library/boldPaymentButton.js"></script>
+        @stack('scripts')
     </head>
     <body class="bg-slate-200 dark:bg-slate-700">
         @livewire('partials.navbar')
