@@ -4,7 +4,7 @@
       <div class="flex flex-wrap mb-24 -mx-3">
         <div class="w-full pr-2 lg:w-1/4 lg:block">
           <div class="p-4 mb-5 bg-white border border-gray-200 dark:border-gray-900 dark:bg-gray-900">
-            <h2 class="text-2xl font-bold dark:text-gray-400"> Categories</h2>
+            <h2 class="text-2xl font-bold dark:text-gray-400">Categorias</h2>
             <div class="w-16 pb-2 mb-6 border-b border-rose-600 dark:border-gray-400"></div>
             
             <ul>
@@ -25,26 +25,26 @@
             </ul>
           </div>
           <div class="p-4 mb-5 bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-900">
-            <h2 class="text-2xl font-bold dark:text-gray-400">Brand</h2>
+            <h2 class="text-2xl font-bold dark:text-gray-400">Cepa</h2>
             <div class="w-16 pb-2 mb-6 border-b border-rose-600 dark:border-gray-400"></div>
             <ul>
-              @foreach($brands as $brand)
-              <li class="mb-4" wire:key="{{ $brand->id }}">
-                <label for="{{ $brand->slug }}" class="flex items-center dark:text-gray-300">
+              @foreach($strains as $strain)
+              <li class="mb-4" wire:key="{{ $strain->id }}">
+                <label for="{{ $strain->slug }}" class="flex items-center dark:text-gray-300">
                   <input 
-                    id="{{ $brand->slug }}"
-                    wire:model.change="selected_brands" 
+                    id="{{ $strain->slug }}"
+                    wire:model.change="selected_strains" 
                     type="checkbox" 
                     class="w-4 h-4 mr-2" 
-                    value="{{ $brand->id }}">
-                  <span class="text-lg dark:text-gray-400">{{ $brand->name }}</span>
+                    value="{{ $strain->id }}">
+                  <span class="text-lg dark:text-gray-400">{{ $strain->name }}</span>
                 </label>
               </li>
              @endforeach
             </ul>
           </div>
           <div class="p-4 mb-5 bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-900">
-            <h2 class="text-2xl font-bold dark:text-gray-400">Product Status</h2>
+            <h2 class="text-2xl font-bold dark:text-gray-400">Estado del producto</h2>
             <div class="w-16 pb-2 mb-6 border-b border-rose-600 dark:border-gray-400"></div>
             <ul>
               <li class="mb-4">
@@ -54,7 +54,7 @@
                     type="checkbox" 
                     wire:model.change="featured" 
                     class="w-4 h-4 mr-2">
-                  <span class="text-lg dark:text-gray-400">Is Featured</span>
+                  <span class="text-lg dark:text-gray-400">Es destacado</span>
                 </label>
               </li>
               <li class="mb-4">
@@ -64,14 +64,14 @@
                     type="checkbox" 
                     wire:model.change="in_stock" 
                     class="w-4 h-4 mr-2">
-                  <span class="text-lg dark:text-gray-400">In stok</span>
+                  <span class="text-lg dark:text-gray-400">En inventario</span>
                 </label>
               </li>
             </ul>
           </div>
 
           <div class="p-4 mb-5 bg-white border border-gray-200 dark:bg-gray-900 dark:border-gray-900">
-            <h2 class="text-2xl font-bold dark:text-gray-400">Price</h2>
+            <h2 class="text-2xl font-bold dark:text-gray-400">Precio</h2>
             <div class="w-16 pb-2 mb-6 border-b border-rose-600 dark:border-gray-400"></div>
             <div>
               <div class="flex justify-between ">
@@ -96,9 +96,9 @@
                 <select 
                   wire:model.change="sort" 
                   class="block w-40 text-base bg-gray-100 cursor-pointer dark:text-gray-400 dark:bg-gray-900">
-                  <option value="">Select an option</option>
-                  <option value="latest">Sort by latest</option>
-                  <option value="price">Sort by Price</option>
+                  <option value="">Seleccione una opción</option>
+                  <option value="latest">Ordenar por fecha</option>
+                  <option value="price">Ordenar por precio</option>
                 </select>
               </div>
             </div>
@@ -136,7 +136,7 @@
                     <span 
                       wire:loading
                       wire:target='addToCart({{ $product->id }}, 1)'
-                      >Adding...</span>
+                      >Agregando...</span>
                   </a>
 
                 </div>

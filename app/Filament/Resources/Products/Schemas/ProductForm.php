@@ -66,9 +66,9 @@ class ProductForm
                                 ->preload()
                                 ->required(),
     
-                            Select::make('brand_id')
-                                ->label('Brand')
-                                ->relationship('brand', 'name')
+                            Select::make('strain_id')
+                                ->label('Cepa')
+                                ->relationship('strain', 'name')
                                 ->searchable()
                                 ->preload()
                                 ->required(),

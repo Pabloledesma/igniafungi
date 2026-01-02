@@ -2,7 +2,7 @@
 
 namespace App\Livewire;
 
-use App\Models\Brand;
+use App\Models\Strain;
 use App\Models\Product;
 use Livewire\Component;
 use App\Models\Category;
@@ -20,7 +20,7 @@ class ProductsPage extends Component
     public $selected_categories = [];
     
     #[Url]
-    public $selected_brands = [];
+    public $selected_strains = [];
 
     #[Url]
     public $featured = false;
@@ -47,8 +47,8 @@ class ProductsPage extends Component
         }
 
         // Filtro de Marcas
-        if (!empty($this->selected_brands)) {
-            $query->whereIn('brand_id', $this->selected_brands);
+        if (!empty($this->selected_strains)) {
+            $query->whereIn('strain_id', $this->selected_strains);
         }
 
         // Filtro de Destacados
@@ -78,7 +78,7 @@ class ProductsPage extends Component
         return view('livewire.products-page', [
             // Ejecutamos la paginación una sola vez al final
             'products' => $query->latest()->paginate(9), 
-            'brands' => Brand::where('is_active', 1)->get($attributes),
+            'strains' => Strain::where('is_active', 1)->get($attributes),
             'categories' => Category::where('is_active', 1)->get($attributes)
         ]);
     }

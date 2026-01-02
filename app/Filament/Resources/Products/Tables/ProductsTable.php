@@ -23,7 +23,7 @@ class ProductsTable
                     ->searchable(),
                 TextColumn::make('category.name')
                     ->sortable(),
-                TextColumn::make('brand.name')
+                TextColumn::make('strain.name')
                     ->sortable(),
                 TextColumn::make('price')
                     ->money()

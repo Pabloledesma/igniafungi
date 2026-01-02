@@ -47,7 +47,7 @@
 </div>
   {{-- Hero section End --}}
   
-  {{-- Brand section Start --}}
+  {{-- Strain section Start --}}
 <section class="py-20 bg-stone-50">
   <div class="max-w-xl mx-auto text-center">
     <div class="relative flex flex-col items-center">
@@ -65,15 +65,15 @@
 
   <div class="justify-center max-w-6xl px-4 py-4 mx-auto">
     <div class="grid grid-cols-1 gap-8 lg:grid-cols-3 md:grid-cols-2">
-      @foreach($brands as $brand)
-        <div wire:key="{{ $brand->id }}" class="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-stone-100">
-          <a href="/products?selected_brands[0]={{ $brand->id }}" class="block overflow-hidden">
-            <img src="{{ asset('storage/' . $brand->image) }}" alt="{{ $brand->name }}" 
+      @foreach($strains as $strain)
+        <div wire:key="{{ $strain->id }}" class="group bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-stone-100">
+          <a href="/products?selected_strains[0]={{ $strain->id }}" class="block overflow-hidden">
+            <img src="{{ asset('storage/' . $strain->image) }}" alt="{{ $strain->name }}" 
               class="object-cover w-full h-72 group-hover:scale-105 transition-transform duration-500">
           </a>
           <div class="p-6 text-center">
             <h3 class="text-xl font-bold text-stone-800 uppercase tracking-widest">
-              {{ $brand->name }}
+              {{ $strain->name }}
             </h3>
             <p class="text-orange-600 text-sm mt-1 font-medium">Ver Colección</p>
           </div>
@@ -82,8 +82,7 @@
     </div>
   </div>
 </section>
-{{-- Brand section End --}}
-{{-- Category section Start --}}
+{{-- Strain section End --}}
 {{-- Category section Start --}}
 <div class="bg-stone-900 py-24">
   <div class="max-w-xl mx-auto text-center mb-16">
