@@ -3,7 +3,7 @@
 <div class="w-full h-screen relative overflow-hidden flex items-center justify-center bg-stone-950">
   
   <div class="absolute inset-0 z-0">
-    <img src="{{ asset('storage/uploads/bg_hericium.webp') }}" 
+    <img src="{{ asset('images/bg_hericium.webp') }}" 
          alt="Hericium Background" 
          class="w-full h-full object-cover opacity-60">
     <div class="absolute inset-0 bg-gradient-to-b from-[#260D01]/80 via-stone-950/60 to-emerald-950/40"></div>
