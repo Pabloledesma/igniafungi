@@ -257,7 +257,7 @@
 									<p class="text-sm font-medium text-gray-900 truncate dark:text-white">
 										{{ $item['name']  }}
 									</p>
-									<p class="text-sm text-gray-500 truncate dark:text-gray-400">
+									<p class="text-sm text-wood-200 truncate dark:text-gray-400">
 										Quantity: {{ $item['quantity'] }}
 									
 									</p>

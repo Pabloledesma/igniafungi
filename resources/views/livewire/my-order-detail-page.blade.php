@@ -17,7 +17,7 @@
 
         <div class="grow">
           <div class="flex items-center gap-x-2">
-            <p class="text-xs uppercase tracking-wide text-gray-500">
+            <p class="text-xs uppercase tracking-wide text-wood-200">
               Customer
             </p>
           </div>
@@ -43,7 +43,7 @@
 
         <div class="grow">
           <div class="flex items-center gap-x-2">
-            <p class="text-xs uppercase tracking-wide text-gray-500">
+            <p class="text-xs uppercase tracking-wide text-wood-200">
               Order Date
             </p>
           </div>
@@ -69,7 +69,7 @@
 
         <div class="grow">
           <div class="flex items-center gap-x-2">
-            <p class="text-xs uppercase tracking-wide text-gray-500">
+            <p class="text-xs uppercase tracking-wide text-wood-200">
               Order Status
             </p>
           </div>
@@ -95,7 +95,7 @@
 
         <div class="grow">
           <div class="flex items-center gap-x-2">
-            <p class="text-xs uppercase tracking-wide text-gray-500">
+            <p class="text-xs uppercase tracking-wide text-wood-200">
               Payment Status
             </p>
           </div>

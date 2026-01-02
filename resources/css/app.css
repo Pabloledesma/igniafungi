@@ -12,4 +12,17 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --color-gold-ignia: #c59e4e;
+
+    /* Maderas Profundas (Para Header, Footer y fondos oscuros) */
+    --color-wood-950: #1a0b05; /* Un tono casi negro, madera quemada */
+    --color-wood-900: #260d01; /* El color exacto rgb(38, 13, 1) que seleccionaste */
+    --color-wood-800: #3d1c10; /* Madera oscura rojiza */
+
+    /* Maderas Claras y Neutros (Para secciones de texto o fondos suaves) */
+    --color-wood-200: #e5d5c5; /* Madera clara, tipo pino suave */
+    --color-wood-100: #f5f0eb; /* Fondo casi blanco, pero cálido (papel artesanal) */
+
+    /* Acento de Fuego (Para botones y notificaciones) */
+    --color-fire-500: #ea580c; /* Naranja quemado */
 }

@@ -36,7 +36,7 @@
                 {{ $product->name }}</h2>
               <p class="inline-block mb-6 text-4xl font-bold text-gray-700 dark:text-gray-400 ">
                 <span>$1500.99</span>
-                <span class="text-base font-normal text-gray-500 line-through dark:text-gray-400">{{ Number::currency($product->price, 'COP') }}</span>
+                <span class="text-base font-normal text-wood-200 line-through dark:text-gray-400">{{ Number::currency($product->price, 'COP') }}</span>
               </p>
               <p class="max-w-md text-gray-700 dark:text-gray-400">{{ $product->description }}</p>
             </div>
@@ -57,7 +57,7 @@
             <div class="flex flex-wrap items-center gap-4">
               <button 
                 wire:click.prevent='addToCart({{ $product->id }}, {{ $quantity }})' 
-                class="w-full p-4 bg-blue-500 rounded-md lg:w-2/5 dark:text-gray-200 text-gray-50 hover:bg-blue-600 dark:bg-blue-500 dark:hover:bg-blue-700">
+                class="w-full p-4 bg-blue-500 rounded-md lg:w-2/5 dark:text-gray-200 text-gray-50 hover:bg-gold-ignia dark:bg-blue-500 dark:hover:bg-blue-700">
                 Add to cart</button>
             </div>
           </div>
