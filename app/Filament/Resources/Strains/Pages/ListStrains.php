@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\Brands\Pages;
+namespace App\Filament\Resources\Strains\Pages;
 
-use App\Filament\Resources\Brands\BrandResource;
+use App\Filament\Resources\Strains\StrainResource;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
-class ListBrands extends ListRecords
+class ListStrains extends ListRecords
 {
-    protected static string $resource = BrandResource::class;
+    protected static string $resource = StrainResource::class;
 
     protected function getHeaderActions(): array
     {

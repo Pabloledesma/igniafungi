@@ -13,9 +13,11 @@ return new class extends Migration
     {
         Schema::create('strains', function (Blueprint $table) {
             $table->id();
-            $table->string('name'); // Ej: "Blue Oyster 301"
-            $table->string('type')->nullable(); // Ej: "Pleurotus", "Shiitake"
-            $table->integer('incubation_days')->default(15); // Para predecir cuándo fructifica
+            $table->string('name'); 
+            $table->string('slug')->unique();
+            $table->string('image')->nullable();
+            $table->boolean('is_active')->default(true);
+            $table->integer('incubation_days')->default(15); 
             $table->timestamps();
         });
     }

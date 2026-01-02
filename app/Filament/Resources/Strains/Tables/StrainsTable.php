@@ -1,12 +1,8 @@
 <?php
 
-namespace App\Filament\Resources\Brands\Tables;
+namespace App\Filament\Resources\Strains\Tables;
 
 use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteAction;
-use Filament\Actions\ViewAction;
-use Filament\Actions\ActionGroup;
-use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Tables\Columns\IconColumn;
@@ -14,7 +10,7 @@ use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
-class BrandsTable
+class StrainsTable
 {
     public static function configure(Table $table): Table
     {
@@ -22,13 +18,14 @@ class BrandsTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable(),
-                ImageColumn::make('image')
-                    ->visibility('public')
-                    ->disk('public'),
                 TextColumn::make('slug')
                     ->searchable(),
+                ImageColumn::make('image'),
                 IconColumn::make('is_active')
                     ->boolean(),
+                TextColumn::make('incubation_days')
+                    ->numeric()
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -42,11 +39,7 @@ class BrandsTable
                 //
             ])
             ->recordActions([
-                ActionGroup::make([
-                    ViewAction::make(),
-                    EditAction::make(),
-                    DeleteAction::make(),
-                ])
+                EditAction::make(),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

@@ -6,10 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 
-class Brand extends Model
+class Strain extends Model
 {
     use HasFactory;
-    protected $fillable = ['name', 'slug', 'image', 'is_active'];
+    protected $fillable = ['name', 'slug', 'image', 'is_active', 'incubation_days'];
 
     public function products(): HasMany
     {
