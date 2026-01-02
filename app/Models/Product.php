@@ -16,6 +16,7 @@ class Product extends Model
         'strain_id',
         'name', 
         'slug', 
+        'short_description', 
         'description', 
         'price', 
         'images', 

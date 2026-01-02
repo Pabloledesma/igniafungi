@@ -18,12 +18,13 @@ class ProductFactory extends Factory
     {
         return [
             'name' => $this->faker->sentence(3),
+            'category_id' => \App\Models\Category::factory(),
+            'strain_id' => \App\Models\Strain::factory(),
             'description' => $this->faker->paragraph(),
+            'short_description' => $this->faker->paragraph(),
             'slug' => str($this->faker->sentence(3))->slug(),
             'price' => $this->faker->randomFloat(2, 10, 500),
             'is_active' => true,
-            'category_id' => \App\Models\Category::factory(),
-            'strain_id' => \App\Models\Strain::factory(),
         ];
     }
 }

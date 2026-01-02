@@ -5,9 +5,9 @@ namespace Database\Factories;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Brand>
+ * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Strain>
  */
-class BrandFactory extends Factory
+class StrainFactory extends Factory
 {
     /**
      * Define the model's default state.
@@ -19,6 +19,7 @@ class BrandFactory extends Factory
         return [
             'name' => $this->faker->word(),
             'slug' => str($this->faker->word())->slug(),
+            'incubation_days' => 15,
             'is_active' => true,
         ];
     }
