@@ -19,7 +19,7 @@ return new class extends Migration
             $table->decimal('substrate_weight_dry', 8, 2); 
             $table->date('inoculation_date'); 
             $table->integer('quantity')->default(1); 
-            $table->decimal('bag_weight', 8, 3)->nullable()->after('quantity');
+            $table->decimal('bag_weight', 8, 3)->nullable();
             $table->string('type')->default('bulk');
             $table->string('grain_type')->nullable(); 
             $table->string('container_type')->nullable();
