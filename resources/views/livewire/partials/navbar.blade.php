@@ -3,7 +3,7 @@
     
       <div class="flex items-center justify-center"> 
         <a class="flex flex-col items-center justify-center rounded-md text-xl font-semibold focus:outline-hidden focus:opacity-80" href="#" aria-label="Ignia Fungi">
-            <img src="{{ asset('/storage/uploads/logo_ignia_sin_texto.png') }}" 
+            <img src="{{ asset('images/logo_ignia_sin_texto.png') }}" 
                 alt="Logo Ignia Fungi" 
                 class="h-12 w-auto object-contain mb-1">
             
@@ -39,11 +39,11 @@
             <a wire:navigate class="font-medium {{ request()->is('/') ? 'text-gold-ignia' : 'text-wood-950' }} py-3 md:py-6 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" href="/" aria-current="page">Home</a>
 
             <a wire:navigate class="font-medium {{ request()->is('categories') ? 'text-gold-ignia dark:text-blue-500' : 'text-wood-200 dark:text-gray-400 dark:hover:text-wood-200 dark:focus:ring-gray-600' }} hover:text-gray-400 py-3 md:py-6 dark:focus:outline-none dark:focus:ring-1" href="/categories">
-              Categories
+              Categorias
             </a>
 
             <a wire:navigate class="font-medium {{ request()->is('products') ? 'text-gold-ignia' : 'text-wood-200 dark:text-gray-400' }} hover:text-gray-400 py-3 md:py-6 dark:hover:text-wood-200 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" href="/products">
-              Products
+              Productos
             </a>
 
             <a wire:navigate class="font-medium flex items-center {{ request()->is('cart') ? 'text-gold-ignia' : 'text-wood-200 dark:text-gray-400' }} hover:text-gray-400 py-3 md:py-6 dark:hover:text-wood-200 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" href="/cart">
@@ -57,12 +57,14 @@
             </a>
             @guest
               <div class="pt-3 md:pt-0">
-                <a wire:navigate class="py-2.5 px-4 inline-flex items-center gap-x-2 text-sm font-semibold rounded-lg border border-transparent bg-gold-ignia text-white hover:bg-blue-700 disabled:opacity-50 disabled:pointer-events-none dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" href="/login">
-                  <svg class="flex-shrink-0 w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <a wire:navigate class="py-2.5 px-4 inline-flex items-center gap-x-2 text-sm font-semibold rounded-lg border border-transparent bg-gold-ignia text-white transition-all duration-300 hover:bg-orange-500 hover:scale-105 hover:shadow-[0_0_20px_5px_rgba(234,88,12,0.6)] active:scale-95" href="/login">
+                  <span class="absolute inset-0 rounded-lg bg-orange-400 opacity-0 group-hover:opacity-20 blur-md transition-opacity duration-300"></span>
+                  <span class="relative z-10">Login</span>
+                  <svg class="frelative z-10 flex-shrink-0 w-4 h-4 transition-transform duration-500 group-hover:rotate-12" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
                     <circle cx="12" cy="7" r="4" />
                   </svg>
-                  Log in
+                  
                 </a>
               </div>
             @endguest
