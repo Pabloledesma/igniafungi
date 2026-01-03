@@ -15,6 +15,7 @@ class Batch extends Model
     protected $fillable = [
         'parent_batch_id', 
         'strain_id', 
+        'recipe_id', 
         'user_id', 
         'code', 
         'weigth_dry',
@@ -33,47 +34,9 @@ class Batch extends Model
         'inoculation_date' => 'date', // Esto convierte el texto en Objeto Fecha
     ];
 
-    // Asignación automática de usuario al crear
-    protected static function booted()
+    public function recipe(): BelongsTo
     {
-        static::creating(function ($batch) {
-            // 1. Asignación de usuario
-            if (auth()->check()) {
-                $batch->user_id = auth()->id();
-            }
-
-            // 2. Lógica de Código Inteligente
-            if (!$batch->code) {
-                // Si es un lote hijo (fructificación parcial)
-                if ($batch->parent_batch_id) {
-                    $parent = self::find($batch->parent_batch_id);
-                    $childCount = self::where('parent_batch_id', $batch->parent_batch_id)->count() + 1;
-                    $batch->code = $parent->code . '-F' . $childCount;
-                } 
-                // Si es un lote nuevo (Padre)
-                else {
-                    $prefix = strtoupper(substr($batch->strain?->name ?? 'BT', 0, 3));
-                    $date = now()->format('ymd');
-                    $random = rand(10, 99);
-                    $batch->code = "{$prefix}-{$date}-{$random}";
-                }
-            }
-            
-        });
-
-        static::updating(function ($batch) {
-        // Lógica Global de Finalización Automática
-        if ($batch->isDirty('quantity') && (int)$batch->quantity === 0) {
-            $batch->status = 'finalized';
-            
-            // Opcional: Agregar nota automática a la bitácora si no existe
-            $now = now()->format('Y-m-d H:i');
-            $user_name = auth()->user()->name;
-            if (!str_contains($batch->observations, 'LOTE FINALIZADO')) {
-                $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
-            }
-        }
-    });
+        return $this->belongsTo(Recipe::class);
     }
 
     public function strain() : BelongsTo

@@ -5,14 +5,17 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Batch;
+use App\Models\Recipe;
 use App\Models\Strain;
+use App\Models\Supply;
 use Livewire\Livewire;
 use App\Models\Harvest;
+use App\Models\RecipeSupply;
+use Filament\Tables\Actions\Action;
+use Filament\Forms\Components\TextInput;
 use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Filament\Resources\Batches\Pages\ListBatches;
-use Filament\Tables\Actions\Action;
-use Filament\Forms\Components\TextInput;
 
 class BatchTest extends TestCase
 {
@@ -114,6 +117,70 @@ class BatchTest extends TestCase
         // Assert: El modelo debió cambiar su propio estado
         $this->assertEquals('finalized', $batch->status);
         $this->assertStringContainsString('finalizado automáticamente', $batch->observations);
+    }
+
+    /** @test */
+    public function it_decrements_supply_stock_correctly_on_batch_creation()
+    {
+        // 1. Arrange: Crear la infraestructura necesaria
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // Crear Insumos con stock inicial
+        $aserrin = Supply::create([
+            'name' => 'Aserrín',
+            'quantity' => 100, // kg
+            'unit' => 'kg',
+            'category' => 'substrate'
+        ]);
+
+        $bolsas = Supply::create([
+            'name' => 'Bolsas 2kg',
+            'quantity' => 100, // unidades
+            'unit' => 'units',
+            'category' => 'packaging'
+        ]);
+
+        // Crear la Receta
+        $recipe = Recipe::create(['name' => 'Fórmula Maestra']);
+
+        // Vincular insumos a la receta usando el modelo pivot RecipeSupply
+        // Aserrín al 10%
+        RecipeSupply::create([
+            'recipe_id' => $recipe->id,
+            'supply_id' => $aserrin->id,
+            'calculation_mode' => 'percentage',
+            'value' => 10,
+        ]);
+
+        // 1 Bolsa por unidad de lote
+        RecipeSupply::create([
+            'recipe_id' => $recipe->id,
+            'supply_id' => $bolsas->id,
+            'calculation_mode' => 'fixed_per_unit',
+            'value' => 1,
+        ]);
+
+        // 2. Act: Crear un Batch (esto dispara el BatchObserver)
+        // Lote de 20 unidades con 40kg de peso seco total
+        $batch = Batch::create([
+            'strain_id' => Strain::factory()->create()->id,
+            'type' => 'bulk',
+            'recipe_id' => $recipe->id,
+            'quantity' => 20,
+            'weigth_dry' => 40,
+            'inoculation_date' => now(),
+        ]);
+
+        // 3. Assert: Verificar que la matemática sea exacta
+        $aserrin->refresh();
+        $bolsas->refresh();
+
+        // Cálculo Aserrín: 100 - (40 * 0.10) = 96
+        $this->assertEquals(96, $aserrin->quantity);
+
+        // Cálculo Bolsas: 100 - (20 * 1) = 80
+        $this->assertEquals(80, $bolsas->quantity);
     }
 
 }

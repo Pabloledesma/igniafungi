@@ -34,7 +34,15 @@ class BatchForm
                         ])
                         ->default('bulk')
                         ->required()
-                        ->live(), 
+                        ->live(),
+                        
+                    Select::make('recipe_id')
+                        ->label('Receta de Sustrato')
+                        ->relationship('recipe', 'name') // Vincula con el modelo Recipe
+                        ->searchable()
+                        ->preload()
+                        ->required(fn (Get $get) => $get('type') === 'bulk') // Obligatorio solo si es sustrato bulk
+                        ->helperText('Seleccione la receta para descontar automáticamente los insumos del inventario.'),
 
                     // GRUPO DE CAMPOS EXCLUSIVOS PARA SEMILLA 🌾
                     Grid::make(2)

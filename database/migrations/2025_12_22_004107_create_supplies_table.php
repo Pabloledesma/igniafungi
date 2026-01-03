@@ -16,12 +16,8 @@ return new class extends Migration
             
             $table->string('name'); // Ej: "Arroz Integral"
             $table->string('category'); // Ej: "grain", "substrate", "consumable", "equipment"
-            
-            // Control de Inventario
             $table->decimal('quantity', 10, 2)->default(0); // Cuánto tengo (Ej: 50.5)
             $table->string('unit'); // Unidad de medida (Ej: "kg", "litros", "unidades")
-            
-            // Alertas y Costos
             $table->decimal('min_stock', 10, 2)->default(0); // Alerta si baja de esto
             $table->decimal('cost_per_unit', 10, 2)->nullable(); // Para calcular costos de producción futuros
             

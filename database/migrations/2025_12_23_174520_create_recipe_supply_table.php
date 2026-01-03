@@ -14,12 +14,10 @@ return new class extends Migration
     {
         Schema::create('recipe_supply', function (Blueprint $table) {
             $table->id();
-            // Une con la tabla de recetas
             $table->foreignId('recipe_id')->constrained()->onDelete('cascade');
-            // Une con la tabla de insumos (Supplies)
             $table->foreignId('supply_id')->constrained()->onDelete('cascade');
-            // Cantidad específica que usa esta receta
-            $table->decimal('quantity', 10, 2); 
+            $table->string('calculation_mode')->default('percentage'); // 'percentage' o 'fixed_per_unit'
+            $table->decimal('value', 10, 2);
             $table->timestamps();
         });
     }
