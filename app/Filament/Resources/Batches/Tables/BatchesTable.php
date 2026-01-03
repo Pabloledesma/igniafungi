@@ -13,6 +13,7 @@ use Filament\Actions\DeleteBulkAction;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
+use Filament\Tables\Filters\SelectFilter;
 use App\Filament\Resources\Batches\BatchResource;
 
 class BatchesTable
@@ -71,7 +72,9 @@ class BatchesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
-                //
+                SelectFilter::make('strain')
+                    ->relationship('strain', 'name')
+                    ->label('Filtrar por Genética'),
             ])
             ->recordActions([
                    // Botón Editar (El lápiz estándar)
