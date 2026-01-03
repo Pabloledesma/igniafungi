@@ -29,7 +29,7 @@ class BatchesTable
                     ->label('Código')
                     ->sortable()
                     ->searchable(),
-                TextColumn::make('substrate_weight_dry')
+                TextColumn::make('weigth_dry')
                     ->numeric()
                     ->sortable(),
                 TextColumn::make('inoculation_date')
@@ -92,14 +92,50 @@ class BatchesTable
                                 'batch' => $record,
                                 'url' => $url,
                             ])->output();
-                        }, "Lote-{$record->code}.pdf");
+                        }, "{$record->code}.pdf");
                     }),
+
+                Action::make('sow_grain')
+                    ->label('Sembrar')
+                    ->icon('heroicon-m-beaker')
+                    ->color('info')
+                    // Solo visible para lotes de grano con existencias
+                    ->visible(fn (Batch $record) => $record->type === 'grain' && $record->quantity > 0)
+                    ->form([
+                        TextInput::make('quantity_to_sow')
+                            ->label('¿Cuántas unidades (frascos/bolsas) vas a sembrar?')
+                            ->numeric()
+                            ->required()
+                            ->minValue(1)
+                            ->maxValue(fn (Batch $record) => $record->quantity),
+                    ])
+                    ->action(function (Batch $record, array $data) {
+                        $quantity = (int) $data['quantity_to_sow'];
+                        $now = now()->format('Y-m-d H:i');
+                        $user_name = auth()->user()->name;
+                        
+                       // Creamos el mensaje para la bitácora
+                        $logMessage = "\n- [{$now}] {$user_name}: Se sembraron {$quantity} unidades. Quedan " . ($record->quantity - $quantity) . " disponibles.";
+
+                        // Actualizamos el registro
+                        $record->update([
+                            'quantity' => $record->quantity - $quantity,
+                            // Concatenamos el mensaje nuevo a lo que ya existía en la bitácora
+                            'observations' => $record->observations . $logMessage
+                        ]);
+                        Notification::make()
+                            ->title('Semilla descontada')
+                            ->body($logMessage)
+                            ->success()
+                            ->send();
+                    })
+                    ->requiresConfirmation(),
 
                 Action::make('move_to_fruiting')
                     ->label('Pasar a Fructificación')
                     ->icon('heroicon-m-arrow-right-circle') // Icono de flecha
                     ->color('success') // Verde
-                    ->visible(fn (Batch $record) => $record->status === 'incubation' && $record->quantity > 0) // Solo visible si está incubando
+                    ->visible(fn (Batch $record) => $record->type === 'bulk' &&$record->status === 'incubation' && $record->quantity > 0) 
                     ->form([
                         TextInput::make('quantity_to_move')
                             ->label('¿Cuántas unidades pasan a Fructificación?')

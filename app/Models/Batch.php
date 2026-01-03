@@ -15,10 +15,12 @@ class Batch extends Model
     protected $fillable = [
         'parent_batch_id', 
         'strain_id', 
+        'user_id', 
         'code', 
-        'substrate_weight_dry',
+        'weigth_dry',
         'inoculation_date', 
         'quantity',
+        'contaminated_quantity',
         'bag_weight',
         'type',
         'grain_type',
@@ -35,10 +37,43 @@ class Batch extends Model
     protected static function booted()
     {
         static::creating(function ($batch) {
+            // 1. Asignación de usuario
             if (auth()->check()) {
                 $batch->user_id = auth()->id();
             }
+
+            // 2. Lógica de Código Inteligente
+            if (!$batch->code) {
+                // Si es un lote hijo (fructificación parcial)
+                if ($batch->parent_batch_id) {
+                    $parent = self::find($batch->parent_batch_id);
+                    $childCount = self::where('parent_batch_id', $batch->parent_batch_id)->count() + 1;
+                    $batch->code = $parent->code . '-F' . $childCount;
+                } 
+                // Si es un lote nuevo (Padre)
+                else {
+                    $prefix = strtoupper(substr($batch->strain?->name ?? 'BT', 0, 3));
+                    $date = now()->format('ymd');
+                    $random = rand(10, 99);
+                    $batch->code = "{$prefix}-{$date}-{$random}";
+                }
+            }
+            
         });
+
+        static::updating(function ($batch) {
+        // Lógica Global de Finalización Automática
+        if ($batch->isDirty('quantity') && (int)$batch->quantity === 0) {
+            $batch->status = 'finalized';
+            
+            // Opcional: Agregar nota automática a la bitácora si no existe
+            $now = now()->format('Y-m-d H:i');
+            $user_name = auth()->user()->name;
+            if (!str_contains($batch->observations, 'LOTE FINALIZADO')) {
+                $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
+            }
+        }
+    });
     }
 
     public function strain() : BelongsTo
@@ -74,13 +109,13 @@ class Batch extends Model
         return Attribute::make(
             get: function () {
                 // Si el peso seco es 0 o nulo, retornamos 0 para evitar error de división
-                if ($this->substrate_weight_dry <= 0) return 0;
+                if ($this->weigth_dry <= 0) return 0;
 
                 // Sumamos los kilos de todas las cosechas
                 $totalHarvest = $this->harvests()->sum('weight');
 
                 // Fórmula: (Total Cosechado / Total Sustrato Seco) * 100
-                return round(($totalHarvest / $this->substrate_weight_dry) * 100, 2);
+                return round(($totalHarvest / $this->weigth_dry) * 100, 2);
             }
         );
     }

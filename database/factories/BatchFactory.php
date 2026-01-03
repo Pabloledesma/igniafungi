@@ -2,6 +2,7 @@
 
 namespace Database\Factories;
 
+use App\Models\User;
 use App\Models\Strain;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -20,18 +21,12 @@ class BatchFactory extends Factory
        return [
             // Crea una Cepa nueva automáticamente para este lote
             'strain_id' => Strain::factory(),
-            
-            // Genera códigos únicos tipo "LOTE-2023-AB"
-            'code' => $this->faker->unique()->bothify('LOTE-####-??'),
-            
-            // Peso seco aleatorio entre 10kg y 100kg
-            'substrate_weight_dry' => $this->faker->randomFloat(2, 10, 100),
-            
-            // Fecha aleatoria de este año
-            'inoculation_date' => $this->faker->dateTimeThisYear(),
-            
-            // Cantidad de bolsas (ej. 20 a 50)
+            'user_id' => User::factory(),
+            'code' => 'LOTE-' . $this->faker->unique()->numberBetween(1000, 9999),
+            'weigth_dry' => $this->faker->randomFloat(2, 10, 100),
+            'inoculation_date' => now(),
             'quantity' => $this->faker->numberBetween(20, 50),
+            'status' => 'incubation'
         ];
     }
 }

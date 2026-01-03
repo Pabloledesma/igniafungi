@@ -2,7 +2,9 @@
 
 namespace App\Filament\Resources\Batches\Schemas;
 
+use App\Models\Strain;
 use Filament\Schemas\Schema;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Schemas\Components\Grid;
 use Filament\Forms\Components\Textarea;
@@ -22,6 +24,7 @@ class BatchForm
                 // Envolvemos todo en un Group o Section con x-data
                 Section::make('Información del Lote')
                 ->extraAttributes(['x-data' => 'batchAutomation'])
+                ->columnSpanFull()
                 ->schema([
                     Select::make('type')
                         ->label('Tipo de Lote')
@@ -80,21 +83,17 @@ class BatchForm
                         'x-on:change' => 'updateDate($event.target.value)',
                     ]),
                     
-                TextInput::make('code')
-                    ->id('batch_code_input') 
+               TextInput::make('code')
                     ->label('Código del Lote')
-                    ->readOnly()
-                    ->unique(ignoreRecord: true),
+                    ->disabled() // No editable
+                    ->dehydrated(false) // No lo enviamos en el request, el modelo se encarga
+                    ->visible(fn ($record) => $record !== null), // Se muestra solo al editar
                 
-                Select::make('user_id')
-                    ->relationship('user', 'name') 
-                    ->label('Operario')
-                    ->searchable()
-                    ->preload()
-                    ->required(),
+                Hidden::make('user_id')
+                    ->default(auth()->id()),
 
-                TextInput::make('substrate_weight_dry')
-                    ->label('Peso Sustrato SECO (kg)')
+                TextInput::make('weigth_dry')
+                    ->label('Peso en SECO (kg)')
                     ->helperText('Vital para calcular la eficiencia. Solo materia seca.')
                     ->numeric()
                     ->required(),
@@ -112,88 +111,91 @@ class BatchForm
                     ->native(false),
 
                 Section::make('Dimensiones del Lote')
-                ->schema([
-                  // 1. CANTIDAD ACTUAL (VIVAS)
-                TextInput::make('quantity')
-                    ->label('Cantidad Disponible (Vivas)')
-                    ->numeric()
-                    ->required()
-                    ->minValue(0)
-                    ->live() // Escucha cambios
-                    ->afterStateUpdated(function (Get $get, Set $set, ?string $old, ?string $state) {
-                        // Opcional: Si quisieras recalcular algo al cambiar esto manualmente
-                    }),
+                    ->columnSpanFull()
+                    ->columns(4)
+                    ->schema([
+                    // 1. CANTIDAD ACTUAL (VIVAS)
+                    TextInput::make('quantity')
+                        ->label('Cantidad Disponible (Vivas)')
+                        ->numeric()
+                        ->required()
+                        ->minValue(0)
+                        ->live() // Escucha cambios
+                        ->afterStateUpdated(function (Get $get, Set $set, ?string $old, ?string $state) {
+                            // Opcional: Si quisieras recalcular algo al cambiar esto manualmente
+                        }),
 
-                // 2. CANTIDAD CONTAMINADA (MUERTAS)
-                TextInput::make('contaminated_quantity')
-                    ->label('Unidades Contaminadas')
-                    ->numeric()
-                    ->default(0)
-                    ->minValue(0)
-                    ->live() // Importante: Para que reaccione al escribir
-                    ->afterStateUpdated(function (Get $get, Set $set, ?string $old, ?string $state) {
-                        // LÓGICA AUTOMÁTICA DE RESTA 🧠
-                        
-                        $totalOriginal = (int)$get('quantity') + (int)$old; // Reconstruimos el total antes del cambio
-                        $nuevoContaminado = (int)$state;
+                    // 2. CANTIDAD CONTAMINADA (MUERTAS)
+                    TextInput::make('contaminated_quantity')
+                        ->label('Unidades Contaminadas')
+                        ->numeric()
+                        ->default(0)
+                        ->minValue(0)
+                        ->live() // Importante: Para que reaccione al escribir
+                        ->afterStateUpdated(function (Get $get, Set $set, ?string $old, ?string $state) {
+                            // LÓGICA AUTOMÁTICA DE RESTA 🧠
+                            
+                            $totalOriginal = (int)$get('quantity') + (int)$old; // Reconstruimos el total antes del cambio
+                            $nuevoContaminado = (int)$state;
 
-                        // Validación: Si intenta contaminar más de las que existen
-                        if ($nuevoContaminado > $totalOriginal) {
-                            // Forzamos el valor máximo posible y notificamos (opcional)
-                            $set('contaminated_quantity', $totalOriginal);
-                            $set('quantity', 0);
-                            return;
-                        }
+                            // Validación: Si intenta contaminar más de las que existen
+                            if ($nuevoContaminado > $totalOriginal) {
+                                // Forzamos el valor máximo posible y notificamos (opcional)
+                                $set('contaminated_quantity', $totalOriginal);
+                                $set('quantity', 0);
+                                return;
+                            }
 
-                        // Matemática: Las vivas son el Total Original menos las Nuevas Contaminadas
-                        $nuevaCantidadViva = $totalOriginal - $nuevoContaminado;
-                        
-                        // Actualizamos el campo de cantidad disponible automáticamente
-                        $set('quantity', max(0, $nuevaCantidadViva));
-                    })
-                    // VALIDACIÓN FINAL AL GUARDAR (Capa de seguridad extra)
-                    ->rules([
-                        fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
-                            // La suma de vivas + contaminadas no debería (teóricamente) exceder la capacidad lógica,
-                            // pero aquí validamos que 'contaminated' no sea mayor que el total histórico si tuvieras ese dato.
-                            // O validamos simplemente que sea positivo.
-                            // Para tu requerimiento específico: "que no supere el total":
-                            // Como estamos restando dinámicamente, el 'quantity' visible YA ES el remanente.
-                            // La validación crítica es que 'quantity' nunca sea negativo, lo cual ya hace minValue(0).
-                        },
-                    ]),
-                // 3. PESO POR UNIDAD
-                TextInput::make('bag_weight')
-                    ->label('Peso por Unidad')
-                    ->suffix('kg')
-                    ->numeric()
-                    ->step(0.01)
-                    ->required()
-                    ->live()
-                    ->maxValue(fn (Get $get) => $get('container_type') === 'jar' ? 0.5 : 100),
+                            // Matemática: Las vivas son el Total Original menos las Nuevas Contaminadas
+                            $nuevaCantidadViva = $totalOriginal - $nuevoContaminado;
+                            
+                            // Actualizamos el campo de cantidad disponible automáticamente
+                            $set('quantity', max(0, $nuevaCantidadViva));
+                        })
+                        // VALIDACIÓN FINAL AL GUARDAR (Capa de seguridad extra)
+                        ->rules([
+                            fn (Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                // La suma de vivas + contaminadas no debería (teóricamente) exceder la capacidad lógica,
+                                // pero aquí validamos que 'contaminated' no sea mayor que el total histórico si tuvieras ese dato.
+                                // O validamos simplemente que sea positivo.
+                                // Para tu requerimiento específico: "que no supere el total":
+                                // Como estamos restando dinámicamente, el 'quantity' visible YA ES el remanente.
+                                // La validación crítica es que 'quantity' nunca sea negativo, lo cual ya hace minValue(0).
+                            },
+                        ]),
+                        // 3. PESO POR UNIDAD
+                        TextInput::make('bag_weight')
+                            ->label('Peso por Unidad')
+                            ->suffix('kg')
+                            ->numeric()
+                            ->step(0.01)
+                            ->required()
+                            ->live()
+                            ->maxValue(fn (Get $get) => $get('container_type') === 'jar' ? 0.5 : 100),
 
-                // 4. PESO TOTAL ESTIMADO (Vivas + Contaminadas o Solo Vivas?)
-                // Usualmente quieres saber el peso de lo que tienes VIVO.
-                TextInput::make('total_weight_display')
-                    ->label('Peso Total (Vivas)')
-                    ->suffix('kg')
-                    ->readonly() // Evita edición manual
-                    ->extraInputAttributes(['class' => 'font-bold text-success-600']) // Estilo para resaltar
-                    ->placeholder(function (Get $get) {
-                        $qty = (float)$get('quantity');
-                        $weight = (float)$get('bag_weight');
-                        return number_format($qty * $weight, 2) . ' kg';
-                    })
-                    ->live(),
-                ])->columns(3),
+                        // 4. PESO TOTAL ESTIMADO (Vivas + Contaminadas o Solo Vivas?)
+                        // Usualmente quieres saber el peso de lo que tienes VIVO.
+                        TextInput::make('total_weight_display')
+                            ->label('Peso Total (Vivas)')
+                            ->suffix('kg')
+                            ->readonly() // Evita edición manual
+                            ->extraInputAttributes(['class' => 'font-bold text-success-600']) // Estilo para resaltar
+                            ->placeholder(function (Get $get) {
+                                $qty = (float)$get('quantity');
+                                $weight = (float)$get('bag_weight');
+                                return number_format($qty * $weight, 2) . ' kg';
+                            })
+                            ->live(),
+                        ]),
 
-                        Section::make('Bitácora')
-                            ->schema([
-                                MarkdownEditor::make('observations')
-                                    ->label('Observaciones / Eventos')
-                                    ->helperText('Registra aquí bajas por autoconsumo, regalias o notas técnicas.')
-                                    ->columnSpanFull(),
-                            ]),
+                    Section::make('Bitácora')
+                        ->columnSpanFull()
+                        ->schema([
+                            MarkdownEditor::make('observations')
+                                ->label('Observaciones / Eventos')
+                                ->helperText('Registra aquí bajas por autoconsumo, regalias o notas técnicas.')
+                                
+                        ]),
                 
             ])->columns(2),
             ]);

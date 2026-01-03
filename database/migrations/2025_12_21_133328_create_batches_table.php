@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('parent_batch_id')->nullable()->constrained('batches')->nullOnDelete()->after('id');
             $table->foreignId('strain_id')->constrained()->cascadeOnDelete(); 
             $table->string('code')->unique(); 
-            $table->decimal('substrate_weight_dry', 8, 2); 
+            $table->decimal('weigth_dry', 8, 2); 
             $table->date('inoculation_date'); 
             $table->integer('quantity')->default(1); 
             $table->decimal('bag_weight', 8, 3)->nullable();
