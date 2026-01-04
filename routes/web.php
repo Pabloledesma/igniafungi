@@ -42,4 +42,4 @@ Route::middleware('auth')->group(function (){
     Route::get('/cancel', cancelPage::class)->name('cancel');
 });
 
-Route::post('/bold-webhook', [BoldWebhookController::class, 'handle']);
+Route::post('/api/webhooks/bold', [BoldWebhookController::class, 'handle']);

@@ -23,12 +23,31 @@ class Product extends Model
         'is_active', 
         'is_featured', 
         'in_stock', 
+        'stock', 
         'on_sale'
     ];
 
     protected $casts = [
         'images' => 'array',
     ];
+
+    // Accessor para no romper el frontend que use $product->in_stock
+    public function getInStockAttribute(): bool
+    {
+        return $this->stock > 0;
+    }
+
+    /**
+     * Método para reducir stock de forma segura
+     */
+    public function reduceStock(int $quantity)
+    {
+        if ($this->stock < $quantity) {
+            throw new \Exception("Stock insuficiente para el producto: {$this->name}");
+        }
+
+        $this->decrement('stock', $quantity);
+    }
 
     public function category(): BelongsTo
     {

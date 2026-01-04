@@ -11,9 +11,15 @@ class BoldWebhookController extends Controller
     {
         // Bold envía los datos en el cuerpo de la petición
         $data = $request->all();
+
+        $reference = data_get($data, 'data.metadata.reference');
+
+        if (!$reference) {
+            return response()->json(['error' => 'Reference not found in payload'], 400);
+        }
         
         // El campo 'reference' o 'order_id' identifica tu venta
-        $order = Order::find($data['bold-order-id'] ?? $data['reference']);
+        $order = Order::where('reference', $reference)->first();
 
         if (!$order) {
             Log::error("Webhook de Bold: Orden no encontrada", ['data' => $data]);
@@ -22,14 +28,12 @@ class BoldWebhookController extends Controller
 
         // Verificar el estado según los rangos de Sandbox
         // Estados posibles: approved, rejected, error
-        if ($data['bold-tx-status'] === 'approved') {
-            $order->update([
-                'payment_status' => 'paid',
-                'status' => 'processing'
-            ]);
-            Log::info("Orden #{$order->id} marcada como PAGADA vía Webhook.");
+        if ($data['type'] === 'SALE_APPROVED') {
+            $order->completeOrder();
+            Log::info("Orden #{$order->id} procesada exitosamente.");
+            return response()->json(['status' => 'approved'], 200);
         }
 
-        return response()->json(['status' => 'received'], 200);
+        return response()->json(['status' => 'event_ignored'], 200);
     }
 }

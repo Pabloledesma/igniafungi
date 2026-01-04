@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('batches', function (Blueprint $table) {
-            $table->foreignId('user_id')->constrained()->cascadeOnDelete(); 
+            $table->dropColumn(['user_id']); 
         });
     }
 };

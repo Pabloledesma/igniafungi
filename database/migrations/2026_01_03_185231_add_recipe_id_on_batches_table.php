@@ -22,7 +22,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('batches', function (Blueprint $table) {
-            $table->foreignId('recipe_id')->nullable()->constrained()->nullOnDelete();
+            $table->dropColumn(['recipe_id']);
         });
     }
 };
