@@ -2,6 +2,7 @@
 namespace Tests\Feature\Webhooks;
 
 use Tests\TestCase;
+use App\Models\User;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\Delivery;
@@ -81,6 +82,60 @@ class BoldWebhookTest extends TestCase
             'order_id' => $order->id,
             'status' => 'scheduled'
         ]);
+    }
+
+    /** @test */
+    public function it_prevents_double_inventory_decrement_on_duplicated_webhook()
+    {
+        // 1. ARRANGE
+        $product = Product::factory()->create(['stock' => 10]);
+        $reference = 'REF-DOUBLE-CHECK';
+        $order = Order::factory()->create(['reference' => $reference, 'status' => 'pending']);
+        OrderItem::factory()->create([
+            'order_id' => $order->id,
+            'product_id' => $product->id,
+            'quantity' => 2
+        ]);
+
+        $payload = [
+            'type' => 'SALE_APPROVED',
+            'data' => [
+                'payment_id' => 'BOLD-TX-UNIQUE-123',
+                'metadata' => [
+                    'reference' => $reference
+                ]
+            ]
+        ];
+        $signature = hash_hmac('sha256', json_encode($payload), 'test_secret');
+
+        // 2. ACT: Enviamos el webhook por primera vez
+        $this->withHeaders(['X-Bold-Signature' => $signature])->postJson('/api/webhooks/bold', $payload);
+        $this->assertEquals(8, $product->fresh()->stock, "El stock no se descontó correctamente.");
+
+        // 3. ACT: Enviamos el mismo webhook por SEGUNDA vez
+        $response = $this->withHeaders(['X-Bold-Signature' => $signature])->postJson('/api/webhooks/bold', $payload);
+
+        // 4. ASSERT: El stock NO debe haber bajado a 6
+        $response->assertStatus(200);
+        $this->assertEquals(8, $product->fresh()->stock, "¡Error de Idempotencia! El stock se descontó dos veces.");
+    }
+
+    /** @test */
+    public function it_shows_the_thank_you_page_correctly()
+    {
+        $user = User::factory()->create();
+        $order = Order::factory()->create([
+            'user_id' => $user->id,
+            'reference' => 'REF-OK', 
+            'status' => 'paid'
+        ]);
+            
+        $response = $this->actingAs($user)
+                        ->get(route('order.thanks', ['reference' => 'REF-OK']));
+
+        $response->assertStatus(200);
+        $response->assertSee('REF-OK');
+        $response->assertSee('Pago Confirmado');
     }
 
     /**

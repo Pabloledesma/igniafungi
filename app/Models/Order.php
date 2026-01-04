@@ -61,6 +61,11 @@ class Order extends Model
     // App\Models\Order.php
     public function completeOrder()
     {
+        // 1. CLÁUSULA DE GUARDA (Idempotencia)
+        // Si la orden ya está pagada o procesando, salimos de inmediato.
+        if (in_array($this->status, ['paid', 'processing'])) {
+            return;
+        }
         // Usamos una transacción para que si un producto falla, nada se descuente
         DB::transaction(function () {
             $this->update(['status' => 'paid', 'payment_status' => 'paid']);

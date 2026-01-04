@@ -14,6 +14,7 @@ use App\Livewire\MyOrderDetailPage;
 use App\Livewire\ProductDetailPage;
 use Illuminate\Support\Facades\Route;
 use App\Livewire\Auth\ResetPasswordPage;
+use App\Livewire\Shop\OrderConfirmation;
 use App\Livewire\Auth\ForgotPasswordPage;
 use App\Http\Controllers\BoldWebhookController;
 
@@ -37,6 +38,7 @@ Route::middleware('auth')->group(function (){
     });
     Route::get('/checkout', CheckoutPage::class);
     Route::get('/my-orders', MyOrdersPage::class);
+    Route::get('/gracias', OrderConfirmation::class)->name('order.thanks');
     Route::get('/my-orders/{order}', MyOrderDetailPage::class);
     Route::get('/success', SuccessPage::class)->name('success');
     Route::get('/cancel', cancelPage::class)->name('cancel');
