@@ -49,7 +49,7 @@ class BoldWebhookController extends Controller
     private function isValidSignature(Request $request): bool
     {
         $signature = $request->header('x-bold-signature');
-        $secret = config('services.bold.webhook_secret');
+        $secret = config('services.bold.webhook_secret') ?? '';
         
         $payloadEncoded = base64_encode($request->getContent());
 
