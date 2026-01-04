@@ -21,7 +21,7 @@ return new class extends Migration
             $table->longText('description')->nullable();
             $table->longText('short_description')->nullable();
             $table->decimal('price', 10, 2);
-            $table->unsignedInteger('stock')->default(0)->after('price');
+            $table->unsignedInteger('stock')->default(0);
             $table->boolean('is_active')->default(false);
             $table->boolean('is_featured')->default(false);
             $table->boolean('in_stock')->default(false);
