@@ -12,6 +12,29 @@ class BoldWebhookTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Definimos el secreto en el entorno de pruebas
+        config(['services.bold.webhook_secret' => 'test_secret']);
+    }
+
+    private function generateMockSignature($payload): string
+    {
+        // Es vital que sea el JSON exacto
+        return hash_hmac('sha256', json_encode($payload), 'test_secret');
+    }
+
+    /** @test */
+    public function it_returns_401_if_signature_is_missing_or_invalid()
+    {
+        $payload = ['type' => 'SALE_APPROVED'];
+        
+        // Petición sin el header X-Bold-Signature
+        $response = $this->postJson('/api/webhooks/bold', $payload);
+
+        $response->assertStatus(401);
+    }
     /**
      * @test
      * @dataProvider boldPaymentProvider
@@ -37,7 +60,12 @@ class BoldWebhookTest extends TestCase
             'unit_amount' => 10000
         ]);
 
-        $response = $this->postJson('/api/webhooks/bold', $payload);
+        $jsonPayload = json_encode($payload);
+        $signature = hash_hmac('sha256', $jsonPayload, 'test_secret');
+
+        $response = $this->withHeaders([
+                'X-Bold-Signature' => $signature,
+            ])->postJson('/api/webhooks/bold', $payload);
 
         // 3. ASSERT
         $response->assertStatus(200);
@@ -71,11 +99,5 @@ class BoldWebhookTest extends TestCase
                 json_decode('{ "type": "SALE_APPROVED", "data": { "payment_method": "PSE", "metadata": { "reference": "ECOM-FACT-10556" }, "amount": {"total": 99900} } }', true)
             ],
         ];
-    }
-
-    private function generateMockSignature($payload): string
-    {
-        // Aquí simularemos la lógica de HMAC que pide la documentación de Bold
-        return hash_hmac('sha256', json_encode($payload), 'tu_secreto_de_webhook');
     }
 }

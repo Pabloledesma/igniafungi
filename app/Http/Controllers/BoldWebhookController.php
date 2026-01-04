@@ -9,6 +9,15 @@ class BoldWebhookController extends Controller
 {
     public function handle(Request $request)
     {
+        // 1. Validar la firma antes de cualquier otra cosa
+        if (!$this->isValidSignature($request)) {
+            Log::warning("Intento de Webhook de Bold con firma inválida", [
+                'ip' => $request->ip(),
+                'signature' => $request->header('X-Bold-Signature')
+            ]);
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+        
         // Bold envía los datos en el cuerpo de la petición
         $data = $request->all();
 
@@ -35,5 +44,20 @@ class BoldWebhookController extends Controller
         }
 
         return response()->json(['status' => 'event_ignored'], 200);
+    }
+
+    private function isValidSignature(Request $request): bool
+    {
+        $signature = $request->header('X-Bold-Signature');
+        $secret = config('services.bold.webhook_secret');
+        
+        // Obtenemos el JSON crudo del cuerpo de la petición
+        $payload = $request->getContent();
+
+        // Calculamos el hash esperado
+        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+
+        // hash_equals es resistente a ataques de tiempo (timing attacks)
+        return hash_equals($expectedSignature, (string)$signature);
     }
 }

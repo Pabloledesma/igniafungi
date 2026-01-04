@@ -12,8 +12,8 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->validateCsrfTokens(except: [
-            'api/bold-webhook', 
-            'bold-webhook', // Por si acaso también lo definiste en web.php
+            'api/webhooks/bold', 
+            'bold-webhook', 
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

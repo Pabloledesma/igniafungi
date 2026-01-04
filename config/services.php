@@ -35,4 +35,8 @@ return [
         ],
     ],
 
+    'bold' => [
+        'webhook_secret' => env('BOLD_WEBHOOK_SECRET'),
+    ],
+
 ];
