@@ -133,6 +133,7 @@ class CheckoutPage extends Component
                 'integritySignature' => hash('sha256', $this->order_id . $this->total_amount_bold . $moneda . env('BOLD_SECRET_KEY')),
                 'description'        => "Pedido #{$this->order_id} en DCodeMania",
                 'renderMode'         => 'embedded',
+                'redirectionUrl'     => route('order.thanks', ['reference' => $order->reference]),
                 // IMPORTANTE: Enviar como array para que JS lo convierta a string después
                 'customerData'       => [
                     'email'          => $this->email,
