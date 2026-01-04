@@ -93,4 +93,19 @@ class Order extends Model
         });
     }
 
+    // App\Models\Order.php
+    public function checkBoldStatus()
+    {
+        $response = Http::withHeaders([
+            'Authorization' => 'x-api-key ' . env('BOLD_API_KEY')
+        ])->get("https://integrations.api.bold.co/payments/webhook/notifications/{$this->reference}?is_external_reference=true");
+
+        if ($response->successful() && isset($response->json()['notifications'][0])) {
+            $notif = $response->json()['notifications'][0];
+            if ($notif['type'] === 'SALE_APPROVED') {
+                $this->completeOrder();
+            }
+        }
+    }
+
 }

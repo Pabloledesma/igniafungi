@@ -48,14 +48,13 @@ class BoldWebhookController extends Controller
 
     private function isValidSignature(Request $request): bool
     {
-        $signature = $request->header('X-Bold-Signature');
+        $signature = $request->header('x-bold-signature');
         $secret = config('services.bold.webhook_secret');
         
-        // Obtenemos el JSON crudo del cuerpo de la petición
-        $payload = $request->getContent();
+        $payloadEncoded = base64_encode($request->getContent());
 
         // Calculamos el hash esperado
-        $expectedSignature = hash_hmac('sha256', $payload, $secret);
+        $expectedSignature = hash_hmac('sha256', $payloadEncoded, $secret);
 
         // hash_equals es resistente a ataques de tiempo (timing attacks)
         return hash_equals($expectedSignature, (string)$signature);
