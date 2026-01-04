@@ -19,7 +19,6 @@ class CheckoutPage extends Component
     public $last_name;
     public $document_number;
     public $document_type;
-    public $dial_code;
     public $phone;
     public $email;
     public $street_address;
@@ -33,6 +32,7 @@ class CheckoutPage extends Component
     public $shipping_method = 'delivery'; 
     public $shipping_cost = 0;
     public $data_customer_data;
+    public $delivery_date_label = null;
 
     public function placeOrder()
     {
@@ -42,7 +42,6 @@ class CheckoutPage extends Component
             'document_number' => 'required|numeric',
             'document_type' => 'required|in:CC,CE,NIT,PP',
             'phone' => 'required',
-            'dial_code' => 'required',
             'email' => 'required|email',
             'street_address' => 'required|min:3|max:255',
             'city' => 'required|min:3|max:255',
@@ -96,7 +95,7 @@ class CheckoutPage extends Component
         if($this->payment_method == 'BOLD')
         {
             $this->order_id = $order->id;
-            $this->total_amount_bold = (int) $order->grand_total;
+            $this->total_amount_bold = (int) $order->grand_total + (int) $this->shipping_cost;
             $moneda = "COP";
             
             // Preparar configuración para JS
@@ -114,7 +113,6 @@ class CheckoutPage extends Component
                     'email'          => $this->email,
                     'fullName'       => $this->first_name . ' ' . $this->last_name,
                     'phone'          => $this->phone,
-                    'dialCode'       => $this->dial_code,
                     'documentNumber' => (string) $this->document_number,
                     'documentType'   => $this->document_type,
                 ],
@@ -141,5 +139,23 @@ class CheckoutPage extends Component
     {
         $this->cart_items = CartManagement::getCartItemsFromCookie();
         $this->grand_total = CartManagement::calculateGrandTotal($this->cart_items);
+
+            // 1. Pre-llenar con datos del usuario autenticado
+        if (auth()->check()) {
+            $user = auth()->user();
+            $this->first_name = $user->name; // O separa si tienes campos distintos
+            $this->email = $user->email;
+        }
+
+        // 2. Recuperar la información de envío de la sesión (Bogotá/Fecha)
+        $shipping_data = session('checkout_shipping');
+        
+        if ($shipping_data && $shipping_data['is_bogota']) {
+            $this->city = 'Bogotá';
+            $this->state = 'Cundinamarca';
+            $this->shipping_cost = 15000;
+            // Puedes asignar la fecha de entrega a una propiedad pública para mostrarla
+            $this->delivery_date_label = $shipping_data['delivery_date'];
+        }
     }
 }
