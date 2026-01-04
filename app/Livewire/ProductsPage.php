@@ -39,7 +39,10 @@ class ProductsPage extends Component
     public function render()
     {
         // Iniciamos el Query Builder (sin ejecutar get ni paginate aún)
-        $query = Product::query()->where('is_active', 1);
+        $query = Product::query()
+        ->where('is_active', 1)
+        ->where('in_stock', 1)
+        ->where('price', '>', 0);
 
         // Filtro de Categorías: Usamos whereIn porque $selected_categories es un array
         if (!empty($this->selected_categories)) {
