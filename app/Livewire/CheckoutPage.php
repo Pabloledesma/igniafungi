@@ -77,7 +77,7 @@ class CheckoutPage extends Component
         ]);
         
         $cart_items = CartManagement::getCartItemsFromCookie();
-        $total = (int) CartManagement::calculateGrandTotal($cart_items);
+        $subtotal = (int) CartManagement::calculateGrandTotal($cart_items);
 
         foreach($cart_items as $item)
         {
@@ -93,9 +93,11 @@ class CheckoutPage extends Component
             ];
             
         }
+
+        $final_total = $subtotal + (int) $this->shipping_cost;
         $order = new Order();
         $order->user_id = auth()->user()->id;
-        $order->grand_total = CartManagement::calculateGrandTotal($cart_items) + $this->shipping_cost;
+        $order->grand_total = $final_total;
         $order->payment_method = $this->payment_method;
         $order->payment_status = 'pending';
         $order->shipping_amount = $this->shipping_cost;
