@@ -27,6 +27,16 @@ class Order extends Model
         'bold_transaction_id'
     ];
 
+    protected static function booted()
+    {
+        static::creating(function ($order) {
+            // Solo genera la referencia si no se ha asignado una manualmente
+            if (empty($order->reference)) {
+                $order->reference = 'ORD-' . strtoupper(bin2hex(random_bytes(4)));
+            }
+        });
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

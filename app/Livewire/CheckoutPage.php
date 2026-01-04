@@ -29,10 +29,36 @@ class CheckoutPage extends Component
     public $order_id = null;
     public $hash_integridad = null;
     public $total_amount_bold = 0;
-    public $shipping_method = 'delivery'; 
+    public $shipping_method; 
     public $shipping_cost = 0;
     public $data_customer_data;
     public $delivery_date_label = null;
+
+    public function mount()
+    {
+        $this->cart_items = CartManagement::getCartItemsFromCookie();
+        $this->grand_total = CartManagement::calculateGrandTotal($this->cart_items);
+
+            // 1. Pre-llenar con datos del usuario autenticado
+        if (auth()->check()) {
+            $user = auth()->user();
+            $this->first_name = $user->name; // O separa si tienes campos distintos
+            $this->email = $user->email;
+        }
+
+        // 2. Recuperar la información de envío de la sesión (Bogotá/Fecha)
+        $shipping_data = session('checkout_shipping');
+        
+        if ($shipping_data && $shipping_data['is_bogota']) {
+            $this->city = 'Bogotá';
+            $this->state = 'Cundinamarca';
+            $this->shipping_cost = 15000;
+            $this->shipping_method = 'domicilio';
+
+            // Puedes asignar la fecha de entrega a una propiedad pública para mostrarla
+            $this->delivery_date_label = $shipping_data['delivery_date'];
+        }
+    }
 
     public function placeOrder()
     {
@@ -69,13 +95,12 @@ class CheckoutPage extends Component
         }
         $order = new Order();
         $order->user_id = auth()->user()->id;
-        $order->grand_total = CartManagement::calculateGrandTotal($cart_items);
+        $order->grand_total = CartManagement::calculateGrandTotal($cart_items) + $this->shipping_cost;
         $order->payment_method = $this->payment_method;
         $order->payment_status = 'pending';
+        $order->shipping_amount = $this->shipping_cost;
         $order->status = 'new';
         $order->currency = 'cop';
-        $order->shipping_amount = 0;
-        $order->shipping_method = 'none';
         $order->notes = 'Order placed by ' . auth()->user()->name;
         $order->save();
 
@@ -95,7 +120,7 @@ class CheckoutPage extends Component
         if($this->payment_method == 'BOLD')
         {
             $this->order_id = $order->id;
-            $this->total_amount_bold = (int) $order->grand_total + (int) $this->shipping_cost;
+            $this->total_amount_bold = (int) $order->grand_total;
             $moneda = "COP";
             
             // Preparar configuración para JS
@@ -135,27 +160,5 @@ class CheckoutPage extends Component
         CartManagement::clearCartItems();
     }
 
-    public function mount()
-    {
-        $this->cart_items = CartManagement::getCartItemsFromCookie();
-        $this->grand_total = CartManagement::calculateGrandTotal($this->cart_items);
-
-            // 1. Pre-llenar con datos del usuario autenticado
-        if (auth()->check()) {
-            $user = auth()->user();
-            $this->first_name = $user->name; // O separa si tienes campos distintos
-            $this->email = $user->email;
-        }
-
-        // 2. Recuperar la información de envío de la sesión (Bogotá/Fecha)
-        $shipping_data = session('checkout_shipping');
-        
-        if ($shipping_data && $shipping_data['is_bogota']) {
-            $this->city = 'Bogotá';
-            $this->state = 'Cundinamarca';
-            $this->shipping_cost = 15000;
-            // Puedes asignar la fecha de entrega a una propiedad pública para mostrarla
-            $this->delivery_date_label = $shipping_data['delivery_date'];
-        }
-    }
+   
 }
