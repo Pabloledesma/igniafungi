@@ -9,7 +9,7 @@ class BoldWebhookController extends Controller
 {
     public function handle(Request $request)
     {
-        // 1. Validar la firma antes de cualquier otra cosa
+        // 1. Validar la firma (Seguridad)
         if (!$this->isValidSignature($request)) {
             Log::warning("Intento de Webhook de Bold con firma inválida", [
                 'ip' => $request->ip(),
@@ -18,32 +18,48 @@ class BoldWebhookController extends Controller
             return response()->json(['error' => 'Unauthorized'], 401);
         }
         
-        // Bold envía los datos en el cuerpo de la petición
-        $data = $request->all();
-
-        $reference = data_get($data, 'data.metadata.reference');
+        $payload = $request->all();
+        
+        // Bold envía la información dentro de 'data'
+        $data = $payload['data'] ?? [];
+        $reference = $data['reference'] ?? null;
+        $status = $data['status'] ?? null; 
 
         if (!$reference) {
-            return response()->json(['error' => 'Reference not found in payload'], 400);
+            return response()->json(['error' => 'No reference found in payload'], 400);
         }
-        
-        // El campo 'reference' o 'order_id' identifica tu venta
+
         $order = Order::where('reference', $reference)->first();
 
         if (!$order) {
-            Log::error("Webhook de Bold: Orden no encontrada", ['data' => $data]);
+            Log::error("Webhook de Bold: Orden no encontrada", ['reference' => $reference]);
             return response()->json(['message' => 'Order not found'], 404);
         }
 
-        // Verificar el estado según los rangos de Sandbox
-        // Estados posibles: approved, rejected, error
-        if ($data['type'] === 'SALE_APPROVED') {
-            $order->completeOrder();
-            Log::info("Orden #{$order->id} procesada exitosamente.");
-            return response()->json(['status' => 'approved'], 200);
-        }
+        // Lógica de estados basada en la documentación de Bold
+        switch ($status) {
+            case 'APPROVED': // Estado para éxito según estándar Bold
+            case 'SALE_APPROVED': 
+                $order->update(['status' => 'paid']);
+                $order->completeOrder(); // Método que ya tienes para limpiar carrito/enviar mail
+                Log::info("Orden #{$order->id} PAGADA exitosamente.");
+                return response()->json(['status' => 'success'], 200);
 
-        return response()->json(['status' => 'event_ignored'], 200);
+            case 'REJECTED': // Estado para rechazos (fondos insuficientes, pin inválido, etc.)
+                $order->update(['status' => 'failed']);
+                Log::warning("Orden #{$order->id} RECHAZADA por la pasarela.");
+                return response()->json(['status' => 'rejected'], 200);
+
+            case 'FAILED':
+            case 'ERROR':
+                $order->update(['status' => 'failed']);
+                Log::error("Orden #{$order->id} falló por error técnico en Bold.");
+                return response()->json(['status' => 'error'], 200);
+
+            default:
+                Log::info("Webhook de Bold recibió un estado no manejado: {$status}");
+                return response()->json(['status' => 'ignored'], 200);
+        }
     }
 
     private function isValidSignature(Request $request): bool
