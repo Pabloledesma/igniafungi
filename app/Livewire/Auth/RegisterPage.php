@@ -19,8 +19,10 @@ class RegisterPage extends Component
     {
         $this->validate([
             'name' => 'required',
-            'email' => 'required|email|unique:users,email|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
             'password' => 'required|min:8|max:255'
+        ], [
+            'email.unique' => 'Este correo ya tiene una cuenta asociada.'
         ]);
 
         $user = User::create([
@@ -32,7 +34,7 @@ class RegisterPage extends Component
         event(new Registered($user));
 
         auth()->login($user);
-        return redirect()->intended('/'); 
+        return redirect()->route('verification.notice');
     }
     
     public function render()
