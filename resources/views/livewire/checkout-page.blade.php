@@ -14,7 +14,7 @@
 
             const launch = () => {
                 try {
-                    console.log('Iniciando Bold con config final:', config);
+                    console.log('Iniciando Bold con config final:', config); //Quitar esto en producción!!!
                     const checkout = new BoldCheckout(config);
                     checkout.open();
                 } catch (e) {
@@ -114,45 +114,66 @@
 						
 						<div class="grid grid-cols-2 gap-4">
 							<div>
-								<label class="block text-gray-700 dark:text-white mb-1" for="address">
-									Dirección
-								</label>
-								<input wire:model="street_address" class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('street_address') border-red-500 @enderror" id="street_address" type="text">
-								</input>
-								@error('street_address')
-									<div class="text-red-500 text-sm">{{ $message }}</div>
-								@enderror
-							</div>
-							<div>
 								<label class="block text-gray-700 dark:text-white mb-1" for="city">
 									Ciudad
 								</label>
-								<input wire:model="city" class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('city') border-red-500 @enderror" id="city" type="text">
-								</input>
+								<select wire:model.live="city" class="py-3 px-4 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:pointer-events-none">
+									<option selected="">Seleccione una opción</option>
+									<option value="Bogotá">Bogotá</option>
+									<option value="Barranquilla">Barranquilla</option>
+									<option value="Bucaramanga">Bucaramanga</option>
+									<option value="Cali">Cali</option>
+									<option value="Cartagena">Cartagena</option>
+									<option value="Medellin">Medellin</option>
+								</select>
 								@error('city')
 									<div class="text-red-500 text-sm">{{ $message }}</div>
 								@enderror
 							</div>
-							<div>
-								<label class="block text-gray-700 dark:text-white mb-1" for="state">
-									Departamento
-								</label>
-								<input wire:model="state" class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('state') border-red-500 @enderror" id="state" type="text">
-								</input>
-								@error('state')
-									<div class="text-red-500 text-sm">{{ $message }}</div>
-								@enderror
-							</div>
-							<div>
-								<label class="block text-gray-700 dark:text-white mb-1" for="zip">
-									ZIP
-								</label>
-								<input wire:model="zip_code" class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('zip_code') border-red-500 @enderror" id="zip_code" type="text">
-								</input>
-								@error('zip_code')
-									<div class="text-red-500 text-sm">{{ $message }}</div>
-								@enderror
-							</div>
+							@if ($city === 'Bogotá')
+								<div>
+									<label class="block text-gray-700 dark:text-white mb-1" for="location">
+										Localidad
+									</label>
+									<select wire:model.live="location" class="py-3 px-4 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:pointer-events-none">
+										<option value="">Seleccione una localidad</option>
+										<option value="Suba">Suba</option>
+										<option value="Engativa">Engativa</option>
+										<option value="Kennedy">Kennedy</option>
+										<option value="Fontibon">Fontibon</option>
+										<option value="Teusaquillo">Teusaquillo</option>
+										<option value="Usaquen">Usaquen</option>
+										<option value="Puente Aranda">Puente Aranda</option>
+										<option value="Usme">Usme</option>
+										<option value="Bosa">Bosa</option>
+										<option value="Ciudad Bolivar">Ciudad Bolivar</option>
+										<option value="Rafael Uribe Uribe">Rafael Uribe Uribe</option>
+										<option value="Tunjuelito">Tunjuelito</option>
+										<option value="Santa Fe">Santa Fe</option>
+										<option value="San Cristobal">San Cristobal</option>
+										<option value="Barrios Unidos">Barrios Unidos</option>
+										<option value="Antonio Nariño">Antonio Nariño</option>
+										<option value="Martires">Martires</option>
+										<option value="Candelaria">Candelaria</option>
+										<option value="Chapinero">Chapinero</option>
+										<option value="Sumapaz">Sumapaz</option>
+									</select>
+									@error('location')
+										<div class="text-red-500 text-sm">{{ $message }}</div>
+									@enderror
+								</div>
+							@endif
+						
+						</div>
+						<div>
+							<label class="block text-gray-700 dark:text-white mb-1" for="address">
+								Dirección
+							</label>
+							<input wire:model="street_address" class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('street_address') border-red-500 @enderror" id="street_address" type="text">
+							</input>
+							@error('street_address')
+								<div class="text-red-500 text-sm">{{ $message }}</div>
+							@enderror
 						</div>
 						<div class="text-lg font-semibold mb-4">
 							Seleccione el metodo de pago

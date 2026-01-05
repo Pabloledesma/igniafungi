@@ -19,8 +19,8 @@
                 <tr wire:key="{{ $item['product_id'] }}">
                   <td class="py-4">
                     <div class="flex items-center">
-                      <img class="h-16 w-16 mr-4" src="{{ asset('/storage/' . $item['image']) }}" alt="{{ $item['name'] }}">
-                      <span class="font-semibold">{{ $item['name'] }}</span>
+                      <img class="h-16 w-16 mr-4 truncate" src="{{ asset('/storage/' . $item['image']) }}" alt="{{ $item['name'] }}">
+                      <span class="font-semibold truncate">{{ $item['name'] }}</span>
                     </div>
                   </td>
                   <td class="py-4">{{ Number::currency($item['unit_amount'], 'COP') }}</td>
@@ -56,6 +56,17 @@
                           <span class="mt-1 flex items-center text-xs text-gray-500">Hongos Frescos y Cosechados</span>
                       </span>
                   </span>
+                  @if($is_bogota)
+                    <div class="ms-6 flex-none" wire:key="location-selector-container">
+                      <select wire:model.live="location" class="py-2 px-3 block w-40 border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500">
+                          <option value="">Seleccione</option>
+                          @foreach(array_keys(\App\Helpers\CartManagement::LOCALIDAD_PRECIOS) as $loc)
+                              <option value="{{ $loc }}">{{ $loc }}</option>
+                          @endforeach
+                      </select>
+                      @error('location') <div class="text-red-500 text-[10px] mt-1">{{ $message }}</div> @enderror
+                    </div>
+                  @endif
                   <svg class="h-5 w-5 text-blue-600 {{ $is_bogota ? '' : 'hidden' }}" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                   </svg>
@@ -103,6 +114,22 @@
       @endif
       </div>
       <div class="md:w-1/4">
+        @php $data = $this->getProgressData(); @endphp
+
+        <div class="p-4 bg-white border-b">
+            <div class="flex justify-between mb-1 text-sm">
+                @if($data['is_free'])
+                    <span class="text-green-600 font-bold">¡Genial! Tienes envío gratis 🚚</span>
+                @else
+                    <span>Te faltan <strong>${{ number_format($data['missing']) }}</strong> para envío gratis</span>
+                @endif
+                <span>$200k</span>
+            </div>
+            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
+                    style="width: {{ $data['percentage'] }}%"></div>
+            </div>
+        </div>
         <div class="bg-white rounded-lg shadow-md p-6 border-t-4 border-gold-ignia">
           <h2 class="text-lg font-semibold mb-4">Resumen</h2>
           
@@ -113,7 +140,7 @@
 
           <div class="flex justify-between mb-2 {{ $is_bogota ? 'text-blue-600' : 'text-gray-400' }}">
             <span>Domicilio</span>
-            <span>{{ $is_bogota ? Number::currency(15000, 'COP') : '--' }}</span>
+            <span>{{ $this->shippingCost > 0 ? 'COP ' . number_format($this->shippingCost) : '¡Gratis!' }}</span>
           </div>
 
           <hr class="my-2">
@@ -123,7 +150,7 @@
             <span class="font-bold text-xl text-slate-900">{{ Number::currency($this->finalTotal, 'COP') }}</span>
           </div>
 
-          @if($cart_items && $is_bogota)
+          @if($cart_items)
             {{-- Cambiamos el <a> por un <button> con wire:click para ejecutar la lógica de sesión --}}
             <button wire:click="checkout" class="bg-gold-ignia hover:bg-black transition-colors block text-center text-white font-bold py-3 px-4 rounded-lg w-full shadow-md">
               Agendar Pedido

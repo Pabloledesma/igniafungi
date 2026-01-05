@@ -36,6 +36,8 @@ return [
     ],
 
     'bold' => [
+        'key' => env('BOLD_INTEGRATION_KEY'),
+        'secret' => env('BOLD_SECRET_KEY'),
         'webhook_secret' => env('BOLD_WEBHOOK_SECRET'),
     ],
 

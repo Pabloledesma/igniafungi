@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Address extends Model
 {
@@ -15,7 +16,8 @@ class Address extends Model
         'street_address',
         'city',
         'state',
-        'zip_code'
+        'zip_code',
+        'location'
     ];
 
     public function order(): BelongsTo

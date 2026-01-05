@@ -12,9 +12,23 @@ class CartPage extends Component
 {
     public $cart_items = [];
     public $grand_total;
-    public $is_bogota = false;
+    public $is_bogota = true;
     public $selected_delivery_index = 0;
+    public $location;
 
+    public function getProgressData() {
+        $subtotal = CartManagement::calculateGrandTotal($this->cart_items);
+        $limit = CartManagement::FREE_SHIPPING_THRESHOLD;
+        $missing = $limit - $subtotal;
+        $percentage = ($subtotal / $limit) * 100;
+
+        return [
+            'percentage' => min($percentage, 100),
+            'missing' => max($missing, 0),
+            'is_free' => $subtotal >= $limit
+        ];
+    }
+        
     /**
      * Centralizamos la actualización del carrito
      */
@@ -54,7 +68,13 @@ class CartPage extends Component
     #[Computed]
     public function shippingCost()
     {
-        return $this->is_bogota ? 15000 : 0;
+        $subtotal = CartManagement::calculateGrandTotal($this->cart_items);
+        
+        // Si es Bogotá, pasamos la localidad seleccionada. 
+        // Si no es Bogotá, el helper usará la tarifa nacional automáticamente.
+        $destino = $this->is_bogota ? 'Bogotá' : 'Nacional';
+        
+        return CartManagement::getShippingCost($subtotal, $destino, $this->location);
     }
 
     /**
@@ -97,6 +117,7 @@ class CartPage extends Component
         session([
             'checkout_shipping' => [
                 'is_bogota'     => (bool)$this->is_bogota,
+                'location'      => $this->location,
                 'cost'          => $this->shippingCost,
                 'delivery_date' => $selectedDate
             ]

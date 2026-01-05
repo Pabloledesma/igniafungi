@@ -22,9 +22,6 @@ class CheckoutPage extends Component
     public $phone;
     public $email;
     public $street_address;
-    public $city;
-    public $state;
-    public $zip_code;
     public $payment_method;
     public $order_id = null;
     public $hash_integridad = null;
@@ -33,31 +30,85 @@ class CheckoutPage extends Component
     public $shipping_cost = 0;
     public $data_customer_data;
     public $delivery_date_label = null;
+    public $city;
+    public $free_shipping_if = CartManagement::FREE_SHIPPING_THRESHOLD;
+    public $location; // Para la localidad
+    public $cities = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena'];
+    public $localidadPrecios = [
+        // ANILLO 1: Vecinos inmediatos o misma localidad
+        'Engativa'          => 9000,
+        'Fontibon'          => 9500,
+        'Barrios Unidos'    => 10000,
+        'Teusaquillo'       => 10500,
+        'Suba'              => 11000,
+
+        // ANILLO 2: Centro y Occidente cercano
+        'Puente Aranda'     => 12000,
+        'Chapinero'         => 12500,
+        'Martires'          => 13000,
+        'Usaquen'           => 13500,
+        'Kennedy'           => 14000,
+
+        // ANILLO 3: Centro-Sur
+        'Santa Fe'          => 14500,
+        'Candelaria'        => 15000,
+        'Antonio Nariño'    => 15500,
+        'Rafael Uribe Uribe'=> 16000,
+        'Tunjuelito'        => 16500,
+
+        // ANILLO 4: Periferia Sur (Mayor distancia)
+        'San Cristobal'     => 17500,
+        'Bosa'              => 18000,
+        'Ciudad Bolivar'    => 18500,
+        'Usme'              => 19500,
+        'Sumapaz'           => 20000,
+    ];
+
+    public function updatedLocation($value) 
+    {
+        $this->calculateShipping();
+    }
+
+    public function updatedCity($value) 
+    {
+        if ($value !== 'Bogotá') {
+            $this->location = null;
+        }
+        $this->calculateShipping();
+    }
+
+    protected function calculateShipping() 
+    {
+        $subtotal = (int) CartManagement::calculateGrandTotal($this->cart_items);
+
+        // Invocamos al Helper centralizado
+        $this->shipping_cost = CartManagement::getShippingCost(
+            $subtotal, 
+            $this->city, 
+            $this->location, 
+            $this->localidadPrecios
+        );
+
+        $this->grand_total = $subtotal + $this->shipping_cost;
+    }
 
     public function mount()
     {
+        $this->first_name = auth()->user()->name;
+        $this->email = auth()->user()->email;
+
         $this->cart_items = CartManagement::getCartItemsFromCookie();
-        $this->grand_total = CartManagement::calculateGrandTotal($this->cart_items);
-
-            // 1. Pre-llenar con datos del usuario autenticado
-        if (auth()->check()) {
-            $user = auth()->user();
-            $this->first_name = $user->name; // O separa si tienes campos distintos
-            $this->email = $user->email;
-        }
-
-        // 2. Recuperar la información de envío de la sesión (Bogotá/Fecha)
+        // Inicializamos el envío según lo que venga de la sesión del carrito
         $shipping_data = session('checkout_shipping');
         
-        if ($shipping_data && $shipping_data['is_bogota']) {
-            $this->city = 'Bogotá';
-            $this->state = 'Cundinamarca';
-            $this->shipping_cost = 15000;
-            $this->shipping_method = 'domicilio';
-
-            // Puedes asignar la fecha de entrega a una propiedad pública para mostrarla
+        if ($shipping_data) {
+            $this->city = $shipping_data['is_bogota'] ? 'Bogotá' : null;
             $this->delivery_date_label = $shipping_data['delivery_date'];
+            $this->location = $shipping_data['location'];
+            $this->shipping_cost = $shipping_data['cost'];
         }
+
+        $this->calculateShipping();
     }
 
     public function placeOrder()
@@ -71,8 +122,6 @@ class CheckoutPage extends Component
             'email' => 'required|email',
             'street_address' => 'required|min:3|max:255',
             'city' => 'required|min:3|max:255',
-            'state' => 'required|min:3|max:255',
-            'zip_code' => 'required|min:5|max:255',
             'payment_method' => 'required|in:BOLD,COD'
         ]);
         
@@ -113,8 +162,7 @@ class CheckoutPage extends Component
         $address->phone = $this->phone;
         $address->street_address = $this->street_address;
         $address->city = $this->city;
-        $address->state = $this->state;
-        $address->zip_code = $this->zip_code;
+        $address->location = $this->location;
         $address->save();
 
         $order->items()->createMany($cart_items);
@@ -133,9 +181,9 @@ class CheckoutPage extends Component
                 'amount'             => (string) $this->total_amount_bold,
                 'apiKey'             => env('BOLD_INTEGRATION_KEY'),
                 'integritySignature' => hash('sha256', $this->order_id . $this->total_amount_bold . $moneda . env('BOLD_SECRET_KEY')),
-                'description'        => "Pedido #{$this->order_id} en DCodeMania",
+                'description'        => "Pedido #{$this->order_id} en Ignia Fungi",
                 'renderMode'         => 'embedded',
-                'redirectionUrl'     => route('order.thanks', ['reference' => $order->reference]),
+                'redirectionUrl'     => str_replace('http://localhost:8000', 'https://dev.igniafungi.com', route('order.thanks', ['reference' => $order->reference])),
                 // IMPORTANTE: Enviar como array para que JS lo convierta a string después
                 'customerData'       => [
                     'email'          => $this->email,
@@ -146,9 +194,8 @@ class CheckoutPage extends Component
                 ],
                 'billingAddress'     => [
                     'address'        => $this->street_address,
-                    'zipCode'        => $this->zip_code,
                     'city'           => $this->city,
-                    'state'          => $this->state,
+                    'location'          => $this->location,
                     'country'        => 'CO' // Código de país de 2 dígitos
                 ]
             ];

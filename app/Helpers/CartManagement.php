@@ -7,6 +7,51 @@ use Illuminate\Support\Facades\Cookie;
 
 class CartManagement
 {
+    public const FREE_SHIPPING_THRESHOLD = 200000;
+    public const DEFAULT_NATIONAL_SHIPPING = 15000;
+    public const LOCALIDAD_PRECIOS = [
+        'Engativa'          => 9000,
+        'Fontibon'          => 9500,
+        'Barrios Unidos'    => 10000,
+        'Teusaquillo'       => 10500,
+        'Suba'              => 11000,
+        'Puente Aranda'     => 12000,
+        'Chapinero'         => 12500,
+        'Martires'          => 13000,
+        'Usaquen'           => 13500,
+        'Kennedy'           => 14000,
+        'Santa Fe'          => 14500,
+        'Candelaria'        => 15000,
+        'Antonio Nariño'    => 15500,
+        'Rafael Uribe Uribe'=> 16000,
+        'Tunjuelito'        => 16500,
+        'San Cristobal'     => 17500,
+        'Bosa'              => 18000,
+        'Ciudad Bolivar'    => 18500,
+        'Usme'              => 19500,
+        'Sumapaz'           => 20000,
+    ];
+    
+    /**
+     * Centraliza la lógica de cobro de envío.
+     */
+    public static function getShippingCost($subtotal, $city, $location = null) 
+    {
+        // 1. Regla de Envío Gratis
+        if ($subtotal >= self::FREE_SHIPPING_THRESHOLD) {
+            return 0;
+        }
+
+        // 2. Lógica para Bogotá
+        if ($city === 'Bogotá') {
+            // Buscamos el precio en la constante propia de la clase
+            return self::LOCALIDAD_PRECIOS[$location] ?? self::DEFAULT_NATIONAL_SHIPPING;
+        }
+
+        // 3. Tarifa Nacional
+        return self::DEFAULT_NATIONAL_SHIPPING;
+    }
+    
     //add item to cart
     public static function addItemsToCart($product_id, $quantity = null)
     {
