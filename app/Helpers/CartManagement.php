@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Cookie;
 class CartManagement
 {
     public const FREE_SHIPPING_THRESHOLD = 200000;
-    public const DEFAULT_NATIONAL_SHIPPING = 15000;
+    public const DEFAULT_NATIONAL_SHIPPING = 45000;
     public const LOCALIDAD_PRECIOS = [
         'Engativa'          => 9000,
         'Fontibon'          => 9500,
@@ -37,19 +37,48 @@ class CartManagement
      */
     public static function getShippingCost($subtotal, $city, $location = null) 
     {
-        // 1. Regla de Envío Gratis
-        if ($subtotal >= self::FREE_SHIPPING_THRESHOLD) {
-            return 0;
-        }
-
-        // 2. Lógica para Bogotá
+        // 1. Lógica específica para BOGOTÁ
         if ($city === 'Bogotá') {
-            // Buscamos el precio en la constante propia de la clase
-            return self::LOCALIDAD_PRECIOS[$location] ?? self::DEFAULT_NATIONAL_SHIPPING;
+            // Solo aquí validamos el umbral de envío gratis
+            if ($subtotal >= self::FREE_SHIPPING_THRESHOLD) {
+                return 0; // Envío gratis solo para Bogotá
+            }
+            
+            // Si no alcanza el monto, se cobra según la localidad
+            return self::LOCALIDAD_PRECIOS[$location] ?? 9000; 
         }
 
-        // 3. Tarifa Nacional
-        return self::DEFAULT_NATIONAL_SHIPPING;
+        // 2. Lógica para el RESTO DEL PAÍS (Nacional)
+        // Sin importar el subtotal, se cobra la tarifa estándar
+        return self::DEFAULT_NATIONAL_SHIPPING; // Retorna 15000
+    }
+
+    public static function getColombiaCities() {
+    return [
+            'Leticia', 'Medellín', 'Arauca', 'Barranquilla', 'Cartagena', 'Tunja', 'Manizales', 
+            'Florencia', 'Yopal', 'Popayán', 'Valledupar', 'Quibdó', 'Montería', 'Bogotá', 
+            'Inírida', 'San José del Guaviare', 'Neiva', 'Riohacha', 'Santa Marta', 'Villavicencio', 
+            'Pasto', 'Cúcuta', 'Mocoa', 'Armenia', 'Pereira', 'San Andrés', 'Bucaramanga', 
+            'Sincelejo', 'Ibagué', 'Cali', 'Mitú', 'Puerto Carreño', 'Apartadó', 'Bello', 
+            'Buenaventura', 'Dosquebradas', 'Envigado', 'Floridablanca', 'Girón', 'Itagüí', 
+            'Magangué', 'Maicao', 'Palmira', 'Piedecuesta', 'Popayán', 'Riohacha', 'Soledad', 
+            'Tulua', 'Tumaco', 'Tunja', 'Turbo', 'Uribia', 'Valledupar', 'Villavicencio', 'Yumbo'
+        ];
+    }
+
+    /**
+     * Retorna la lista de los 32 departamentos de Colombia.
+     */
+    public static function getColombiaDepartments() 
+    {
+        return [
+            'Amazonas', 'Antioquia', 'Arauca', 'Atlántico', 'Bolívar', 'Boyacá', 
+            'Caldas', 'Caquetá', 'Casanare', 'Cauca', 'Cesar', 'Chocó', 
+            'Córdoba', 'Cundinamarca', 'Guainía', 'Guaviare', 'Huila', 'La Guajira', 
+            'Magdalena', 'Meta', 'Nariño', 'Norte de Santander', 'Putumayo', 'Quindío', 
+            'Risaralda', 'San Andrés y Providencia', 'Santander', 'Sucre', 'Tolima', 
+            'Valle del Cauca', 'Vaupés', 'Vichada'
+        ];
     }
     
     //add item to cart

@@ -2,10 +2,11 @@
 
 namespace App\Livewire;
 
+use Carbon\Carbon;
+use App\Models\Product;
 use Livewire\Component;
 use App\Helpers\CartManagement;
 use App\Livewire\Partials\Navbar;
-use Carbon\Carbon;
 use Livewire\Attributes\Computed;
 
 class CartPage extends Component
@@ -36,6 +37,21 @@ class CartPage extends Component
     {
         $this->cart_items = $items;
         $this->grand_total = CartManagement::calculateGrandTotal($this->cart_items);
+    }
+
+    #[Computed]
+    public function hasRestrictedProducts()
+    {
+        foreach ($this->cart_items as $item) {
+            // Asumiendo que en el array del carrito guardas el slug o ID de la categoría
+            // o puedes consultar el modelo Product si es necesario.
+            $product = Product::find($item['product_id']);
+            
+            if ($product && $product->category && $product->category->slug === 'hongos-gourmet') {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -111,6 +127,15 @@ class CartPage extends Component
 
     public function checkout()
     {
+        // Bloqueo de seguridad: Si hay productos restringidos y no es Bogotá
+        if (!$this->is_bogota && $this->hasRestrictedProducts) {
+            $this->dispatch('notify', [
+                'type' => 'error',
+                'message' => 'Elimina los hongos frescos para envíos nacionales.'
+            ]);
+            return;
+        }
+        
         // Usamos la opción seleccionada por el usuario de la lista de deliveryOptions
         $selectedDate = $this->deliveryOptions[$this->selected_delivery_index]['label'] ?? null;
 

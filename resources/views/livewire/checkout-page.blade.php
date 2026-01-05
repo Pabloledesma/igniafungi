@@ -118,13 +118,10 @@
 									Ciudad
 								</label>
 								<select wire:model.live="city" class="py-3 px-4 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:pointer-events-none">
-									<option selected="">Seleccione una opción</option>
-									<option value="Bogotá">Bogotá</option>
-									<option value="Barranquilla">Barranquilla</option>
-									<option value="Bucaramanga">Bucaramanga</option>
-									<option value="Cali">Cali</option>
-									<option value="Cartagena">Cartagena</option>
-									<option value="Medellin">Medellin</option>
+									<option value="">Seleccione una ciudad</option>
+									@foreach(\App\Helpers\CartManagement::getColombiaCities() as $cityName)
+										<option value="{{ $cityName }}">{{ $cityName }}</option>
+									@endforeach
 								</select>
 								@error('city')
 									<div class="text-red-500 text-sm">{{ $message }}</div>
@@ -163,7 +160,22 @@
 									@enderror
 								</div>
 							@endif
-						
+							@if ($city != 'Bogotá')
+								<div>
+								<label class="block text-gray-700 dark:text-white mb-1" for="department">
+									Departamento
+								</label>
+								<select wire:model.live="department" class="py-3 px-4 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:pointer-events-none">
+									<option value="">Seleccione un departamento</option>
+									@foreach(\App\Helpers\CartManagement::getColombiaDepartments() as $departmentName)
+										<option value="{{ $departmentName }}">{{ $departmentName }}</option>
+									@endforeach
+								</select>
+								@error('department')
+									<div class="text-red-500 text-sm">{{ $message }}</div>
+								@enderror
+							</div>
+							@endif
 						</div>
 						<div>
 							<label class="block text-gray-700 dark:text-white mb-1" for="address">
@@ -227,19 +239,21 @@
 						</li>
 				
 					@endforeach
-					<li class="py-3 sm:py-4">
-						<div class="flex justify-between mb-2 font-medium text-blue-600">
-							<span>Envío (Bogotá)</span>
-							<span>{{ Number::currency($shipping_cost, 'COP') }}</span>
-						</div>
-						@if(isset($delivery_date_label))
-							<div class="bg-blue-50 p-2 rounded mb-2 border border-blue-100">
-								<p class="text-xs text-blue-800 font-bold">
-									🚚 Entrega: {{ $delivery_date_label }}
-								</p>
+					@if($city === 'Bogotá')
+						<li class="py-3 sm:py-4">
+							<div class="flex justify-between mb-2 font-medium text-blue-600">
+								<span>Envío (Bogotá)</span>
+								<span>{{ Number::currency($shipping_cost, 'COP') }}</span>
 							</div>
-						@endif
-					</li>
+							@if(isset($delivery_date_label))
+								<div class="bg-blue-50 p-2 rounded mb-2 border border-blue-100">
+									<p class="text-xs text-blue-800 font-bold">
+										🚚 Entrega: {{ $delivery_date_label }}
+									</p>
+								</div>
+							@endif
+						</li>
+					@endif
 					<li class="py-3 sm:py-4">
 						<div class="flex justify-between mb-2 font-bold text-lg">
 							<span>Total a Pagar</span>

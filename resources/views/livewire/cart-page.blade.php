@@ -58,6 +58,7 @@
                   </span>
                   @if($is_bogota)
                     <div class="ms-6 flex-none" wire:key="location-selector-container">
+                      <label for="location">Localidad</label>
                       <select wire:model.live="location" class="py-2 px-3 block w-40 border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500">
                           <option value="">Seleccione</option>
                           @foreach(array_keys(\App\Helpers\CartManagement::LOCALIDAD_PRECIOS) as $loc)
@@ -114,25 +115,27 @@
       @endif
       </div>
       <div class="md:w-1/4">
-        @php $data = $this->getProgressData(); @endphp
+        @if($is_bogota)
+          @php $data = $this->getProgressData(); @endphp
 
-        <div class="p-4 bg-white border-b">
-            <div class="flex justify-between mb-1 text-sm">
-                @if($data['is_free'])
-                    <span class="text-green-600 font-bold">¡Genial! Tienes envío gratis 🚚</span>
-                @else
-                    <span>Te faltan <strong>${{ number_format($data['missing']) }}</strong> para envío gratis</span>
-                @endif
-                <span>$200k</span>
-            </div>
-            <div class="w-full bg-gray-200 rounded-full h-2.5">
-                <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
-                    style="width: {{ $data['percentage'] }}%"></div>
-            </div>
-        </div>
+          <div class="p-4 bg-white border-b">
+              <div class="flex justify-between mb-1 text-sm">
+                  @if($data['is_free'])
+                      <span class="text-green-600 font-bold">¡Genial! Tienes envío gratis 🚚</span>
+                  @else
+                      <span>Te faltan <strong>${{ number_format($data['missing']) }}</strong> para envío gratis</span>
+                  @endif
+                  <span>$200k</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2.5">
+                  <div class="bg-blue-600 h-2.5 rounded-full transition-all duration-500" 
+                      style="width: {{ $data['percentage'] }}%"></div>
+              </div>
+          </div>
+        @endif
         <div class="bg-white rounded-lg shadow-md p-6 border-t-4 border-gold-ignia">
           <h2 class="text-lg font-semibold mb-4">Resumen</h2>
-          
+
           <div class="flex justify-between mb-2">
             <span>Subtotal</span>
             <span>{{ Number::currency($grand_total, 'COP') }}</span>
@@ -150,16 +153,46 @@
             <span class="font-bold text-xl text-slate-900">{{ Number::currency($this->finalTotal, 'COP') }}</span>
           </div>
 
-          @if($cart_items)
-            {{-- Cambiamos el <a> por un <button> con wire:click para ejecutar la lógica de sesión --}}
-            <button wire:click="checkout" class="bg-gold-ignia hover:bg-black transition-colors block text-center text-white font-bold py-3 px-4 rounded-lg w-full shadow-md">
-              Agendar Pedido
-            </button>
-          @else
-            <button disabled class="bg-gray-300 cursor-not-allowed block text-center text-white py-3 px-4 rounded-lg w-full">
-              Seleccione Bogotá para continuar
-            </button>
-          @endif
+           @if($cart_items)
+            @if(!$is_bogota && $this->hasRestrictedProducts)
+                {{-- Mensaje de advertencia --}}
+                <div class="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-red-700">
+                                <strong>Atención:</strong> Los productos de la categoría <span class="font-bold">Hongos Gourmet</span> solo están disponibles para entrega en Bogotá. Por favor, elimínalos o selecciona Bogotá como destino.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                {{-- Botón deshabilitado o simplemente oculto --}}
+                <button disabled class="bg-gray-300 cursor-not-allowed block text-center text-white font-bold py-3 px-4 rounded-lg w-full">
+                    Pedido no disponible para Nacional
+                </button>
+            @else
+                {{-- Botón normal --}}
+                @if ($is_bogota && !$this->location)
+                  <div class="ml-3">
+                      <p class="text-sm text-red-700">
+                          <strong>Atención:</strong> Seleccione una localidad
+                      </p>
+                  </div>
+                @else
+                <button wire:click="checkout" class="bg-gold-ignia hover:bg-black transition-colors block text-center text-white font-bold py-3 px-4 rounded-lg w-full shadow-md">
+                    Agendar Pedido
+                </button>
+                @endif
+            @endif
+            @else
+                <button disabled class="bg-gray-300 cursor-not-allowed block text-center text-white py-3 px-4 rounded-lg w-full">
+                    Carrito vacío
+                </button>
+            @endif
         </div>
       </div>
     </div>

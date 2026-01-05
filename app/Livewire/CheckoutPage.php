@@ -31,6 +31,7 @@ class CheckoutPage extends Component
     public $data_customer_data;
     public $delivery_date_label = null;
     public $city;
+    public $departmet;
     public $free_shipping_if = CartManagement::FREE_SHIPPING_THRESHOLD;
     public $location; // Para la localidad
     public $cities = ['Bogotá', 'Medellín', 'Cali', 'Barranquilla', 'Cartagena'];

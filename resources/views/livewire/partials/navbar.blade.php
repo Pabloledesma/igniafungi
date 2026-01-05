@@ -1,4 +1,4 @@
-<header class="sticky top-4 inset-x-0 flex flex-wrap md:justify-start md:flex-nowrap z-50 w-full before:absolute before:inset-0 before:max-w-5xl before:mx-2 lg:before:mx-auto before:rounded-[26px] before:bg-neutral-800/30 before:backdrop-blur-md">
+<header class="sticky top-4 inset-x-0 flex flex-wrap md:justify-start md:flex-nowrap z-[60] w-full before:absolute before:inset-0 before:max-w-5xl before:mx-2 lg:before:mx-auto before:rounded-[26px] before:bg-neutral-800/30 before:backdrop-blur-md">
     <nav class="relative max-w-5xl w-full flex flex-wrap md:flex-nowrap basis-full items-center justify-between py-2 ps-5 pe-2 md:py-0 mx-2 lg:mx-auto">
     
       <div class="flex items-center justify-center"> 
@@ -76,7 +76,7 @@
                 <svg class="ms-2 w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
 
-              <div class="hs-dropdown-menu transition-[opacity,margin] duration-[150ms] hs-dropdown-open:opacity-100 opacity-0 md:w-48 hidden z-[100] bg-white md:shadow-md rounded-lg p-2 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 absolute md:absolute md:top-full right-0 md:right-0 mt-2">
+              <div class="hs-dropdown-menu transition-[opacity,margin] duration-[150ms] hs-dropdown-open:opacity-100 opacity-0 md:w-48 hidden !z-[100] bg-white md:shadow-md rounded-lg p-2 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 absolute md:absolute md:top-full right-0 md:right-0 mt-2">
                 
                 <a wire:navigate class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" href="/my-orders">
                   My Orders
