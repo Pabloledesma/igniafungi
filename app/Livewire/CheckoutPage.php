@@ -173,18 +173,15 @@ class CheckoutPage extends Component
             $this->total_amount_bold = (int) $order->grand_total;
             $moneda = "COP";
             
-            // Preparar configuración para JS
-            // En tu controlador
             $config = [
                 'orderId'            => (string) $this->order_id,
                 'currency'           => 'COP',
                 'amount'             => (string) $this->total_amount_bold,
-                'apiKey'             => env('BOLD_INTEGRATION_KEY'),
-                'integritySignature' => hash('sha256', $this->order_id . $this->total_amount_bold . $moneda . env('BOLD_SECRET_KEY')),
+                'apiKey'             => config('services.bold.key'),
+                'integritySignature' => hash('sha256', $this->order_id . $this->total_amount_bold . $moneda . config('services.bold.secret')),
                 'description'        => "Pedido #{$this->order_id} en Ignia Fungi",
                 'renderMode'         => 'embedded',
                 'redirectionUrl'     => str_replace('http://localhost:8000', 'https://dev.igniafungi.com', route('order.thanks', ['reference' => $order->reference])),
-                // IMPORTANTE: Enviar como array para que JS lo convierta a string después
                 'customerData'       => [
                     'email'          => $this->email,
                     'fullName'       => $this->first_name . ' ' . $this->last_name,
@@ -196,7 +193,7 @@ class CheckoutPage extends Component
                     'address'        => $this->street_address,
                     'city'           => $this->city,
                     'location'          => $this->location,
-                    'country'        => 'CO' // Código de país de 2 dígitos
+                    'country'        => 'CO' 
                 ]
             ];
             // Limpiar carrito y emitir evento al navegador
