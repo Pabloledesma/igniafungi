@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Mail;
 
 Route::get('/test-envio-real', function () {
     Mail::raw('¡Prueba exitosa! Este correo sale desde el Transactional Stream de Ignia Fungi.', function ($message) {
-        $message->to('tu-correo-personal@gmail.com')
+        $message->to('pabloledes83@gmail.com')
                 ->subject('Validación de Dominio Ignia Fungi');
     });
     return "Correo enviado a través de la infraestructura de Mailtrap.";
