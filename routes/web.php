@@ -69,7 +69,6 @@ Route::middleware(['auth', 'verified'])->group(function (){
     Route::get('/my-orders', MyOrdersPage::class);
     Route::get('/gracias', OrderConfirmation::class)->name('order.thanks');
     Route::get('/my-orders/{order}', MyOrderDetailPage::class);
-    Route::get('/success', SuccessPage::class)->name('success');
     Route::get('/cancel', cancelPage::class)->name('cancel');
 });
 

@@ -202,7 +202,7 @@ class CheckoutPage extends Component
             $this->dispatch('open-bold-checkout', config: $config);
         } else {
             // Pago contra entrega: Redirigir directamente
-            return redirect()->route('success');
+            return redirect()->route('order.thanks', ['reference' => $order->reference]);
         }
 
         CartManagement::clearCartItems();

@@ -1,7 +1,17 @@
 <div class="min-h-screen py-10 px-4">
     <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
         
-        @if($order->status === 'paid')
+        @if($order->payment_method === 'cod')
+        <div class="bg-slate-800 p-6 text-center">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-sm">
+                <svg class="w-10 h-10 text-gold-ignia" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-extrabold text-white">¡Pedido Recibido!</h1>
+            <p class="text-slate-200 mt-2">Pagarás en efectivo al recibir tus productos.</p>
+        </div>
+        @elseif($order->status === 'paid')
             <div class="bg-gold-ignia p-6 text-center">
                 <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-sm">
                     <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
