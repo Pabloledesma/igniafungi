@@ -6,6 +6,7 @@ use App\Models\User;
 use Livewire\Component;
 use Livewire\Attributes\Title;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Auth\Events\Registered;
 
 #[Title('Register Page')]
 class RegisterPage extends Component
@@ -27,6 +28,8 @@ class RegisterPage extends Component
             'email' => $this->email,
             'password' => Hash::make($this->password)
         ]);
+
+        event(new Registered($user));
 
         auth()->login($user);
         return redirect()->intended('/'); 
