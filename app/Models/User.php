@@ -59,4 +59,13 @@ class User extends Authenticatable implements FilamentUser, MustVerifyEmail
     {
         return str_ends_with($this->email, '@igniafungi.com');
     }
+
+    /**
+     * Sobrescribe el método original para enviar la verificación a la cola.
+     */
+    public function sendEmailVerificationNotification()
+    {
+        // Esto enviará el correo usando la conexión de cola definida en tu .env
+        $this->notify(new \Illuminate\Auth\Notifications\VerifyEmail);
+    }
 }
