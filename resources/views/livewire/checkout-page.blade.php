@@ -14,7 +14,6 @@
 
             const launch = () => {
                 try {
-                    console.log('Iniciando Bold con config final:', config); //Quitar esto en producción!!!
                     const checkout = new BoldCheckout(config);
                     checkout.open();
                 } catch (e) {

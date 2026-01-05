@@ -20,7 +20,7 @@ class OrderConfirmation extends Component
 
         // 2. Buscamos la orden. Usamos with() para cargar los productos y evitar N+1
         $this->order = Order::where('reference', $reference)
-                    ->with(['items.product', 'address'])
+                    ->with(['items.product', 'addresses'])
                     ->firstOrFail(); // Si no existe, lanza 404
 
     }
