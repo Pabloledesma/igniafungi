@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use App\Models\BatchLoss;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Model;
@@ -137,6 +138,11 @@ class Batch extends Model
     public function getDaysInCurrentPhaseAttribute()
     {
         $current = $this->phases()->wherePivot('finished_at', null)->first();
-        return $current ? now()->diffInDays($current->pivot->started_at) : 0;
+    
+        if (!$current || !$current->pivot->started_at) {
+            return 0;
+        }
+
+        return Carbon::parse($current->pivot->started_at)->diffInDays(now());
     }
 }

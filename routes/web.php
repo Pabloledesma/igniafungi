@@ -4,6 +4,7 @@ use App\Livewire\CartPage;
 use App\Livewire\HomePage;
 use App\Livewire\CancelPage;
 use Illuminate\Http\Request;
+use App\Livewire\BatchKanban;
 use App\Livewire\CheckoutPage;
 use App\Livewire\MyOrdersPage;
 use App\Livewire\ProductsPage;
@@ -17,10 +18,10 @@ use Illuminate\Support\Facades\Route;
 use App\Livewire\Auth\ResetPasswordPage;
 use App\Livewire\Shop\OrderConfirmation;
 use App\Livewire\Auth\ForgotPasswordPage;
-use App\Http\Controllers\BoldWebhookController;
-use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use App\Http\Controllers\BatchLossController;
 use App\Http\Controllers\BatchPhaseController;
+use App\Http\Controllers\BoldWebhookController;
+use Illuminate\Foundation\Auth\EmailVerificationRequest;
 
 
 Route::get('/test-envio-real', function () {
@@ -71,7 +72,10 @@ Route::middleware(['auth', 'verified'])->group(function (){
     Route::get('/gracias', OrderConfirmation::class)->name('order.thanks');
     Route::get('/my-orders/{order}', MyOrderDetailPage::class);
     Route::get('/cancel', cancelPage::class)->name('cancel');
+});
 
+Route::middleware(['auth'])->group(function () {
+    Route::get('/kanban', BatchKanban::class)->name('kanban');
     Route::post('/batches/{batch}/transition', [BatchPhaseController::class, 'transition']) 
         ->name('batches.transition');
     Route::post('/batches/{batch}/losses', [BatchLossController::class, 'store'])
