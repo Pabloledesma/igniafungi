@@ -3,7 +3,7 @@
 use App\Livewire\CartPage;
 use App\Livewire\HomePage;
 use App\Livewire\CancelPage;
-use App\Livewire\SuccessPage;
+use Illuminate\Http\Request;
 use App\Livewire\CheckoutPage;
 use App\Livewire\MyOrdersPage;
 use App\Livewire\ProductsPage;
@@ -12,15 +12,16 @@ use App\Livewire\CategoriesPage;
 use App\Livewire\Auth\RegisterPage;
 use App\Livewire\MyOrderDetailPage;
 use App\Livewire\ProductDetailPage;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route;
 use App\Livewire\Auth\ResetPasswordPage;
 use App\Livewire\Shop\OrderConfirmation;
 use App\Livewire\Auth\ForgotPasswordPage;
 use App\Http\Controllers\BoldWebhookController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
-use Illuminate\Http\Request;
-use App\Mail\MyTestEmail;
-use Illuminate\Support\Facades\Mail;
+use App\Http\Controllers\BatchLossController;
+use App\Http\Controllers\BatchPhaseController;
+
 
 Route::get('/test-envio-real', function () {
     Mail::raw('¡Prueba exitosa! Este correo sale desde el Transactional Stream de Ignia Fungi.', function ($message) {
@@ -70,6 +71,11 @@ Route::middleware(['auth', 'verified'])->group(function (){
     Route::get('/gracias', OrderConfirmation::class)->name('order.thanks');
     Route::get('/my-orders/{order}', MyOrderDetailPage::class);
     Route::get('/cancel', cancelPage::class)->name('cancel');
+
+    Route::post('/batches/{batch}/transition', [BatchPhaseController::class, 'transition']) 
+        ->name('batches.transition');
+    Route::post('/batches/{batch}/losses', [BatchLossController::class, 'store'])
+        ->name('batches.losses.store');
 });
 
 Route::post('/api/webhooks/bold', [BoldWebhookController::class, 'handle']);

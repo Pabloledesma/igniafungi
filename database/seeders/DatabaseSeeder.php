@@ -3,9 +3,13 @@
 namespace Database\Seeders;
 
 use App\Models\User;
+use App\Models\Batch;
+use App\Models\Phase;
+use App\Models\Recipe;
 use App\Models\Strain;
 use App\Models\Product;
 use App\Models\Category;
+use Illuminate\Support\Str;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -19,8 +23,8 @@ class DatabaseSeeder extends Seeder
      */
    public function run(): void
     {
-        User::factory()->create(['name' => 'Pablo', 'email' => 'gerencia@igniafungi.com', 'password' => Hash::make('password')]);
-        User::factory()->create(['name' => 'Alexa', 'email' => 'comercial@igniafungi.com', 'password' => Hash::make('password')]);
+        $pablo = User::factory()->create(['name' => 'Pablo', 'email' => 'gerencia@igniafungi.com', 'password' => Hash::make('password')]);
+        $alexa = User::factory()->create(['name' => 'Alexa', 'email' => 'comercial@igniafungi.com', 'password' => Hash::make('password')]);
 
         $catGourmet = Category::factory()->create(['name' => 'Hongos Gourmet', 'slug' => 'hongos-gourmet', 'is_active' => true]);
         $catMedicina = Category::factory()->create(['name' => 'Medicina Ancestral', 'slug' => 'medicina-ancestral', 'is_active' => true]);
@@ -36,6 +40,48 @@ class DatabaseSeeder extends Seeder
         $strainEryngii = Strain::factory()->create(['name' => 'Eryngii', 'slug' => 'eryngii', 'incubation_days' => 30]);
         $strainShiitake = Strain::factory()->create(['name' => 'Shiitake', 'slug' => 'shiitake', 'incubation_days' => 60]);
         $strainReishii = Strain::factory()->create(['name' => 'Reishii', 'slug' => 'reishii', 'incubation_days' => 30]);
+
+        // 1. Crear Fases maestras
+        $phasesData = [
+            ['name' => 'Inoculación', 'slug' => 'inoculation', 'order' => 1],
+            ['name' => 'Incubación', 'slug' => 'incubation', 'order' => 2],
+            ['name' => 'Fructificación', 'slug' => 'fruiting', 'order' => 3],
+            ['name' => 'Cosecha', 'slug' => 'harvest', 'order' => 4],
+        ];
+
+        foreach ($phasesData as $data) {
+            Phase::updateOrCreate(['slug' => $data['slug']], $data);
+        }
+
+        $phases = Phase::orderBy('order')->get();
+        $recipe = Recipe::factory()->create(['name' => 'Receta Base Estándar']);
+
+        // 2. Crear un Lote de ejemplo en cada fase para probar el Kanban
+        foreach ($phases as $phase) {
+            $batch = Batch::create([
+                'user_id' => $pablo->id,
+                'recipe_id' => $recipe->id,
+                'code' => "Lote " . Str::upper(Str::random(5)),
+                'strain_id' => Strain::inRandomOrder()->first()->id ?? 1,
+                'recipe_id' => 1, // Asumiendo que existe una receta base
+                'quantity' => rand(50, 100),
+                'weigth_dry' => rand(50, 100),
+                'inoculation_date' => now(),
+                'status' => 'active',
+            ]);
+
+            // Asociar la fase actual al lote
+            $batch->phases()->attach($phase->id, [
+                'user_id' => $pablo->id,
+                'started_at' => now()->subDays(rand(1, 10)),
+                'notes' => 'Lote generado por el seeder para pruebas de UI.'
+            ]);
+
+            // Agregar una merma aleatoria a un lote de Incubación
+            if ($phase->slug === 'incubation') {
+                $batch->recordLoss(5, 'Contaminación detectada', $pablo->id, 'Pequeña mancha de moho verde.');
+            }
+        }
 
         Product::factory()->create([
             'name' => 'Melena de León fresca',
