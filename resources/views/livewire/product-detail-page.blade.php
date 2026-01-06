@@ -10,12 +10,13 @@
               @endif
             </div>
             <div class="flex-wrap hidden md:flex ">
-
-              @foreach($product->images as $image)
-              <div class="w-1/2 p-2 sm:w-1/4" x-on:click="mainImage='{{ asset('storage/' . $image) }}'">
-                <img src="{{ asset('storage/' . $image) }}" alt="" class="object-cover w-full lg:h-20 cursor-pointer hover:border hover:border-blue-500">
-              </div>
-              @endforeach
+              @if($product && $product->images)
+                @foreach($product->images as $image)
+                <div class="w-1/2 p-2 sm:w-1/4" x-on:click="mainImage='{{ asset('storage/' . $image) }}'">
+                  <img src="{{ asset('storage/' . $image) }}" alt="" class="object-cover w-full lg:h-20 cursor-pointer hover:border hover:border-blue-500">
+                </div>
+                @endforeach
+              @endif
 
             </div>
             <div class="px-6 pb-6 mt-6 border-t border-gray-300 dark:border-gray-400 ">
