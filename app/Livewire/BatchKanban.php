@@ -9,32 +9,44 @@ use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\DB;
 use Jantinnerezo\LivewireAlert\Facades\LivewireAlert;
 
-
 #[Layout('components.layouts.erp')]
 class BatchKanban extends Component
 {
-    public $selectedBatchId;
+    // Modales y Estados
     public $showModal = false;
+    public $showDiscardModal = false;
     public $showLossModal = false;
-    public $notes;
-    public $nextPhaseId;
     public $isLastPhase = false;
+    public $isTotalDiscard = false;
+
+    // Propiedades generales
+    public $selectedBatchId;
+    public $notes = '';
+    public $nextPhaseId;
+
+    // Propiedades de Cosecha
     public $harvestWeight; 
-    public $shouldFinishBatch = false; 
     public $harvestDate;
+    public $shouldFinishBatch = false; 
+
+    // Propiedades de Descarte
+    public $discardQuantity;
+    public $discardReason;
+    public $discardNotes;
 
     public function mount()
     {
-        $this->harvestDate = now()->format('Y-m-d'); // Fecha por defecto: hoy
+        $this->harvestDate = now()->format('Y-m-d');
     }
-    
+
+    // --- LÓGICA DE TRANSICIÓN Y COSECHA ---
+
     public function openTransitionModal($batchId)
     {
         $this->selectedBatchId = $batchId;
         $batch = Batch::find($batchId);
         $currentPhase = $batch->current_phase;
 
-        // Buscamos si existe una fase con orden superior
         $nextPhase = Phase::where('order', '>', $currentPhase->order)
                         ->orderBy('order')
                         ->first();
@@ -44,124 +56,114 @@ class BatchKanban extends Component
             $this->isLastPhase = false;
         } else {
             $this->nextPhaseId = null;
-            $this->isLastPhase = true; // Estamos en la fase final (Cosecha)
+            $this->isLastPhase = true;
         }
 
         $this->showModal = true;
-    }
-
-    public function close()
-    {
-        $this->reset(['selectedBatchId', 'showModal', 'notes', 'nextPhaseId']);
     }
 
     public function harvestBatch()
     {
         $this->validate([
             'harvestWeight' => 'required|numeric|min:0.1',
+            'harvestDate' => 'required|date',
             'notes' => 'nullable|string'
         ]);
 
-        $batch = Batch::find($this->selectedBatchId);
+        $batch = Batch::findOrFail($this->selectedBatchId);
 
         DB::transaction(function () use ($batch) {
-            // 1. Crear el recurso Harvest
+            // 1. Crear el recurso Harvest (Usando tu modelo Harvest)
             $batch->harvests()->create([
                 'user_id' => auth()->id(),
                 'weight' => $this->harvestWeight,
-                'harvest_date' => now(), // o la fecha que elijas del modal
+                'harvest_date' => $this->harvestDate,
                 'notes' => $this->notes,
                 'phase_id' => $batch->current_phase->id,
             ]);
 
-            // 2. Si el usuario marcó "Finalizar bloque"
             if ($this->shouldFinishBatch) {
                 $batch->update(['status' => 'harvested']);
                 
-                // Cerrar la fase en la tabla pivote definitivamente
                 $batch->phases()->updateExistingPivot($batch->current_phase->id, [
                     'finished_at' => now(),
                     'notes' => $this->notes . " (Bloque finalizado)"
                 ]);
             } else {
-                // Si NO finaliza, el lote se queda en la fase de Cosecha para el siguiente flush
-                // Solo guardamos la nota de esta cosecha específica
+                // Registro de nota en el pivote para histórico
                 $currentNotes = $batch->current_phase->pivot->notes;
                 $batch->phases()->updateExistingPivot($batch->current_phase->id, [
-                    'notes' => $currentNotes . "\n- Cosecha (" . now()->format('d/m') . "): {$this->harvestWeight}g. " . $this->notes
+                    'notes' => $currentNotes . "\n- Cosecha (" . $this->harvestDate . "): {$this->harvestWeight} kg. " . $this->notes
                 ]);
             }
         });
 
         $this->close();
-        $this->reset(['shouldFinishBatch', 'harvestWeight']);
-        LivewireAlert::title('Success')
-            ->position('bottom-end')
-            ->success()
-            ->text("Cosecha registrada correctamente.")
-            ->show();
-    }
-
-    public function finishBatch()
-    {
-        $this->validate([
-            'harvestWeight' => 'required|numeric|min:0',
-        ]);
-
-        $batch = Batch::find($this->selectedBatchId);
-
-        DB::transaction(function () use ($batch) {
-            // 1. Marcar el lote como finalizado/cosechado
-            $batch->update([
-                'status' => 'harvested',
-                'weight_dry' => $this->harvestWeight, // O el campo de peso que uses
-            ]);
-
-            // 2. Cerrar la última fase en la tabla pivote
-            $batch->phases()->updateExistingPivot($batch->current_phase->id, [
-                'finished_at' => now(),
-                'notes' => $this->notes ?? 'Cosecha completada'
-            ]);
-        });
-
-        $this->close();
-        $this->dispatch('notify', 'Lote cosechado con éxito.');
+        $this->alertSuccess("Cosecha registrada correctamente.");
     }
 
     public function confirmTransition()
     {
-        $this->validate([
-            'nextPhaseId' => 'required|exists:phases,id',
-        ]);
+        $this->validate(['nextPhaseId' => 'required|exists:phases,id']);
 
-        $batch = Batch::find($this->selectedBatchId);
+        $batch = Batch::findOrFail($this->selectedBatchId);
         $nextPhase = Phase::find($this->nextPhaseId);
 
-        // Ejecutamos la lógica del modelo que ya tiene TDD
         $batch->transitionTo($nextPhase, $this->notes);
 
-        // Cerramos el modal y reseteamos variables
         $this->close();
-
-        // Notificación opcional (si usas alguna librería de toasts)
-        LivewireAlert::title('Success')
-            ->position('bottom-end')
-            ->success()
-            ->text("Lote {$batch->code} movido a {$nextPhase->name}")
-            ->show();
+        $this->alertSuccess("Lote {$batch->code} movido a {$nextPhase->name}");
     }
 
-    public function discardBatch($batchId, $reason, $qty)
+    // --- LÓGICA DE DESCARTE (QUINTAR BLOQUES) ---
+
+    public function openDiscardModal($batchId)
     {
-        $batch = Batch::find($batchId);
-        
-        DB::transaction(function () use ($batch, $reason, $qty) {
-            // 1. Registrar la merma
-            $batch->recordLoss($qty, $reason, auth()->id());
-            
-            // 2. Si la cantidad perdida es igual o mayor a la actual, inactivar lote
-            if ($qty >= $batch->quantity) {
-                $batch->update(['status' => 'contaminated']);
+        $this->selectedBatchId = $batchId;
+        $this->discardQuantity = 0;
+        $this->discardReason = 'Contaminación';
+        $this->isTotalDiscard = false; 
+        $this->showDiscardModal = true;
+    }
+
+    public function updatedIsTotalDiscard($value)
+    {
+        if ($value) {
+            $batch = Batch::find($this->selectedBatchId);
+            $this->discardQuantity = $batch->quantity;
+        }
+    }
+
+    public function processDiscard()
+    {
+        $batch = Batch::findOrFail($this->selectedBatchId);
+
+        // Si es descarte total, forzamos la cantidad del lote
+        if ($this->isTotalDiscard) {
+            $this->discardQuantity = $batch->quantity;
+        }
+
+        $this->validate([
+            'discardQuantity' => 'required|numeric|min:0.1|max:' . $batch->quantity,
+            'discardReason' => 'required|string',
+        ]);
+
+        DB::transaction(function () use ($batch) {
+            // 1. Registrar la pérdida en tu tabla de mermas
+            $batch->recordLoss(
+                $this->discardQuantity, 
+                $this->discardReason, 
+                auth()->id(), 
+                $this->discardNotes
+            );
+
+            // 2. Si el lote queda en 0 o se marcó descarte total, se saca del Kanban
+            if ($this->isTotalDiscard || $this->discardQuantity >= $batch->quantity) {
+                // Si el motivo es Agotado usamos 'finalized', si no 'contaminated'
+                $newStatus = ($this->discardReason === 'Agotado') ? 'finalized' : 'contaminated';
+                
+                $batch->update(['status' => $newStatus]);
+
                 // Cerramos la fase actual
                 $batch->phases()->wherePivot('finished_at', null)->updateExistingPivot(
                     $batch->current_phase->id, 
@@ -170,7 +172,30 @@ class BatchKanban extends Component
             }
         });
 
-        $this->dispatch('notify', 'Lote reportado por contaminación.');
+        $this->closeDiscard();
+        $this->alertSuccess("El descarte se ha registrado correctamente.");
+    }
+
+    // --- UTILIDADES ---
+
+    public function close()
+    {
+        $this->reset(['selectedBatchId', 'showModal', 'notes', 'nextPhaseId', 'harvestWeight', 'shouldFinishBatch']);
+    }
+
+    public function closeDiscard()
+    {
+        $this->showDiscardModal = false;
+        $this->reset(['discardQuantity', 'discardReason', 'discardNotes', 'selectedBatchId']);
+    }
+
+    private function alertSuccess($message)
+    {
+        LivewireAlert::title('Éxito')
+            ->position('bottom-end')
+            ->success()
+            ->text($message)
+            ->show();
     }
 
     public function render()
@@ -178,7 +203,8 @@ class BatchKanban extends Component
         return view('livewire.batch-kanban', [
             'phases' => Phase::orderBy('order')
                 ->with(['batches' => function($query) {
-                    $query->wherePivot('finished_at', null); // Solo lotes activos en esa fase
+                    $query->where('status', 'active') // Importante: solo activos
+                          ->wherePivot('finished_at', null);
                 }])->get()
         ]);
     }
