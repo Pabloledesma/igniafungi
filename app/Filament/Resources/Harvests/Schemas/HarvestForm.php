@@ -36,7 +36,8 @@ class HarvestForm
                     ->minValue(0.01), // Evita registros de 0kg
                 DatePicker::make('harvest_date')
                     ->label('Fecha de Cosecha')
-                    ->format('d/m/Y')
+                    ->displayFormat('d/m/Y') // Lo que ve el usuario
+                    ->format('Y-m-d')
                     ->required(),
                 Textarea::make('notes')
                     ->label('Observaciones')
