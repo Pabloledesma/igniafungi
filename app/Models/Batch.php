@@ -38,11 +38,6 @@ class Batch extends Model
         'inoculation_date' => 'date', // Esto convierte el texto en Objeto Fecha
     ];
 
-    protected static function booted()
-    {
-        static::observe(\App\Observers\BatchObserver::class);
-    }
-
     public function recipe(): BelongsTo
     {
         return $this->belongsTo(Recipe::class);
@@ -151,7 +146,7 @@ class Batch extends Model
         }
         
         return $this->losses()->create([
-            'phase_id' => $this->current_phase->id,
+            'phase_id' => $phaseId,
             'quantity' => $qty,
             'reason' => $reason,
             'details' => $details,

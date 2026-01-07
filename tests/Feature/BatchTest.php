@@ -11,15 +11,19 @@ use App\Models\Supply;
 use Livewire\Livewire;
 use App\Models\Harvest;
 use App\Models\RecipeSupply;
-use Filament\Tables\Actions\Action;
-use Filament\Forms\Components\TextInput;
-use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use App\Filament\Resources\Batches\Pages\ListBatches;
 
 class BatchTest extends TestCase
 {
     use RefreshDatabase;
+    
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // Limpiamos el rastro del observer antes de cada test
+        \App\Observers\BatchObserver::clearProcessed();
+    }
     
     /** @test */
     public function a_batch_belongs_to_a_strain()
@@ -162,14 +166,14 @@ class BatchTest extends TestCase
         ]);
 
         // 2. Act: Crear un Batch (esto dispara el BatchObserver)
-        // Lote de 20 unidades con 40kg de peso seco total
+        // Crear el lote
         $batch = Batch::create([
-            'strain_id' => Strain::factory()->create()->id,
-            'type' => 'bulk',
+            'user_id' => $user->id,
             'recipe_id' => $recipe->id,
-            'quantity' => 20,
             'weigth_dry' => 40,
-            'inoculation_date' => now(),
+            'quantity' => 20,
+            'status' => 'preparation',
+            'code' => 'TEST-001'
         ]);
 
         // 3. Assert: Verificar que la matemática sea exacta

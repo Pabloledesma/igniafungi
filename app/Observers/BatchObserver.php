@@ -8,6 +8,15 @@ use Filament\Notifications\Notification;
 
 class BatchObserver
 {
+    protected static $processing = null;
+    // Propiedad para evitar duplicidad
+    protected static array $processedBatches = [];
+
+    public static function clearProcessed(): void
+    {
+        self::$processedBatches = [];
+    }
+    
     /**
      * Contexto: Antes de insertar en la BD (Before Insert)
      */
@@ -33,7 +42,14 @@ class BatchObserver
      */
     public function created(Batch $batch): void
     {
-        // 1. Lógica de Kanban: Asignar fase inicial de Preparación
+        // Si el ID ya está en el array, no procesamos de nuevo
+        if (in_array($batch->id, self::$processedBatches)) {
+            return;
+        }
+
+        // Registrar el ID como procesado
+        self::$processedBatches[] = $batch->id;
+
         $this->assignInitialPhase($batch);
 
         if ($batch->recipe_id) {
@@ -104,19 +120,14 @@ class BatchObserver
     private function deductInventory(Batch $batch): void
     {
         
-        // Cargamos la relación asegurando que traiga los campos de la tabla pivote
-        $batch->loadMissing(['recipe.supplies' => function ($query) {
-            $query->withPivot('calculation_mode', 'value');
-        }]);
+        // Forzamos la carga de la receta si no está presente
+        $recipe = $batch->recipe()->with('supplies')->first();
         
-        $recipe = $batch->recipe;
-        if (!$recipe) return;
-        
-        Log::info('Datos para cálculo:', [
-            'peso_seco' => $batch->weigth_dry, // Verifica si es weigth o weight
-            'cantidad_lote' => $batch->quantity,
-            'insumos_count' => $recipe->supplies->count()
-        ]);
+        if (!$recipe || $recipe->supplies->isEmpty()) {
+            Log::warning("El lote {$batch->id} no tiene receta o insumos vinculados.");
+            return;
+        }
+
         foreach ($recipe->supplies as $supply) {
             // Accedemos explícitamente a los datos del pivote
             $mode = $supply->pivot->calculation_mode;
@@ -132,10 +143,10 @@ class BatchObserver
                 ? ($batch->weigth_dry * $value) / 100 
                 : $value * $batch->quantity;
 
-            if ($amountToDeduct > 0 && $supply->exists) {
-                // Evitamos números negativos si no es lo deseado
-                $newQuantity = max(0, $supply->quantity - $amountToDeduct);
-                $supply->update(['quantity' => $newQuantity]);
+           if ($amountToDeduct > 0) {
+                // USAR decrement() directamente en la base de datos
+                // Esto es más seguro y evita problemas de concurrencia
+                $supply->decrement('quantity', $amountToDeduct);
                 
                 $batch->observations .= "\n- [Insumo] {$supply->name}: {$amountToDeduct} descontados.";
             }
