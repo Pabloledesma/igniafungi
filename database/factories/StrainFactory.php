@@ -18,7 +18,7 @@ class StrainFactory extends Factory
     {
         return [
             'name' => $this->faker->word(),
-            'slug' => str($this->faker->word())->slug(),
+            'slug' => $this->faker->unique()->slug(),
             'incubation_days' => 15,
             'is_active' => true,
         ];
