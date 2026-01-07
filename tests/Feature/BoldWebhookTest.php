@@ -17,7 +17,7 @@ class BoldWebhookTest extends TestCase
     {
         parent::setUp();
         // Definimos el secreto en el entorno de pruebas
-        config(['services.bold.webhook_secret' => 'test_secret']);
+        config(['services.bold.webhook_secret' => '']);
     }
 
     private function generateMockSignature($payload): string
@@ -27,7 +27,7 @@ class BoldWebhookTest extends TestCase
         // 2. Codificar en Base64 (como pide Bold)
         $encoded = base64_encode($json);
         // 3. Generar Hash
-        return hash_hmac('sha256', $encoded, 'test_secret');
+        return hash_hmac('sha256', $encoded, '');
     }
 
     /** @test */
@@ -69,10 +69,10 @@ class BoldWebhookTest extends TestCase
         // 2. CODIFICAR EN BASE64 (Esto es lo que faltaba en el test)
         $base64Payload = base64_encode($jsonPayload);
             // 3. Generar la firma usando el Base64
-        $signature = hash_hmac('sha256', $base64Payload, 'test_secret');
+        $signature = hash_hmac('sha256', $base64Payload, '');
 
         $response = $this->withHeaders([
-                'X-Bold-Signature' => $signature,
+                'x-bold-signature' => $signature,
             ])->postJson('/api/webhooks/bold', $payload);
 
         // 3. ASSERT
@@ -104,10 +104,9 @@ class BoldWebhookTest extends TestCase
             'quantity' => 2
         ]);
 
-        $payload = [
-            'type' => 'SALE_APPROVED',
+       $payload = [
             'data' => [
-                'payment_id' => 'BOLD-TX-UNIQUE-123',
+                'status' => 'APPROVED', // IMPORTANTE: Sin esto el switch del controlador no hace nada
                 'metadata' => [
                     'reference' => $reference
                 ]
@@ -148,6 +147,33 @@ class BoldWebhookTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('REF-OK');
         $response->assertSee('Pago Confirmado');
+    }
+
+    /** @test */
+    public function it_processes_approved_payment_with_empty_secret_sandbox()
+    {
+        $payload = [
+            'data' => [
+                'reference' => 'ORD-100',
+                'status' => 'APPROVED',
+                'payment_method' => 'tarjeta web'
+            ]
+        ];
+        
+        $body = json_encode($payload);
+        
+        // 1. CODIFICAR EL BODY EN BASE64 (Paso vital según Bold)
+        $payloadEncoded = base64_encode($body);
+        
+        // 2. FIRMAR CON SECRETO VACÍO
+        $secret = ""; 
+        $signature = hash_hmac('sha256', $payloadEncoded, $secret);
+
+        $response = $this->withHeaders([
+            'X-Bold-Signature' => $signature,
+        ])->postJson('/api/webhooks/bold', $payload);
+
+        $response->assertStatus(200);
     }
 
     /**

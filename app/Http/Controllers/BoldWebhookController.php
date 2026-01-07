@@ -20,10 +20,10 @@ class BoldWebhookController extends Controller
         
         $payload = $request->all();
         
-        // Bold envía la información dentro de 'data'
-        $data = $payload['data'] ?? [];
-        $reference = $data['reference'] ?? null;
-        $status = $data['status'] ?? null; 
+        // 2. Usamos data_get para buscar la referencia en cualquier lugar posible
+        // Esto busca en data.reference o en data.metadata.reference
+        $reference = data_get($payload, 'data.metadata.reference') 
+              ?? data_get($payload, 'data.reference');
 
         if (!$reference) {
             return response()->json(['error' => 'No reference found in payload'], 400);
@@ -36,6 +36,7 @@ class BoldWebhookController extends Controller
             return response()->json(['message' => 'Order not found'], 404);
         }
 
+        $status = data_get($payload, 'data.status');
         // Lógica de estados basada en la documentación de Bold
         switch ($status) {
             case 'APPROVED': // Estado para éxito según estándar Bold
@@ -64,15 +65,13 @@ class BoldWebhookController extends Controller
 
     private function isValidSignature(Request $request): bool
     {
-        $signature = $request->header('x-bold-signature');
-        $secret = '';
-        
-        $payloadEncoded = base64_encode($request->getContent());
+        $signature = $request->header('X-Bold-Signature') ?? $request->header('x-bold-signature');
+        // Si config devuelve null, usamos string vacío por seguridad
+        $secret = config('services.bold.webhook_secret') ?? ''; 
 
-        // Calculamos el hash esperado
+        $payloadEncoded = base64_encode($request->getContent());
         $expectedSignature = hash_hmac('sha256', $payloadEncoded, $secret);
 
-        // hash_equals es resistente a ataques de tiempo (timing attacks)
         return hash_equals($expectedSignature, (string)$signature);
     }
 }
