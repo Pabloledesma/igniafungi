@@ -37,6 +37,7 @@ class BatchKanban extends Component
     public $lossQuantity;
     public $lossReason;
     public $lossDetails;
+    public $batchType = ''; // Puede ser '', 'grain' o 'bulk'
 
     public function mount()
     {
@@ -251,8 +252,12 @@ class BatchKanban extends Component
             'phases' => Phase::orderBy('order')
                 ->with(['batches' => function($query) {
                     // Incluimos todos los estados que representan un lote en producción
-                    $query->whereIn('batches.status', ['active', 'inoculation', 'incubation', 'fruiting', 'harvest'])
+                    $query->whereIn('batches.status', ['active', 'contaminated', 'finalized'])
                         ->wherePivot('finished_at', null);
+                    // Aplicar filtro si no está vacío
+                    if ($this->batchType) {
+                        $query->where('type', $this->batchType);
+                    }
                 }])->get()
         ]);
     }

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Batches\Schemas;
 
+use App\Models\Phase;
 use App\Models\Strain;
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Hidden;
@@ -56,6 +57,7 @@ class BatchForm
                                 'Maíz' => 'Maíz',
                                 'Avena' => 'Avena',
                             ])
+                            ->default('Trigo')
                             ->required()
                             ->searchable()
                             ->createOptionForm([ 
@@ -71,25 +73,60 @@ class BatchForm
                                 'jar' => 'Frasco de Vidrio (max 500g)',
                                 'bag' => 'Bolsa de Grano',
                             ])
+                            ->default('jar')
                             ->required()
                             ->live(), // Para validar el peso según el envase
                     ])
                     ->visible(fn (Get $get) => $get('type') === 'grain'),
+                Select::make('phase_id')
+                    ->label('Fase Inicial')
+                    ->options(function (get $get) {
+                        $type = $get('type');
+                        
+                        // Si es semilla, quizás solo quieres mostrar fases de laboratorio/incubación
+                        if ($type === 'grain') {
+                            return Phase::whereIn('slug', ['preparation', 'inoculation', 'incubation'])->pluck('name', 'id');
+                        }
 
-                Select::make('strain_id') // Cepa / Genética
-                    ->relationship('strain', 'name')
+                        return Phase::orderBy('order')->pluck('name', 'id');
+                    })
                     ->required()
+                    ->live(),
+                Select::make('status')
+                    ->options([
+                        'active' => 'Activo',
+                        'contaminated' => 'Contaminado',
+                        'finalized' => 'Finalizado',
+                    ])
+                    ->default('active')
+                    ->required(),
+                
+                Select::make('strain_id') // Cepa / Genética
+                    ->label('Cepa / Genética')
+                    ->relationship('strain', 'name')
                     ->extraAttributes([
                         'x-on:change' => 'updatePrefix($event.target.options[$event.target.selectedIndex].text)',
-                    ]),
+                    ])->visible(function (Get $get) {
+                    $phaseId = $get('phase_id');
+                    if (!$phaseId) return true; // Visible por defecto si no hay selección
+
+                    $preparationPhase = Phase::where('slug', 'preparation')->first();
+                    // Solo es visible si el ID seleccionado NO es el de preparación
+                    return $phaseId != $preparationPhase?->id;
+                }),
                 
                 DatePicker::make('inoculation_date') // Fecha Inoculación
                     ->label('Fecha Inoculación')
                     ->default(now())
-                    ->required()
                    ->extraAttributes([
                         'x-on:change' => 'updateDate($event.target.value)',
-                    ]),
+                    ])->visible(function (Get $get) {
+                    $phaseId = $get('phase_id');
+                    if (!$phaseId) return true;
+
+                    $preparationPhase = Phase::where('slug', 'preparation')->first();
+                    return $phaseId != $preparationPhase?->id;
+                }),
                     
                TextInput::make('code')
                     ->label('Código del Lote')
@@ -106,18 +143,7 @@ class BatchForm
                     ->numeric()
                     ->required(),
 
-                Select::make('status')
-                    ->label('Estado Actual')
-                    ->options([
-                        'incubation' => 'Incubación 🌑',
-                        'fruiting' => 'Fructificación 🍄',
-                        'completed' => 'Finalizado / Cosechado ✅', // Opcional, para cerrar lotes viejos
-                    ])
-                    ->default('incubation')
-                    ->required()
-                    // Opcional: Iconos o colores para que se vea bonito en el select
-                    ->native(false),
-
+              
                 Section::make('Dimensiones del Lote')
                     ->columnSpanFull()
                     ->columns(4)

@@ -98,11 +98,10 @@ class BatchTest extends TestCase
             'quantity' => 50,
             'inoculation_date' => now(),
         ]);
-
         // Verificamos que el código siga el patrón PLE-AAMMDD-XX
         $this->assertNotNull($batch->code);
-        $this->assertStringContainsString('PLE-', $batch->code);
-        $this->assertEquals(13, strlen($batch->code)); // PLE-260103-12 tiene 11 caracteres
+        $this->assertStringContainsString('SUB-', $batch->code);
+        $this->assertEquals(13, strlen($batch->code)); 
     }
 
     /** @test */

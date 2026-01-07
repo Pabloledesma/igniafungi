@@ -27,7 +27,7 @@ class BatchObserver
         }
 
         if (!$batch->code) {
-            $this->generateBatchCode($batch);
+            $batch->code =$this->generateBatchCode($batch);
         }
 
         // Aseguramos que el status inicial sea preparación si no viene uno definido
@@ -96,25 +96,31 @@ class BatchObserver
     /**
      * Métodos privados de soporte para mantener limpio el Observer
      */
-    private function generateBatchCode(Batch $batch): void
+    private function generateBatchCode(Batch $batch)
     {
-        if ($batch->parent_batch_id) {
-            $parent = Batch::find($batch->parent_batch_id);
-            $childCount = Batch::where('parent_batch_id', $batch->parent_batch_id)->count() + 1;
-            $batch->code = $parent->code . '-F' . $childCount;
-        } else {
-           // Manejo de strain_id nulo para la fase de preparación
-            $prefix = 'SUB'; // Default para Sustrato/Substratum
-            
-            if ($batch->strain_id) {
-                $strainName = \App\Models\Strain::where('id', $batch->strain_id)->value('name');
-                if ($strainName) {
-                    $prefix = strtoupper(substr($strainName, 0, 3));
-                }
-            }
-            
-            $batch->code = "{$prefix}-" . now()->format('ymd') . "-" . str_pad(rand(1, 99), 2, '0', STR_PAD_LEFT);
+        // 1. Determinar el prefijo según el tipo
+        $prefix = $batch->type === 'grain' ? 'GRA' : 'SUB';
+        
+        // 2. Obtener la fecha actual (AAMMDD)
+        $datePart = now()->format('dMy'); 
+
+        // 3. Buscar el último código que coincida con este prefijo y fecha
+        // Usamos lockForUpdate si es necesario, pero para SQLite basta con asegurar la consulta.
+        $lastBatch = Batch::where('code', 'like', "{$prefix}-{$datePart}-%")
+            ->orderBy('id', 'desc')
+            ->first();
+
+        $nextNumber = 1;
+
+       if ($lastBatch) {
+            // Extraemos de forma segura el número después del último guion
+            $lastCode = $lastBatch->code;
+            $parts = explode('-', $lastCode);
+            $lastNumber = (int) end($parts);
+            $nextNumber = $lastNumber + 1;
         }
+        // 4. Retornar el código formateado
+        return "{$prefix}-{$datePart}-{$nextNumber}";
     }
 
     private function deductInventory(Batch $batch): void

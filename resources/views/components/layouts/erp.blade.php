@@ -24,6 +24,8 @@
                 </svg>
                 <span class="font-bold text-sm uppercase tracking-widest">Panel Admin</span>
             </a>
+
+           
            <div class="flex items-center gap-4">
                 <span class="text-xs font-bold text-gray-400 border border-gray-200 px-3 py-1 rounded-full bg-gray-50">
                     USER: {{ strtoupper(auth()->user()->name) }}
