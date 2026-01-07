@@ -104,13 +104,17 @@ class BatchKanban extends Component
 
     public function confirmTransition()
     {
-        $this->validate(['nextPhaseId' => 'required|exists:phases,id']);
-
-        $batch = Batch::findOrFail($this->selectedBatchId);
+        $batch = Batch::find($this->selectedBatchId);
         $nextPhase = Phase::find($this->nextPhaseId);
-
+        
+        // Validación: Si pasa a incubación, debe tener genética
+        if ($nextPhase && $nextPhase->slug === 'incubation' && is_null($batch->strain_id)) {
+            $this->addError('strain_id', 'Debes asignar una genética antes de inocular e iniciar incubación.');
+            return;
+        }
+        
+        $this->validate(['nextPhaseId' => 'required|exists:phases,id']);
         $batch->transitionTo($nextPhase, $this->notes);
-
         $this->close();
         $this->alertSuccess("Lote {$batch->code} movido a {$nextPhase->name}");
     }
