@@ -37,16 +37,35 @@ class DatabaseSeeder extends Seeder
         $strainShiitake = Strain::factory()->create(['name' => 'Shiitake', 'slug' => 'shiitake', 'incubation_days' => 60]);
         $strainReishii = Strain::factory()->create(['name' => 'Reishii', 'slug' => 'reishii', 'incubation_days' => 30]);
 
-        // 1. Crear Fases maestras
-        $phasesData = [
-            ['name' => 'Inoculación', 'slug' => 'inoculation', 'order' => 1],
-            ['name' => 'Incubación', 'slug' => 'incubation', 'order' => 2],
-            ['name' => 'Fructificación', 'slug' => 'fruiting', 'order' => 3],
-            ['name' => 'Cosecha', 'slug' => 'harvest', 'order' => 4],
+        $fases = [
+            [
+                'name' => 'Preparación', 
+                'slug' => 'preparation', 
+                'order' => 1,
+                'description' => 'Mezcla, empaque y esterilización del sustrato'
+            ],
+            [
+                'name' => 'Enfriamiento', 
+                'slug' => 'cooling', 
+                'order' => 2,
+                'description' => 'Sustrato alcanzando temperatura ambiente'
+            ],
+            [
+                'name' => 'Incubación', 
+                'slug' => 'incubation', 
+                'order' => 3,
+                'description' => 'Crecimiento del micelio post-inoculación'
+            ],
+            [
+                'name' => 'Fructificación', 
+                'slug' => 'fruiting', 
+                'order' => 4,
+                'description' => 'Producción de oleadas y cosecha'
+            ],
         ];
 
-        foreach ($phasesData as $data) {
-            Phase::updateOrCreate(['slug' => $data['slug']], $data);
+        foreach ($fases as $fase) {
+            \App\Models\Phase::updateOrCreate(['slug' => $fase['slug']], $fase);
         }
 
         $phases = Phase::orderBy('order')->get();
