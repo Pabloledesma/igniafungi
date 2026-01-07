@@ -22,9 +22,9 @@ class BatchFactory extends Factory
             // Crea una Cepa nueva automáticamente para este lote
             'strain_id' => null,
             'user_id' => User::factory(),
-            'code' => 'LOTE-' . $this->faker->unique()->numberBetween(1000, 9999),
+            'code' => null,
             'weigth_dry' => $this->faker->randomFloat(2, 10, 100),
-            'inoculation_date' => now(),
+            'inoculation_date' => null,
             'quantity' => $this->faker->numberBetween(20, 50),
             'status' => 'preparation'
         ];
