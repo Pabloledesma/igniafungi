@@ -19,6 +19,10 @@ class HarvestFactory extends Factory
         return [
             'batch_id' => \App\Models\Batch::factory(),
             'weight' => $this->faker->randomFloat(2, 0.1, 5),
+            'harvest_date' => now(),
+            'notes' => $this->faker->sentence(),
+            'phase_id' => \App\Models\Phase::factory(),
+            'user_id' => \App\Models\User::factory()
         ];
     }
 }

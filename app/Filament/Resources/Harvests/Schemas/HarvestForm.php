@@ -4,7 +4,9 @@ namespace App\Filament\Resources\Harvests\Schemas;
 
 use Filament\Schemas\Schema;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Database\Eloquent\Builder;
 
 class HarvestForm
@@ -32,6 +34,13 @@ class HarvestForm
                     ->suffix('kg')  // Adorno visual
                     ->required()
                     ->minValue(0.01), // Evita registros de 0kg
+                DatePicker::make('harvest_date')
+                    ->label('Fecha de Cosecha')
+                    ->format('d/m/Y')
+                    ->required(),
+                Textarea::make('notes')
+                    ->label('Observaciones')
+                    ->autosize()
             ]);
     }
 }

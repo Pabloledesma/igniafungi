@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Harvests\Tables;
 
+use Dom\Text;
 use Filament\Tables\Table;
 use Filament\Actions\EditAction;
 use Filament\Actions\BulkActionGroup;
@@ -26,6 +27,13 @@ class HarvestsTable
                         Sum::make()
                             ->label('Total Cosechado'),
                     ]),
+                TextColumn::make('harvest_date')
+                    ->label('Fecha de Cosecha')
+                    ->date()
+                    ->sortable(),
+                TextColumn::make('notes')
+                    ->label('Observaciones')
+                    ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
