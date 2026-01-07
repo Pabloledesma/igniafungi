@@ -63,7 +63,7 @@ class BatchKanbanTest extends TestCase
     }
 
    /** @test */
-    public function batch_requires_strain_to_advance_to_incubation()
+    public function batch_requires_strain_to_advance_to_inoculation()
     {
         $user = User::factory()->create();
         $this->be($user); // Autenticamos al usuario
@@ -75,8 +75,8 @@ class BatchKanbanTest extends TestCase
         );
 
         $incubation = Phase::firstOrCreate(
-            ['slug' => 'incubation'],
-            ['name' => 'Incubación', 'order' => 2]
+            ['slug' => 'inoculation'],
+            ['name' => 'Inoculación', 'order' => 2]
         );
 
         // Creamos el lote sin cepa
