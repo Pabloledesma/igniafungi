@@ -152,23 +152,38 @@ class BatchKanban extends Component
     public function openDiscardModal($batchId)
     {
         $this->selectedBatchId = $batchId;
+        $this->showDiscardModal = true;
         $this->discardQuantity = 0;
         $this->discardReason = 'Contaminación';
         $this->isTotalDiscard = false; 
-        $this->showDiscardModal = true;
     }
 
     public function updatedIsTotalDiscard($value)
     {
-        if ($value) {
-            $batch = Batch::find($this->selectedBatchId);
-            $this->discardQuantity = $batch->quantity;
+        if ($value && $this->selectedBatchId) {
+        // Traemos solo el valor de la columna quantity, sin hidratar el modelo completo
+        $this->discardQuantity = Batch::where('id', $this->selectedBatchId)->value('quantity');
+        } else {
+            $this->discardQuantity = 0;
         }
     }
 
     public function processDiscard()
     {
-        $batch = Batch::findOrFail($this->selectedBatchId);
+        $id = $this->selectedBatchId;
+        
+        if (is_array($id)) {
+            // Si es un array tipo ['id' => 5] o [0 => 5], sacamos el valor
+            $id = collect($id)->flatten()->first();
+        }
+
+        // 2. Verificación de seguridad
+        if (!$id) {
+            $this->alertError("No se pudo identificar el lote. Por favor intenta de nuevo.");
+            return;
+        }
+
+        $batch = Batch::findOrFail($id);
 
         // Si es descarte total, forzamos la cantidad del lote
         if ($this->isTotalDiscard) {
