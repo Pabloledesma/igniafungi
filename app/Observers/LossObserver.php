@@ -3,24 +3,21 @@
 namespace App\Observers;
 
 use App\Models\BatchLoss;
+use Illuminate\Support\Facades\Log;
 
 class LossObserver
 {
     /**
      * Handle the BatchLoss "created" event.
      */
-    public function created($loss): void
+    public function created(BatchLoss $loss): void
     {
-        $batch = $loss->batch;
+        // Usamos el ID directamente para evitar recargas de relaciones nulas
+        $batch = \App\Models\Batch::find($loss->batch_id);
         
         if ($batch) {
-            // Restamos la cantidad perdida de la cantidad actual del lote
-            $newQuantity = max(0, $batch->quantity - $loss->quantity);
-            
-            $batch->update([
-                'quantity' => $newQuantity,
-                // Si la pérdida es total, podemos marcar el estado aquí o dejarlo al BatchObserver
-            ]);
+            // decrement() es una consulta SQL directa, es más limpia para inventarios
+            $batch->decrement('quantity', $loss->quantity);
         }
     }
 
