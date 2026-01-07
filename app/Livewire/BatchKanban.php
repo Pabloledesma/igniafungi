@@ -136,7 +136,7 @@ class BatchKanban extends Component
         $nextPhase = Phase::find($this->nextPhaseId);
         
         // Validación: Si pasa a incubación, debe tener genética
-        if ($nextPhase && $nextPhase->slug === 'incubation' && is_null($batch->strain_id)) {
+        if ($nextPhase && $nextPhase->slug === 'inoculation' && is_null($batch->strain_id)) {
             $this->addError('strain_id', 'Debes asignar una genética antes de inocular e iniciar incubación.');
             return;
         }
