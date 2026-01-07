@@ -12,12 +12,10 @@ class BatchObserver
      */
     public function creating(Batch $batch): void
     {
-        // 1. Asignación de usuario
         if (auth()->check()) {
             $batch->user_id = auth()->id();
         }
 
-        // 2. Lógica de Código Inteligente
         if (!$batch->code) {
             $this->generateBatchCode($batch);
         }
@@ -61,8 +59,11 @@ class BatchObserver
             $childCount = Batch::where('parent_batch_id', $batch->parent_batch_id)->count() + 1;
             $batch->code = $parent->code . '-F' . $childCount;
         } else {
-            $prefix = strtoupper(substr($batch->strain?->name ?? 'BT', 0, 3));
-            $batch->code = "{$prefix}-" . now()->format('ymd') . "-" . rand(10, 99);
+            // BUSQUEDA DIRECTA POR ID para evitar el nulo en el Seeder
+            $strainName = \App\Models\Strain::where('id', $batch->strain_id)->value('name') ?? 'BT';
+            $prefix = strtoupper(substr($strainName, 0, 3));
+            
+            $batch->code = "{$prefix}-" . now()->format('ymd') . "-" . str_pad(rand(1, 99), 2, '0', STR_PAD_LEFT);
         }
     }
 
@@ -97,10 +98,11 @@ class BatchObserver
                 ? ($batch->weigth_dry * $value) / 100 
                 : $value * $batch->quantity;
 
-            if ($amountToDeduct > 0) {
-                $supply->decrement('quantity', $amountToDeduct);
+            if ($amountToDeduct > 0 && $supply->exists) {
+                // Evitamos números negativos si no es lo deseado
+                $newQuantity = max(0, $supply->quantity - $amountToDeduct);
+                $supply->update(['quantity' => $newQuantity]);
                 
-                // Usamos el nombre de la columna real del lote para la bitácora
                 $batch->observations .= "\n- [Insumo] {$supply->name}: {$amountToDeduct} descontados.";
             }
         }

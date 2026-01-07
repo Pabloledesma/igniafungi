@@ -60,4 +60,28 @@ class BatchKanbanTest extends TestCase
             'finished_at' => now()->toDateTimeString()
         ]);
     }
+
+    /** @test */
+    public function it_can_discard_a_completely_contaminated_batch()
+    {
+        $user = User::factory()->create();
+        $batch = Batch::factory()->create(['quantity' => 50]);
+        $phase = Phase::create(['name' => 'Incubation', 'slug' => 'incubation', 'order' => 2]);
+        $batch->phases()->attach($phase->id, ['user_id' => $user->id, 'started_at' => now()]);
+
+        Livewire::actingAs($user)
+            ->test(BatchKanban::class)
+            ->call('discardBatch', $batch->id, 'Trichoderma generalizado', 50)
+            ->assertStatus(200);
+
+        // El lote debe estar inactivo
+        $this->assertEquals('contaminated', $batch->fresh()->status);
+        
+        // Debe existir el registro en mermas
+        $this->assertDatabaseHas('batch_losses', [
+            'batch_id' => $batch->id,
+            'quantity' => 50,
+            'reason' => 'Trichoderma generalizado'
+        ]);
+    }
 }

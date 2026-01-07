@@ -9,15 +9,11 @@ use App\Models\Recipe;
 use App\Models\Strain;
 use App\Models\Product;
 use App\Models\Category;
-use Illuminate\Support\Str;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
      * Seed the application's database.
      */
@@ -61,9 +57,8 @@ class DatabaseSeeder extends Seeder
             $batch = Batch::create([
                 'user_id' => $pablo->id,
                 'recipe_id' => $recipe->id,
-                'code' => "Lote " . Str::upper(Str::random(5)),
-                'strain_id' => Strain::inRandomOrder()->first()->id ?? 1,
-                'recipe_id' => 1, // Asumiendo que existe una receta base
+                'strain_id' => $strainMelena->id,
+                'recipe_id' => $recipe->id, 
                 'quantity' => rand(50, 100),
                 'weigth_dry' => rand(50, 100),
                 'inoculation_date' => now(),

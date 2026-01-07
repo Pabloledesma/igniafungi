@@ -38,6 +38,11 @@ class Batch extends Model
         'inoculation_date' => 'date', // Esto convierte el texto en Objeto Fecha
     ];
 
+    protected static function booted()
+    {
+        static::observe(\App\Observers\BatchObserver::class);
+    }
+
     public function recipe(): BelongsTo
     {
         return $this->belongsTo(Recipe::class);
@@ -82,6 +87,12 @@ class Batch extends Model
     public function losses(): HasMany
     {
         return $this->hasMany(BatchLoss::class);
+    }
+
+    // Accessor para saber cuánto ha producido el lote en total
+    public function getTotalYieldAttribute()
+    {
+        return $this->harvests()->sum('quantity');
     }
 
     // Accessor útil para obtener la fase activa en el test
@@ -133,6 +144,25 @@ class Batch extends Model
             'details' => $details,
             'user_id' => $userId
         ]);
+    }
+
+    public function discard($reason, $qty)
+    {
+        return DB::transaction(function () use ($reason, $qty) {
+            // Registrar la merma
+            $this->recordLoss($qty, $reason, auth()->id());
+
+            // Si es descarte total, cerramos la fase actual en la tabla PIVOTE
+            $currentPhase = $this->phases()->wherePivot('finished_at', null)->first();
+            
+            if ($currentPhase) {
+                $this->phases()->updateExistingPivot($currentPhase->id, [
+                    'finished_at' => now()
+                ]);
+            }
+
+            return $this->update(['status' => 'contaminated']);
+        });
     }
 
     public function getDaysInCurrentPhaseAttribute()
