@@ -14,7 +14,7 @@ trait AddsToCart
             $this->dispatch('update-cart-count', total_count: $count_items)->to(Navbar::class);
         }
 
-        LivewireAlert::title('Product added to the cart successfully!')
+        LivewireAlert::title('El producto se agrego correctamente!')
             ->success()
             ->show();
 
