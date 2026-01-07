@@ -2,6 +2,7 @@
 namespace App\Observers;
 
 use App\Models\Batch;
+use App\Models\Phase;
 use Illuminate\Support\Facades\Log;
 use Filament\Notifications\Notification;
 
@@ -19,6 +20,11 @@ class BatchObserver
         if (!$batch->code) {
             $this->generateBatchCode($batch);
         }
+
+        // Aseguramos que el status inicial sea preparación si no viene uno definido
+        if (!$batch->status) {
+            $batch->status = 'preparation';
+        }
     }
 
     /**
@@ -27,6 +33,9 @@ class BatchObserver
      */
     public function created(Batch $batch): void
     {
+        // 1. Lógica de Kanban: Asignar fase inicial de Preparación
+        $this->assignInitialPhase($batch);
+
         if ($batch->recipe_id) {
             $this->deductInventory($batch);
         }
@@ -50,6 +59,25 @@ class BatchObserver
     }
 
     /**
+     * Lógica para el Kanban: Evita lotes huérfanos
+     */
+    private function assignInitialPhase(Batch $batch): void
+    {
+        $firstPhase = Phase::where('slug', 'preparation')->first();
+
+        if ($firstPhase) {
+            $batch->phases()->attach($firstPhase->id, [
+                'user_id' => $batch->user_id ?? (auth()->id() ?? 1),
+                'started_at' => now(),
+            ]);
+            
+            Log::info("Lote {$batch->code} asignado a fase: {$firstPhase->name}");
+        } else {
+            Log::error("No se encontró la fase 'preparation'. ¿Ejecutaste el PhaseSeeder?");
+        }
+    }
+
+    /**
      * Métodos privados de soporte para mantener limpio el Observer
      */
     private function generateBatchCode(Batch $batch): void
@@ -59,9 +87,15 @@ class BatchObserver
             $childCount = Batch::where('parent_batch_id', $batch->parent_batch_id)->count() + 1;
             $batch->code = $parent->code . '-F' . $childCount;
         } else {
-            // BUSQUEDA DIRECTA POR ID para evitar el nulo en el Seeder
-            $strainName = \App\Models\Strain::where('id', $batch->strain_id)->value('name') ?? 'BT';
-            $prefix = strtoupper(substr($strainName, 0, 3));
+           // Manejo de strain_id nulo para la fase de preparación
+            $prefix = 'SUB'; // Default para Sustrato/Substratum
+            
+            if ($batch->strain_id) {
+                $strainName = \App\Models\Strain::where('id', $batch->strain_id)->value('name');
+                if ($strainName) {
+                    $prefix = strtoupper(substr($strainName, 0, 3));
+                }
+            }
             
             $batch->code = "{$prefix}-" . now()->format('ymd') . "-" . str_pad(rand(1, 99), 2, '0', STR_PAD_LEFT);
         }
