@@ -62,6 +62,27 @@ class BatchKanbanTest extends TestCase
             ->assertViewHas('phases');
     }
 
+    public function test_batch_requires_strain_to_advance_to_incubation()
+    {
+        // 1. Creamos las fases necesarias
+        $prep = Phase::factory()->create(['slug' => 'preparation', 'order' => 1]);
+        $incubation = Phase::factory()->create(['slug' => 'incubation', 'order' => 2]);
+
+        // 2. Creamos un lote sin strain (nullable) en fase de preparación
+        $batch = Batch::factory()->create([
+            'strain_id' => null,
+            'status' => 'preparation'
+        ]);
+        $batch->phases()->attach($prep->id, ['started_at' => now(), 'user_id' => 1]);
+
+        // 3. Intentamos avanzar a incubación mediante el componente (o controlador)
+        // Aquí validamos que la lógica de tu componente Livewire lance el error
+        Livewire::test(BatchKanban::class)
+            ->set('selectedBatchId', $batch->id)
+            ->call('confirmTransition')
+            ->assertHasErrors(['strain_id']); //
+    }
+    
     /** @test */
     public function can_advance_batch_to_next_phase()
     {

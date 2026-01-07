@@ -67,6 +67,7 @@ class BatchPhaseTest extends TestCase
         ]);
         
         // El batch original debería reflejar la resta si así lo decides
-        // $this->assertEquals(90, $batch->fresh()->quantity);
+        $this->assertEquals(90, $batch->fresh()->quantity);
     }
+
 }
