@@ -20,5 +20,6 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         \App\Models\Batch::observe(\App\Observers\BatchObserver::class);
+        \App\Models\BatchLoss::observe(\App\Observers\LossObserver::class);
     }
 }
