@@ -143,6 +143,13 @@ class Batch extends Model
 
     public function recordLoss($qty, $reason, $userId, $details = null)
     {
+        // Obtenemos la fase actual. Si es null, buscamos la primera fase del lote.
+        $phaseId = $this->current_phase?->id ?? $this->phases()->wherePivot('finished_at', null)->first()?->id;
+
+        if (!$phaseId) {
+            throw new \Exception("No se puede registrar una pérdida: el lote {$this->code} no tiene una fase activa.");
+        }
+        
         return $this->losses()->create([
             'phase_id' => $this->current_phase->id,
             'quantity' => $qty,
