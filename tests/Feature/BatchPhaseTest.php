@@ -50,11 +50,27 @@ class BatchPhaseTest extends TestCase
     /** @test */
     public function test_a_loss_can_be_recorded_for_a_batch_in_its_current_phase()
     {
+        // 1. Asegurar infraestructura
+        \App\Observers\BatchObserver::clearProcessed();
+        $this->seed(\Database\Seeders\PhaseSeeder::class);
+        $user = \App\Models\User::factory()->create();
+        
         // 1. Sembrar las fases para que el Observer las encuentre
         $this->seed(\Database\Seeders\PhaseSeeder::class);
         // 1. Crear el lote usando la fábrica ajustada
         $batch = Batch::factory()->create(['quantity' => 100]);
 
+        // 3. REFUERZO: Asegurarnos de que el lote tenga la fase activa vinculada.
+        // Si el Observer ya la creó, syncWithoutDetaching no hará nada.
+        // Si no la creó, esto la garantiza.
+        $preparationPhase = \App\Models\Phase::where('slug', 'preparation')->first();
+        $batch->phases()->syncWithoutDetaching([
+            $preparationPhase->id => [
+                'user_id' => $user->id,
+                'started_at' => now()
+            ]
+        ]);
+        
         // 2. Registrar la pérdida (Asegúrate de que recordLoss use Eloquent)
         $batch->recordLoss(10, 'Contaminación', 1);
 
