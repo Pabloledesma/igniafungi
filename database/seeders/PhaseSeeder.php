@@ -26,15 +26,21 @@ class PhaseSeeder extends Seeder
                 'description' => 'Sustrato alcanzando temperatura ambiente'
             ],
             [
+                'name' => 'Inoculación', 
+                'slug' => 'inoculation', 
+                'order' => 3,
+                'description' => 'Crecimiento del micelio post-inoculación'
+            ],
+            [
                 'name' => 'Incubación', 
                 'slug' => 'incubation', 
-                'order' => 3,
+                'order' => 4,
                 'description' => 'Crecimiento del micelio post-inoculación'
             ],
             [
                 'name' => 'Fructificación', 
                 'slug' => 'fruiting', 
-                'order' => 4,
+                'order' => 5,
                 'description' => 'Producción de oleadas y cosecha'
             ],
         ];
