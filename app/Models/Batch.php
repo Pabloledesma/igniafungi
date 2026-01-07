@@ -105,14 +105,20 @@ class Batch extends Model
     {
         return Attribute::make(
             get: function () {
-                // Si el peso seco es 0 o nulo, retornamos 0 para evitar error de división
-                if ($this->weigth_dry <= 0) return 0;
+                // 1. Validar que weigth_dry sea numérico y mayor a cero
+                // Usamos floatval por si en la base de datos viene como string
+                $dryWeight = floatval($this->weigth_dry);
+                
+                if ($dryWeight <= 0) {
+                    return 0;
+                }
 
-                // Sumamos los kilos de todas las cosechas
-                $totalHarvest = $this->harvests()->sum('weight');
+                // 2. Sumamos los kilos. 
+                // Si el lote es nuevo y no tiene relación cargada, sum() devolverá 0
+                $totalHarvest = $this->harvests->sum('weight');
 
-                // Fórmula: (Total Cosechado / Total Sustrato Seco) * 100
-                return round(($totalHarvest / $this->weigth_dry) * 100, 2);
+                // 3. Cálculo con redondeo
+                return round(($totalHarvest / $dryWeight) * 100, 2);
             }
         );
     }
