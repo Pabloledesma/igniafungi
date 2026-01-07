@@ -203,8 +203,9 @@ class BatchKanban extends Component
         return view('livewire.batch-kanban', [
             'phases' => Phase::orderBy('order')
                 ->with(['batches' => function($query) {
-                    $query->where('status', 'active') // Importante: solo activos
-                          ->wherePivot('finished_at', null);
+                    // Incluimos todos los estados que representan un lote en producción
+                    $query->whereIn('batches.status', ['active', 'inoculation', 'incubation', 'fruiting', 'harvest'])
+                        ->wherePivot('finished_at', null);
                 }])->get()
         ]);
     }
