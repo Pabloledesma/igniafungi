@@ -11,7 +11,9 @@
                     @foreach($phase->batches as $batch)
                         <div class="relative bg-white p-4 rounded-md shadow border-l-4 border-green-500">
                             <span class="text-xs font-mono text-gray-500">{{ $batch->code }}</span>
-                            <h4 class="font-semibold text-gray-800">{{ $batch->strain->name }}</h4>
+                            <h4 class="font-semibold text-gray-800">
+                                {{ $batch->strain->name ?? '⚠️ Sustrato en Preparación' }}
+                            </h4>
                             
                             <div class="mt-3 text-xs text-gray-600">
                                 <i class="far fa-calendar-alt mr-1"></i>

@@ -34,6 +34,10 @@ class BatchKanban extends Component
     public $discardReason;
     public $discardNotes;
 
+    public $lossQuantity;
+    public $lossReason;
+    public $lossDetails;
+
     public function mount()
     {
         $this->harvestDate = now()->format('Y-m-d');
@@ -60,6 +64,30 @@ class BatchKanban extends Component
         }
 
         $this->showModal = true;
+    }
+
+    public function saveLoss()
+    {
+        $this->validate([
+            'lossQuantity' => 'required|numeric|min:0.1',
+            'lossReason' => 'required|string',
+            'lossDetails' => 'nullable|string',
+        ]);
+
+        $batch = Batch::find($this->selectedBatchId);
+        
+        if ($batch) {
+            $batch->recordLoss(
+                $this->lossQuantity, 
+                $this->lossReason, 
+                auth()->id(), 
+                $this->lossDetails
+            );
+
+            $this->reset(['lossQuantity', 'lossReason', 'lossDetails', 'selectedBatchId']);
+            $this->dispatch('close-modal'); // O el método que uses para cerrar modales
+            $this->alertSuccess('Merma registrada y stock actualizado.');
+        }
     }
 
     public function harvestBatch()

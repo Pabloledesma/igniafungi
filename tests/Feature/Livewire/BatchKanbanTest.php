@@ -62,25 +62,42 @@ class BatchKanbanTest extends TestCase
             ->assertViewHas('phases');
     }
 
-    public function test_batch_requires_strain_to_advance_to_incubation()
+   /** @test */
+    public function batch_requires_strain_to_advance_to_incubation()
     {
-        // 1. Creamos las fases necesarias
-        $prep = Phase::factory()->create(['slug' => 'preparation', 'order' => 1]);
-        $incubation = Phase::factory()->create(['slug' => 'incubation', 'order' => 2]);
+        $user = User::factory()->create();
+        $this->be($user); // Autenticamos al usuario
+        
+        // En lugar de factory o seed completo, usamos creación segura:
+        $prep = Phase::firstOrCreate(
+            ['slug' => 'preparation'],
+            ['name' => 'Preparación', 'order' => 1]
+        );
 
-        // 2. Creamos un lote sin strain (nullable) en fase de preparación
+        $incubation = Phase::firstOrCreate(
+            ['slug' => 'incubation'],
+            ['name' => 'Incubación', 'order' => 2]
+        );
+
+        // Creamos el lote sin cepa
+        // Usamos state para asegurar que el status sea el de la fase inicial
         $batch = Batch::factory()->create([
             'strain_id' => null,
             'status' => 'preparation'
         ]);
-        $batch->phases()->attach($prep->id, ['started_at' => now(), 'user_id' => 1]);
+        
+        // Aseguramos que tenga la fase inicial en la tabla pivote
+        $batch->phases()->syncWithoutDetaching([
+            $prep->id => ['started_at' => now(), 'user_id' => 1]
+        ]);
 
-        // 3. Intentamos avanzar a incubación mediante el componente (o controlador)
-        // Aquí validamos que la lógica de tu componente Livewire lance el error
-        Livewire::test(BatchKanban::class)
+        // Ejecutamos el test de Livewire
+        Livewire::actingAs($user)
+            ->test(BatchKanban::class)
             ->set('selectedBatchId', $batch->id)
-            ->call('confirmTransition')
-            ->assertHasErrors(['strain_id']); //
+            ->set('nextPhaseId', $incubation->id)
+            ->call('confirmTransition') 
+            ->assertHasErrors(['strain_id' => 'Debes asignar una genética antes de inocular e iniciar incubación.']);
     }
     
     /** @test */
@@ -164,9 +181,41 @@ class BatchKanbanTest extends TestCase
         Livewire::actingAs($this->user)
             ->test(BatchKanban::class)
             ->set('selectedBatchId', $this->batch->id)
-            ->set('discardQuantity', 500) // Solo hay 100
+            ->set('discardQuantity', 500) 
             ->set('discardReason', 'Contaminación')
             ->call('processDiscard')
             ->assertHasErrors(['discardQuantity']);
+    }
+
+    public function test_a_loss_can_be_recorded_for_a_batch_in_its_current_phase()
+    {
+        $user = \App\Models\User::factory()->create();
+        // 1. Asegurar que la fase de preparación existe
+        $prep = \App\Models\Phase::firstOrCreate(
+            ['slug' => 'preparation'],
+            ['name' => 'Preparación', 'order' => 1]
+        );
+
+        // 2. Crear el lote
+        $batch = \App\Models\Batch::factory()->create([
+            'quantity' => 100,
+            'status' => 'preparation'
+        ]);
+
+        // 3. Vincular MANUALMENTE la fase para el test (para evitar que falle el Exception)
+        $batch->phases()->attach($prep->id, [
+            'user_id' => $user->id,
+            'started_at' => now()
+        ]);
+
+        Livewire::actingAs($user)
+            ->test(BatchKanban::class)
+            ->set('selectedBatchId', $batch->id)
+            ->set('lossQuantity', 10) 
+            ->set('lossReason', 'Contaminación')
+            ->call('saveLoss') 
+            ->assertStatus(200);
+
+        $this->assertEquals(90, $batch->refresh()->quantity);
     }
 }
