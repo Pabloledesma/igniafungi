@@ -12,7 +12,7 @@ class PhaseSeeder extends Seeder
      */
     public function run(): void
     {
-         $fases = [
+        $phases = [
             [
                 'name' => 'Preparación', 
                 'slug' => 'preparation', 
@@ -45,9 +45,14 @@ class PhaseSeeder extends Seeder
             ],
         ];
 
-        foreach ($fases as $fase) {
-            \App\Models\Phase::updateOrCreate(['slug' => $fase['slug']], $fase);
+        foreach ($phases as $phase) {
+        \App\Models\Phase::updateOrCreate(
+                ['slug' => $phase['slug']],
+                ['name' => $phase['name'], 'order' => $phase['order']]
+            );
         }
+
+        \App\Models\Phase::where('slug', 'harvest')->delete();
 
     }
 }

@@ -45,12 +45,17 @@
                                 {{ round($batch->days_in_current_phase) }} días aquí
                             </div>
 
-                            <div class="mt-4 pt-3 border-t flex justify-end">
+                            @if($phase->slug === 'fruiting')
+                                <button wire:click="openTransitionModal({{ $batch->id }})" 
+                                        class="text-green-600 hover:underline text-xs font-bold uppercase">
+                                    Cosechar / Finalizar
+                                </button>
+                            @else
                                 <button wire:click="openTransitionModal({{ $batch->id }})" 
                                         class="text-blue-600 hover:underline text-xs font-bold uppercase">
                                     Avanzar →
                                 </button>
-                            </div>
+                            @endif
                         </div>
                     @endforeach
                 </div>
