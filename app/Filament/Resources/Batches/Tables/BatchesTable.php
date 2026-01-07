@@ -162,12 +162,6 @@ class BatchesTable
                             Notification::make()->title('Lote completo pasado a Fructificación')->success()->send();
                             return;
                         }
-
-                        // ESCENARIO 2: Se mueve solo una PARTE (Dividir Lote)
-                        
-                        // 1. Restamos del lote original (Padre)
-                        $record->decrement('quantity', $quantityToMove);
-                        
                         // 2. Usamos replicate() para copiar TODOS los datos (Cepa, Tipo, Fechas, Responsable, etc.)
                         $newBatch = $record->replicate();
                         
