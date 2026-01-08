@@ -11,7 +11,7 @@
                 @if($isLastPhase)
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Peso obtenido (kg)</label>
-                        <input type="number" step="0.01" wire:model="harvestWeight" 
+                        <input type="number" step="0.001" wire:model="harvestWeight" placeholder="0.000" 
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-green-500 focus:border-green-500">
                     </div>
 
