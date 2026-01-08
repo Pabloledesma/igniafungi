@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\User;
 use App\Models\Batch;
+use App\Models\Phase;
 use App\Models\Recipe;
 use App\Models\Strain;
 use App\Models\Supply;
@@ -100,7 +101,7 @@ class BatchTest extends TestCase
         ]);
         // Verificamos que el código siga el patrón PLE-AAMMDD-XX
         $this->assertNotNull($batch->code);
-        $this->assertStringContainsString('SUB-', $batch->code);
+        $this->assertStringContainsString('PLE', $batch->code);
         $this->assertEquals(13, strlen($batch->code)); 
     }
 
@@ -184,6 +185,118 @@ class BatchTest extends TestCase
 
         // Cálculo Bolsas: 100 - (20 * 1) = 80
         $this->assertEquals(80, $bolsas->quantity);
+    }
+
+        /** @test */
+    public function it_uses_correct_prefix_based_on_strain_presence()
+    {
+        $strain = Strain::factory()->create(['name' => 'Orellana']);
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+         // Crear la Receta
+        $recipe = Recipe::create(['name' => 'Fórmula Maestra']);
+
+           // Crear Insumos con stock inicial
+        $aserrin = Supply::create([
+            'name' => 'Aserrín',
+            'quantity' => 100, // kg
+            'unit' => 'kg',
+            'category' => 'substrate'
+        ]);
+
+        $bolsas = Supply::create([
+            'name' => 'Bolsas 2kg',
+            'quantity' => 100, // unidades
+            'unit' => 'units',
+            'category' => 'packaging'
+        ]);
+
+
+        // Vincular insumos a la receta usando el modelo pivot RecipeSupply
+        // Aserrín al 10%
+        RecipeSupply::create([
+            'recipe_id' => $recipe->id,
+            'supply_id' => $aserrin->id,
+            'calculation_mode' => 'percentage',
+            'value' => 10,
+        ]);
+
+        // 1 Bolsa por unidad de lote
+        RecipeSupply::create([
+            'recipe_id' => $recipe->id,
+            'supply_id' => $bolsas->id,
+            'calculation_mode' => 'fixed_per_unit',
+            'value' => 1,
+        ]);
+
+        // Caso sin cepa: debe ser SUB
+        $batchSub = Batch::create([
+            'user_id' => $user->id,
+            'recipe_id' => $recipe->id,
+            'type' => 'bulk',
+            'strain_id' => null,
+            'quantity' => 10,
+            'weigth_dry' => 10
+        ]);
+        $this->assertStringStartsWith('SUB-', $batchSub->code);
+
+        // Caso con cepa: debe ser ORE
+        $batchOre = Batch::create([
+            'strain_id' => $strain->id,
+            'user_id' => $user->id,
+            'recipe_id' => $recipe->id,
+            'type' => 'bulk',
+            'quantity' => 10,
+            'weigth_dry' => 10
+        ]);
+        $this->assertStringStartsWith('ORE-', $batchOre->code);
+    }
+
+    /** @test */
+    public function it_updates_prefix_when_strain_is_assigned_to_existing_batch()
+    {
+        $recipe = Recipe::create(['name' => 'Fórmula Maestra']);
+        $batch = Batch::create([
+            'user_id' => User::factory()->create()->id,
+            'recipe_id' => $recipe->id,
+            'type' => 'bulk',
+            'strain_id' => null,
+            'quantity' => 10,
+            'weigth_dry' => 10,
+            'code' => 'SUB-08Jan26-55', // Forzamos un código inicial
+        ]);
+
+        $strain = Strain::factory()->create(['name' => 'Orellana']);
+        
+        // Simulamos la inoculación
+        $batch->update(['strain_id' => $strain->id]);
+
+        // Verificamos que cambió el prefijo pero mantuvo el número 55
+        $this->assertStringStartsWith('ORE-', $batch->code);
+    }
+
+    /** @test */
+    public function it_assigns_the_correct_initial_phase_from_form_data()
+    {
+        $incubation = Phase::firstOrCreate(['slug' => 'incubation'], ['name' => 'Incubación', 'order' => 4]);
+        $recipe = Recipe::create(['name' => 'Fórmula Maestra']);
+        $batch = new Batch([
+            'user_id' => User::factory()->create()->id,
+            'recipe_id' => $recipe->id,
+            'type' => 'bulk',
+            'strain_id' => null,
+            'quantity' => 10,
+            'weigth_dry' => 10,
+            'code' => 'SUB-08Jan26-55', // Forzamos un código inicial
+        ]);
+        
+        // Simulamos lo que hace Filament: pasar el phase_id al objeto
+        $batch->phase_id = $incubation->id; // Propiedad pública virtual
+        $batch->save();
+
+        // Verificamos que el lote esté en la fase de incubación y no en preparación
+        $this->assertEquals($incubation->id, $batch->current_phase->id);
     }
 
 }

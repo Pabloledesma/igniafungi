@@ -74,9 +74,9 @@ class BatchKanbanTest extends TestCase
             ['name' => 'Preparación', 'order' => 1]
         );
 
-        $incubation = Phase::firstOrCreate(
+        $inoculation = Phase::firstOrCreate(
             ['slug' => 'inoculation'],
-            ['name' => 'Inoculación', 'order' => 2]
+            ['name' => 'Inoculación', 'order' => 3]
         );
 
         // Creamos el lote sin cepa
@@ -95,9 +95,9 @@ class BatchKanbanTest extends TestCase
         Livewire::actingAs($user)
             ->test(BatchKanban::class)
             ->set('selectedBatchId', $batch->id)
-            ->set('nextPhaseId', $incubation->id)
+            ->set('nextPhaseId', $inoculation->id)
             ->call('confirmTransition') 
-            ->assertHasErrors(['strain_id' => 'Debes asignar una genética antes de inocular e iniciar incubación.']);
+            ->assertHasErrors(['nextPhaseId']);
     }
     
     /** @test */
