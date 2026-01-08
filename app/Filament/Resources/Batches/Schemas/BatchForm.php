@@ -67,15 +67,6 @@ class BatchForm
                             // Para simplificar ahora, usemos TextInput o Select simple:
                             // ->options(['Mijo' => 'Mijo', ...]) 
                             
-                        Select::make('container_type')
-                            ->label('Tipo de Envase')
-                            ->options([
-                                'jar' => 'Frasco de Vidrio (max 500g)',
-                                'bag' => 'Bolsa de Grano',
-                            ])
-                            ->default('jar')
-                            ->required()
-                            ->live(), // Para validar el peso según el envase
                     ])
                     ->visible(fn (Get $get) => $get('type') === 'grain'),
                 Select::make('phase_id')
@@ -204,8 +195,7 @@ class BatchForm
                             ->numeric()
                             ->step(0.01)
                             ->required()
-                            ->live()
-                            ->maxValue(fn (Get $get) => $get('container_type') === 'jar' ? 0.5 : 100),
+                            ->live(),
 
                         // 4. PESO TOTAL ESTIMADO (Vivas + Contaminadas o Solo Vivas?)
                         // Usualmente quieres saber el peso de lo que tienes VIVO.
