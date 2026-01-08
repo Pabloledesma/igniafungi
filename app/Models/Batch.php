@@ -92,6 +92,12 @@ class Batch extends Model
         return $this->harvests()->sum('quantity');
     }
 
+    // Esto nos permite verificarlo rápidamente con $batch->has_harvests
+    public function getHasHarvestsAttribute(): bool
+    {
+        return $this->harvests()->exists();
+    }
+
     // Accessor útil para obtener la fase activa en el test
     public function getCurrentPhaseAttribute()
     {

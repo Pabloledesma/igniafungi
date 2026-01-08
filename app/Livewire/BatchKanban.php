@@ -268,8 +268,8 @@ class BatchKanban extends Component
                 ->with(['batches' => function($query) {
                     // Incluimos todos los estados que representan un lote en producción
                     $query->whereIn('batches.status', ['active', 'contaminated', 'finalized'])
-                        ->wherePivot('finished_at', null);
-                    // Aplicar filtro si no está vacío
+                        ->wherePivot('finished_at', null)
+                        ->withCount('harvests');
                     if ($this->batchType) {
                         $query->where('type', $this->batchType);
                     }
