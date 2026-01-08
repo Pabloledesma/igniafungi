@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use Filament\Panel;
+use App\Models\Harvest;
 use Filament\PanelProvider;
 use Filament\Pages\Dashboard;
 use Filament\Support\Colors\Color;
@@ -16,8 +17,12 @@ use Filament\Http\Middleware\AuthenticateSession;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
+use App\Filament\Resources\BatchLosses\Widgets\LossChart;
+use App\Filament\Resources\Harvests\Widgets\HarvestChart;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
+use App\Filament\Resources\BatchLosses\Widgets\LossOverview;
+use App\Filament\Resources\Harvests\Widgets\EficienciaPorCepa;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 
 class AdminPanelProvider extends PanelProvider
@@ -41,6 +46,10 @@ class AdminPanelProvider extends PanelProvider
             ->widgets([
                 AccountWidget::class,
                 FilamentInfoWidget::class,
+                LossOverview::class,
+                LossChart::class,
+                HarvestChart::class,
+                EficienciaPorCepa::class
             ])
             ->middleware([
                 EncryptCookies::class,
