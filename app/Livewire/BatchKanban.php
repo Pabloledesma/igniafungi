@@ -87,7 +87,7 @@ class BatchKanban extends Component
 
             $this->reset(['lossQuantity', 'lossReason', 'lossDetails', 'selectedBatchId']);
             $this->dispatch('close-modal'); // O el método que uses para cerrar modales
-            $this->alertSuccess('Merma registrada y stock actualizado.');
+            $this->alert('Merma registrada y stock actualizado.', 'success');
         }
     }
 
@@ -128,7 +128,7 @@ class BatchKanban extends Component
         });
 
         $this->close();
-        $this->alertSuccess("Cosecha registrada correctamente.");
+        $this->alert("Cosecha registrada correctamente.", 'success');
     }
 
     public function confirmTransition()
@@ -145,7 +145,7 @@ class BatchKanban extends Component
         $this->validate(['nextPhaseId' => 'required|exists:phases,id']);
         $batch->transitionTo($nextPhase, $this->notes);
         $this->close();
-        $this->alertSuccess("Lote {$batch->code} movido a {$nextPhase->name}");
+        $this->alert("Lote {$batch->code} movido a {$nextPhase->name}", 'success');
     }
 
     // --- LÓGICA DE DESCARTE (QUINTAR BLOQUES) ---
@@ -221,7 +221,7 @@ class BatchKanban extends Component
         });
 
         $this->closeDiscard();
-        $this->alertSuccess("El descarte se ha registrado correctamente.");
+        $this->alert("El descarte se ha registrado correctamente.", 'success');
     }
 
     // --- UTILIDADES ---
@@ -237,13 +237,24 @@ class BatchKanban extends Component
         $this->reset(['discardQuantity', 'discardReason', 'discardNotes', 'selectedBatchId']);
     }
 
-    private function alertSuccess($message)
+    private function alert($message, $messageType = 'success')
     {
-        LivewireAlert::title('Éxito')
-            ->position('bottom-end')
-            ->success()
-            ->text($message)
-            ->show();
+        if($messageType == 'success') {
+            LivewireAlert::title('Éxito')
+                ->position('bottom-end')
+                ->success()
+                ->text($message)
+                ->show();
+
+        } 
+          
+        if($messageType == 'error') {
+         LivewireAlert::title('Error')
+                ->position('bottom-end')
+                ->error()
+                ->text($message)
+                ->show();
+        }
     }
 
     public function render()
