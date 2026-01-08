@@ -36,12 +36,14 @@ class BoldWebhookController extends Controller
             return response()->json(['message' => 'Order not found'], 404);
         }
 
-        $status = data_get($payload, 'data.status');
+        $status = $payload['type'] ?? data_get($payload, 'data.status');
         // Lógica de estados basada en la documentación de Bold
         switch ($status) {
             case 'APPROVED': // Estado para éxito según estándar Bold
+                $order->completeOrder(); // Este método ya hace el update internamente
+                return response()->json(['status' => 'success'], 200);
+
             case 'SALE_APPROVED': 
-                $order->update(['status' => 'paid']);
                 $order->completeOrder(); // Método que ya tienes para limpiar carrito/enviar mail
                 Log::info("Orden #{$order->id} PAGADA exitosamente.");
                 return response()->json(['status' => 'success'], 200);

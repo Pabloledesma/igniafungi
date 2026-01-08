@@ -118,7 +118,8 @@ class BoldWebhookTest extends TestCase
         // 2. CODIFICAR EN BASE64 (Esto es lo que faltaba en el test)
         $base64Payload = base64_encode($jsonPayload);
             // 3. Generar la firma usando el Base64
-        $signature = hash_hmac('sha256', $base64Payload, 'test_secret');
+        $secret = config('services.bold.webhook_secret');
+        $signature = hash_hmac('sha256', $base64Payload, $secret);
         // 2. ACT: Enviamos el webhook por primera vez
         $this->withHeaders(['X-Bold-Signature' => $signature])->postJson('/api/webhooks/bold', $payload);
         $this->assertEquals(8, $product->fresh()->stock, "El stock no se descontó correctamente.");
@@ -152,6 +153,8 @@ class BoldWebhookTest extends TestCase
     /** @test */
     public function it_processes_approved_payment_with_empty_secret_sandbox()
     {
+        // CREA LA ORDEN PRIMERO para que el controlador la encuentre
+        $order = Order::factory()->create(['reference' => 'ORD-100', 'status' => 'pending']);
         $payload = [
             'data' => [
                 'reference' => 'ORD-100',

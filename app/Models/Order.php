@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -68,7 +69,6 @@ class Order extends Model
         }
     }
 
-    // App\Models\Order.php
     public function completeOrder()
     {
         // 1. CLÁUSULA DE GUARDA (Idempotencia)
