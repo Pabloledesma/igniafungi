@@ -25,6 +25,8 @@ class ProductsPageTest extends TestCase
         // Creamos un producto con el campo images nulo o vacío
         $productWithoutImages = Product::factory()->create([
             'is_active' => true,
+            'in_stock'  => true,  // <--- Crucial para pasar el filtro
+            'price'     => 10000,
             'images' => null // O [] dependiendo de tu migración
         ]);
 
