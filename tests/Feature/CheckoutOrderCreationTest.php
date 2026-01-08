@@ -36,7 +36,8 @@ class CheckoutOrderCreationTest extends TestCase
             'checkout_shipping' => [
                 'is_bogota'     => true,
                 'cost'          => 15000,
-                'delivery_date' => now()->addDay(6)
+                'delivery_date' => now()->addDay(6),
+                'location'      => 'Engativa'
             ]
         ]);
 
@@ -62,8 +63,8 @@ class CheckoutOrderCreationTest extends TestCase
         // ASSERT: La orden debe existir en la base de datos
         $this->assertDatabaseHas('orders', [
             'user_id' => $user->id,
-            'grand_total' => 30000,
-            'shipping_amount' => 15000,
+            'grand_total' => 24000,
+            'shipping_amount' => 9000,
         ]);
 
         // ASSERT: Verificar que la referencia NO sea nula

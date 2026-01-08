@@ -31,6 +31,8 @@ class CheckoutPage extends Component
     public $data_customer_data;
     public $delivery_date_label = null;
     public $city;
+    public $state;
+    public $zip_code;
     public $departmet;
     public $free_shipping_if = CartManagement::FREE_SHIPPING_THRESHOLD;
     public $location; // Para la localidad
@@ -103,10 +105,10 @@ class CheckoutPage extends Component
         $shipping_data = session('checkout_shipping');
         
         if ($shipping_data) {
-            $this->city = $shipping_data['is_bogota'] ? 'Bogotá' : null;
-            $this->delivery_date_label = $shipping_data['delivery_date'];
-            $this->location = $shipping_data['location'];
-            $this->shipping_cost = $shipping_data['cost'];
+            $this->city = ($shipping_data['is_bogota'] ?? false ) ? 'Bogotá' : null;
+            $this->delivery_date_label = $shipping_data['delivery_date'] ?? null;
+            $this->location = $shipping_data['location'] ?? null;
+            $this->shipping_cost = $shipping_data['cost'] ?? 0;
         }
 
         $this->calculateShipping();
