@@ -26,13 +26,13 @@ class BatchObserver
             $batch->user_id = auth()->id();
         }
 
-        if (!$batch->code) {
-            $batch->code =$this->generateBatchCode($batch);
-        }
+     
+        $batch->code =$this->generateBatchCode($batch);
+        
 
         // Aseguramos que el status inicial sea preparación si no viene uno definido
         if (!$batch->status) {
-            $batch->status = 'preparation';
+            $batch->status = 'active';
         }
     }
 
@@ -62,6 +62,12 @@ class BatchObserver
      */
     public function updating(Batch $batch): void
     {
+        if ($batch->isDirty('strain_id') && $batch->strain_id !== null) {
+            $batch->code = $this->generateBatchCode($batch, keepNumber: true);
+        
+            Log::info("Prefijo de lote actualizado: {$batch->code}");
+        }
+        
         if ($batch->isDirty('quantity') && (int)$batch->quantity === 0) {
             $batch->status = 'finalized';
             
@@ -77,49 +83,67 @@ class BatchObserver
     /**
      * Lógica para el Kanban: Evita lotes huérfanos
      */
-    private function assignInitialPhase(Batch $batch): void
+   private function assignInitialPhase(Batch $batch): void
     {
-        $firstPhase = Phase::where('slug', 'preparation')->first();
+        // 1. Intentamos obtenerlo de la propiedad pública del objeto (si se definió en el modelo)
+        $phaseId = $batch->phase_id;
 
-        if ($firstPhase) {
-            $batch->phases()->attach($firstPhase->id, [
+        // 2. Si es null, buscamos en la estructura compleja de Livewire/Filament
+        if (!$phaseId) {
+            $snapshot = request()->input('components.0.snapshot');
+            if ($snapshot) {
+                $decoded = json_decode($snapshot, true);
+                
+                // Según tu DD, los datos están en data -> data -> 0 -> phase_id
+                $formData = $decoded['data']['data'] ?? [];
+                
+                // Verificamos si es un arreglo indexado (como en tu imagen) o asociativo
+                $phaseId = isset($formData[0]['phase_id']) 
+                    ? $formData[0]['phase_id'] 
+                    : ($formData['phase_id'] ?? null);
+            }
+        }
+        
+        if ($phaseId) {
+            $batch->phases()->attach($phaseId, [
                 'user_id' => $batch->user_id ?? (auth()->id() ?? 1),
                 'started_at' => now(),
             ]);
             
-            Log::info("Lote {$batch->code} asignado a fase: {$firstPhase->name}");
-        } else {
-            Log::error("No se encontró la fase 'preparation'. ¿Ejecutaste el PhaseSeeder?");
+            Log::info("Lote {$batch->code} asignado a fase ID: {$phaseId}");
         }
     }
 
-    /**
-     * Métodos privados de soporte para mantener limpio el Observer
-     */
-    private function generateBatchCode(Batch $batch)
+    private function generateBatchCode(Batch $batch, bool $keepNumber = false)
     {
-        // 1. Determinar el prefijo según el tipo
-        $prefix = $batch->type === 'grain' ? 'GRA' : 'SUB';
+        // 1. Determinar el prefijo (Cepa o Tipo)
+        if ($batch->strain_id) {
+            $strainName = $batch->strain?->name ?? \App\Models\Strain::find($batch->strain_id)?->name;
+            $prefix = strtoupper(substr(trim($strainName), 0, 3));
+        } else {
+            $prefix = $batch->type === 'grain' ? 'GRA' : 'SUB';
+        }
         
-        // 2. Obtener la fecha actual (AAMMDD)
         $datePart = now()->format('dMy'); 
 
-        // 3. Buscar el último código que coincida con este prefijo y fecha
-        // Usamos lockForUpdate si es necesario, pero para SQLite basta con asegurar la consulta.
-        $lastBatch = Batch::where('code', 'like', "{$prefix}-{$datePart}-%")
-            ->orderBy('id', 'desc')
-            ->first();
+        // 2. Determinar el número correlativo
+        if ($keepNumber && $batch->code) {
+            // Extraemos el número del código actual (ej: de SUB-08Jan26-5 extrae 5)
+            $parts = explode('-', $batch->code);
+            $nextNumber = end($parts);
+        } else {
+            // Buscamos el siguiente número en la BD para este prefijo y fecha
+            $lastBatch = Batch::where('code', 'like', "{$prefix}-{$datePart}-%")
+                ->orderBy('id', 'desc')
+                ->first();
 
-        $nextNumber = 1;
-
-       if ($lastBatch) {
-            // Extraemos de forma segura el número después del último guion
-            $lastCode = $lastBatch->code;
-            $parts = explode('-', $lastCode);
-            $lastNumber = (int) end($parts);
-            $nextNumber = $lastNumber + 1;
+            $nextNumber = 1;
+            if ($lastBatch) {
+                $parts = explode('-', $lastBatch->code);
+                $nextNumber = (int) end($parts) + 1;
+            }
         }
-        // 4. Retornar el código formateado
+
         return "{$prefix}-{$datePart}-{$nextNumber}";
     }
 

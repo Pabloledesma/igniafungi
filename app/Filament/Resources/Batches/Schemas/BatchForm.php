@@ -82,6 +82,7 @@ class BatchForm
                         return Phase::orderBy('order')->pluck('name', 'id');
                     })
                     ->required()
+                    ->dehydrated()
                     ->live(),
                 Select::make('status')
                     ->options([

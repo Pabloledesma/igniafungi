@@ -34,6 +34,8 @@ class Batch extends Model
         'observations'
     ];
 
+    public $phase_id;
+
     protected $casts = [
         'inoculation_date' => 'date', // Esto convierte el texto en Objeto Fecha
     ];
