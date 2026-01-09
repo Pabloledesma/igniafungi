@@ -2,10 +2,11 @@
 
 namespace App\Filament\Resources\BatchLosses\Schemas;
 
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Textarea;
 use Filament\Schemas\Schema;
+use Filament\Forms\Components\Hidden;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 
 class BatchLossForm
 {
@@ -13,6 +14,9 @@ class BatchLossForm
     {
         return $schema
             ->components([
+                Hidden::make('user_id')
+                    ->default(auth()->id())
+                    ->required(),
                 Select::make('batch_id')
                     ->relationship('batch', 'code')
                     ->label('Lote afectado')
