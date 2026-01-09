@@ -1,103 +1,82 @@
-<header class="sticky top-4 inset-x-0 flex flex-wrap md:justify-start md:flex-nowrap z-[60] w-full before:absolute before:inset-0 before:max-w-5xl before:mx-2 lg:before:mx-auto before:rounded-[26px] before:bg-neutral-800/30 before:backdrop-blur-md">
-    <nav class="relative max-w-5xl w-full flex flex-wrap md:flex-nowrap basis-full items-center justify-between py-2 ps-5 pe-2 md:py-0 mx-2 lg:mx-auto">
+<header class="flex flex-wrap lg:justify-start lg:flex-nowrap z-50 w-full py-7 bg-white dark:bg-neutral-900 shadow-sm lg:shadow-none">
+  <nav class="relative max-w-7xl w-full flex items-center justify-between px-4 md:px-6 lg:px-8 mx-auto">
+  
+  <div class="flex items-center gap-x-2.5 flex-none">
+    <a class="flex-none rounded-xl text-xl inline-block font-semibold focus:outline-none focus:opacity-80" href="{{ route('home') }}" aria-label="Ignia Fungi">
+      <img src="{{ asset('images/logo_ignia_sin_texto.png') }}" alt="Logo Ignia Fungi" class="h-10 lg:h-12 w-auto object-contain"> 
+    </a>
+    <span class="text-gold-ignia text-[10px] tracking-[0.2em] font-medium uppercase whitespace-nowrap hidden sm:inline-block pt-1">
+        Ignia Fungi
+    </span>
+  </div>
+
+  <div class="flex items-center gap-x-2 flex-none">
+    <div class="lg:hidden">
+      <button type="button" class="hs-collapse-toggle size-9 flex justify-center items-center rounded-xl border border-gray-200 dark:border-neutral-700 text-gray-800 dark:text-neutral-200 hover:bg-gray-100 dark:hover:bg-neutral-800 focus:outline-none" data-hs-collapse="#hs-navbar-primary">
+        <svg class="hs-collapse-open:hidden shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="3" x2="21" y1="6" y2="6"/>
+          <line x1="3" x2="21" y1="12" y2="12"/>
+          <line x1="3" x2="21" y1="18" y2="18"/>
+        </svg>
+        <svg class="hs-collapse-open:block hidden shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6 6 18"/>
+          <path d="m6 6 12 12"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+ <div id="hs-navbar-primary" class="hs-collapse hidden overflow-hidden transition-all duration-300 basis-full grow lg:block lg:w-auto px-2 lg:px-0">
+  <div class="flex flex-col gap-y-4 gap-x-0 mt-5 pb-4 lg:pb-0 lg:flex-row lg:justify-center lg:items-center lg:gap-y-0 lg:gap-x-8 lg:mt-0">
+    @php
+      $navItems = [
+          ['name' => 'Home', 'route' => 'home'],
+          ['name' => 'Categorias', 'route' => 'categories'],
+          ['name' => 'Productos', 'route' => 'products'],
+          ['name' => 'Blog', 'route' => 'blog.index'],
+      ];
+    @endphp
+
+    @foreach($navItems as $item)
+      <a wire:navigate 
+         class="relative inline-block text-black dark:text-white hover:text-orange-600 transition py-1 lg:py-0
+         {{ request()->routeIs($item['route']) ? 'font-bold before:absolute before:bottom-[-4px] before:start-0 before:w-full before:h-0.5 before:bg-gold-ignia' : '' }}" 
+         href="{{ route($item['route']) }}">
+        {{ $item['name'] }}
+      </a>
+    @endforeach
+  </div>
+</div>
+
+  <div class="flex items-center gap-x-2 flex-none">
     
-      <div class="flex items-center justify-center"> 
-        <a class="flex flex-col items-center justify-center rounded-md text-xl font-semibold focus:outline-hidden focus:opacity-80" href="#" aria-label="Ignia Fungi">
-            <img src="{{ asset('images/logo_ignia_sin_texto.png') }}" 
-                alt="Logo Ignia Fungi" 
-                class="h-12 w-auto object-contain mb-1">
-            
-            <span class="text-gold-ignia text-[10px] tracking-[0.2em] font-medium uppercase whitespace-nowrap">
-                Ignia Fungi
-            </span>
-        </a>
-      </div>
+    <a wire:navigate href="{{ route('cart') }}" class="size-9 relative flex justify-center items-center rounded-xl bg-stone-100 dark:bg-neutral-800 text-black dark:text-white hover:bg-stone-200 transition">
+      <svg class="shrink-0 size-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+      <span class="absolute -top-1.5 -right-1.5 size-4 bg-orange-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border-2 border-white dark:border-neutral-900">
+        {{ $total_count }}
+      </span>
+    </a>
 
-      <div class="relative md:flex md:items-center md:justify-between">
-      <div class="flex items-center justify-between">
-        <a href="/" class="flex flex-col items-center py-2">
-        </a>
-        <div class="md:hidden">
-          <button type="button" class="hs-collapse-toggle flex justify-center items-center w-9 h-9 text-sm font-semibold rounded-lg border border-gray-200 text-gray-800 hover:bg-gray-100 disabled:opacity-50 disabled:pointer-events-none dark:text-white dark:border-gray-700 dark:hover:bg-gray-700 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" data-hs-collapse="#navbar-collapse-with-animation" aria-controls="navbar-collapse-with-animation" aria-label="Toggle navigation">
-            <svg class="hs-collapse-open:hidden flex-shrink-0 w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="3" x2="21" y1="6" y2="6" />
-              <line x1="3" x2="21" y1="12" y2="12" />
-              <line x1="3" x2="21" y1="18" y2="18" />
-            </svg>
-            <svg class="hs-collapse-open:block hidden flex-shrink-0 w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 6 6 18" />
-              <path d="m6 6 12 12" />
-            </svg>
-          </button>
-        </div>
-      </div>
+    @guest
+      <a wire:navigate href="{{ route('login') }}" class="py-2 px-3 inline-flex items-center gap-x-2 text-sm font-medium rounded-xl bg-gold-ignia text-black hover:bg-yellow-500 transition">
+        Login
+      </a>
+    @endguest
 
-      <div id="navbar-collapse-with-animation" class="hs-collapse hidden overflow-hidden md:overflow-visible transition-all duration-300 basis-full grow md:block">
-        <div class="md:overflow-visible overflow-hidden overflow-y-auto max-h-[75vh] md:max-h-none [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-track]:bg-gray-100 [&::-webkit-scrollbar-thumb]:bg-gray-300 dark:[&::-webkit-scrollbar-track]:bg-slate-700 dark:[&::-webkit-scrollbar-thumb]:bg-slate-500">
-          <div class="flex flex-col gap-x-0 mt-5 divide-y divide-dashed divide-gray-200 md:flex-row md:items-center md:justify-end md:gap-x-7 md:mt-0 md:ps-7 md:divide-y-0 md:divide-solid dark:divide-gray-700">
+    @auth
+    <div class="hs-dropdown relative inline-flex [--placement:bottom-right]">
+      <button id="hs-dropdown-account" type="button" class="hs-dropdown-toggle size-9 inline-flex justify-center items-center rounded-xl border border-gray-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 overflow-hidden">
+        <img class="size-full object-cover" src="https://ui-avatars.com/api/?name={{ auth()->user()->name }}&background=b18a2e&color=fff" alt="Avatar">
+      </button>
 
-            <a wire:navigate class="font-medium {{ request()->is('/') ? 'text-gold-ignia' : 'text-wood-950' }} py-3 md:py-6 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" href="/" aria-current="page">Home</a>
-
-            <a wire:navigate class="font-medium {{ request()->is('categories') ? 'text-gold-ignia dark:text-blue-500' : 'text-wood-200 dark:text-gray-400 dark:hover:text-wood-200 dark:focus:ring-gray-600' }} hover:text-gray-400 py-3 md:py-6 dark:focus:outline-none dark:focus:ring-1" href="/categories">
-              Categorias
-            </a>
-
-            <a wire:navigate class="font-medium {{ request()->is('products') ? 'text-gold-ignia' : 'text-wood-200 dark:text-gray-400' }} hover:text-gray-400 py-3 md:py-6 dark:hover:text-wood-200 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" href="/products">
-              Productos
-            </a>
-
-            <a wire:navigate class="font-medium flex items-center {{ request()->is('cart') ? 'text-gold-ignia' : 'text-wood-200 dark:text-gray-400' }} hover:text-gray-400 py-3 md:py-6 dark:hover:text-wood-200 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600" href="/cart">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="flex-shrink-0 w-5 h-5 mr-1">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
-              </svg>
-              <span class="mr-1">Cart</span>
-              <span class="py-0.5 px-1.5 rounded-full text-xs font-medium bg-blue-50 border border-blue-200 text-gold-ignia">
-                {{ $total_count }}
-              </span>
-            </a>
-            @guest
-              <div class="pt-3 md:pt-0">
-                <a wire:navigate class="py-2.5 px-4 inline-flex items-center gap-x-2 text-sm font-semibold rounded-lg border border-transparent bg-gold-ignia text-white transition-all duration-300 hover:bg-orange-500 hover:scale-105 hover:shadow-[0_0_20px_5px_rgba(234,88,12,0.6)] active:scale-95" href="/login">
-                  <span class="absolute inset-0 rounded-lg bg-orange-400 opacity-0 group-hover:opacity-20 blur-md transition-opacity duration-300"></span>
-                  <span class="relative z-10">Login</span>
-                  <svg class="frelative z-10 flex-shrink-0 w-4 h-4 transition-transform duration-500 group-hover:rotate-12" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-                    <circle cx="12" cy="7" r="4" />
-                  </svg>
-                  
-                </a>
-              </div>
-            @endguest
-            
-           @auth
-            <div class="hs-dropdown relative [--strategy:static] md:[--strategy:fixed] md:py-4">
-              <button id="hs-dropdown-account" type="button" class="flex items-center w-full text-wood-200 hover:text-gray-400 font-medium dark:text-gray-400">
-                {{ auth()->user()->name }}
-                <svg class="ms-2 w-4 h-4" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </button>
-
-              <div class="hs-dropdown-menu transition-[opacity,margin] duration-[150ms] hs-dropdown-open:opacity-100 opacity-0 md:w-48 hidden !z-[100] bg-white md:shadow-md rounded-lg p-2 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 absolute md:absolute md:top-full right-0 md:right-0 mt-2">
-                
-                <a wire:navigate class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" href="/my-orders">
-                  My Orders
-                </a>
-
-                <a wire:navigate class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-gray-800 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700" href="#">
-                  My Account
-                </a>
-                
-                <hr class="my-2 dark:border-gray-700">
-
-                <a wire:navigate class="flex items-center gap-x-3.5 py-2 px-3 rounded-lg text-sm text-red-600 hover:bg-gray-100 dark:hover:bg-gray-700" href="/logout">
-                  Logout
-                </a>
-              </div>
-            </div>
-            @endauth
-
-          </div>
-        </div>
+      <div class="hs-dropdown-menu transition-[opacity,margin] duration hs-dropdown-open:opacity-100 opacity-0 hidden min-w-48 bg-white dark:bg-neutral-800 shadow-xl rounded-xl p-2 mt-2 z-[60] border border-gray-200 dark:border-neutral-700" aria-labelledby="hs-dropdown-account">
+        <a class="flex items-center gap-x-3 py-2 px-3 rounded-lg text-sm text-gray-800 dark:text-neutral-300 hover:bg-gray-100 dark:hover:bg-neutral-700" href="/my-orders">Mis pedidos</a>
+        <div class="my-1 border-t border-gray-200 dark:border-neutral-700"></div>
+        <a class="flex items-center gap-x-3 py-2 px-3 rounded-lg text-sm text-red-600 hover:bg-gray-50" href="/logout">Salir</a>
       </div>
     </div>
-  </nav>
+    @endauth
+
+  </div>
+</nav>
 </header>

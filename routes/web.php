@@ -1,7 +1,10 @@
 <?php
 
+use App\Livewire\AboutUs;
 use App\Livewire\CartPage;
 use App\Livewire\HomePage;
+use App\Livewire\BlogIndex;
+use App\Livewire\BlogDetail;
 use App\Livewire\CancelPage;
 use Illuminate\Http\Request;
 use App\Livewire\BatchKanban;
@@ -23,20 +26,14 @@ use App\Http\Controllers\BatchPhaseController;
 use App\Http\Controllers\BoldWebhookController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 
-
-Route::get('/test-envio-real', function () {
-    Mail::raw('¡Prueba exitosa! Este correo sale desde el Transactional Stream de Ignia Fungi.', function ($message) {
-        $message->to('pabloledes83@gmail.com')
-                ->subject('Validación de Dominio Ignia Fungi');
-    });
-    return "Correo enviado a través de la infraestructura de Mailtrap.";
-});
-
 Route::get('/', HomePage::class)->name('home');
-Route::get('/categories', CategoriesPage::class);
-Route::get('/products', ProductsPage::class);
+Route::get('/categories', CategoriesPage::class)->name('categories');
+Route::get('/products', ProductsPage::class)->name('products');
 Route::get('/products/{slug}', ProductDetailPage::class);
-Route::get('/cart', CartPage::class);
+Route::get('/cart', CartPage::class)->name('cart');
+Route::get('/sobre-nosotros', AboutUs::class)->name('about');
+Route::get('/blog', BlogIndex::class)->name('blog.index');
+Route::get('/blog/{slug}', BlogDetail::class)->name('blog.show');
 
 Route::middleware('guest')->group(function (){
     Route::get('/login', LoginPage::class)->name('login');
@@ -68,14 +65,14 @@ Route::middleware(['auth', 'verified'])->group(function (){
         return redirect()->intended('/');
     })->name('logout');
     Route::get('/checkout', CheckoutPage::class);
-    Route::get('/my-orders', MyOrdersPage::class);
+    Route::get('/my-orders', MyOrdersPage::class)->name('my-orders');
     Route::get('/gracias', OrderConfirmation::class)->name('order.thanks');
     Route::get('/my-orders/{order}', MyOrderDetailPage::class);
     Route::get('/cancel', cancelPage::class)->name('cancel');
+    Route::get('/kanban', BatchKanban::class)->name('kanban');
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::get('/kanban', BatchKanban::class)->name('kanban');
     Route::post('/batches/{batch}/transition', [BatchPhaseController::class, 'transition']) 
         ->name('batches.transition');
     Route::post('/batches/{batch}/losses', [BatchLossController::class, 'store'])
