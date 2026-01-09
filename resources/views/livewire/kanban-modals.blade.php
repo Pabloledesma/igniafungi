@@ -7,6 +7,17 @@
                 {{ $isLastPhase ? 'Registrar Cosecha' : 'Avanzar a Siguiente Fase' }}
             </h3>
 
+            @if($showHarvestFields)
+                <div class="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-700">
+                    <i class="fas fa-exclamation-triangle mr-1"></i> 
+                    ¿Primordios detectados? Puedes cosechar ahora.
+                </div>
+                <button wire:click="openTransitionModal({{ $batch->id }})" 
+                        class="mt-1 text-orange-600 hover:underline text-xs font-bold uppercase">
+                    Cosecha Temprana / Mover
+                </button>
+            @endif
+
             <div class="space-y-4">
                 @if($isLastPhase)
                     <div>

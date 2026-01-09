@@ -17,6 +17,14 @@ class BatchPhaseController
             'notes' => 'nullable|string'
         ]);
 
+        if ($request->has('weight') && $request->weight > 0) {
+            $batch->harvests()->create([
+                'weight' => $request->weight,
+                'date' => now(),
+                // otros campos como calidad...
+            ]);
+        }
+
         $nextPhase = Phase::find($validated['phase_id']);
         
         // Nuestra lógica ya testeada

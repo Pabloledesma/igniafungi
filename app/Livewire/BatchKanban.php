@@ -38,6 +38,7 @@ class BatchKanban extends Component
     public $lossReason;
     public $lossDetails;
     public $batchType = ''; // Puede ser '', 'grain' o 'bulk'
+    public $showHarvestFields = false;
 
     public function mount()
     {
@@ -63,7 +64,7 @@ class BatchKanban extends Component
             $this->nextPhaseId = null;
             $this->isLastPhase = true;
         }
-
+        $this->showHarvestFields = ($currentPhase->slug === 'fruiting' || $currentPhase->slug === 'incubation');
         $this->showModal = true;
     }
 
@@ -93,11 +94,16 @@ class BatchKanban extends Component
 
     public function harvestBatch()
     {
-        $this->validate([
-            'harvestWeight' => 'required|numeric|min:0.1',
-            'harvestDate' => 'required|date',
-            'notes' => 'nullable|string'
-        ]);
+        try {
+            $this->validate([
+                'harvestWeight' => 'required|numeric|min:0.01',
+                'harvestDate' => 'required|date',
+                'notes' => 'nullable|string'
+            ]);
+       } catch (\Illuminate\Validation\ValidationException $e) {
+            // Esto te mostrará en la consola del navegador qué campo falta
+            $this->alert($e->validator->errors(), 'error'); 
+        }
 
         $batch = Batch::findOrFail($this->selectedBatchId);
 

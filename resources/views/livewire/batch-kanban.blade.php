@@ -29,7 +29,7 @@
 
                 <div class="p-3 flex-1 overflow-y-auto space-y-3 custom-scrollbar">
                     @foreach($phase->batches as $batch)
-                        <div class="bg-white rounded-lg shadow border-l-4 {{ $batch->harvests_count > 0 ? 'border-green-500' : 'border-blue-400' }} p-4">
+                        <div class="relative bg-white rounded-lg shadow border-l-4 {{ $batch->harvests_count > 0 ? 'border-green-500' : 'border-blue-400' }} p-4">
                            
                             <div class="absolute top-2 right-2 flex gap-2">
                                 <button wire:click="openDiscardModal({{ $batch }})" class="text-gray-400 hover:text-red-500 transition-colors" title="Descartar unidades">

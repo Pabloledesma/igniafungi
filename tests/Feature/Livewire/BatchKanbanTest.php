@@ -218,4 +218,52 @@ class BatchKanbanTest extends TestCase
 
         $this->assertEquals(90, $batch->refresh()->quantity);
     }
+
+    /** @test */
+    public function it_can_harvest_a_batch_during_incubation_phase()
+    {
+        // 1. Preparar datos: Crear una cepa, una fase de incubación y un lote
+        $strain = Strain::factory()->create(['name' => 'Orellana Rosa']);
+        $incubationPhase = \App\Models\Phase::firstOrCreate(
+        ['slug' => 'incubation'], // Criterio de búsqueda
+        [
+            'name' => 'Incubación',  // Requerido por la BD
+            'order' => 1
+        ]);
+        
+        $batch = Batch::factory()->create([
+            'strain_id' => $strain->id,
+            'status' => 'active'
+        ]);
+
+       $batch->phases()->attach($incubationPhase->id, [
+            'started_at' => now(),
+            'user_id' => \App\Models\User::factory()->create()->id, // Agregado porque es fillable
+            'notes' => 'Iniciado en test'
+        ]);
+
+        // 2. Actuar: Simular el componente Livewire
+        Livewire::actingAs(User::factory()->create())
+            ->test(BatchKanban::class)
+            ->call('openTransitionModal', $batch->id)
+            // Verificar que el componente detectó que debe mostrar campos de cosecha
+            ->assertSet('showHarvestFields', true)
+            // Llenar los datos de cosecha
+            ->set('harvestWeight', 0.5)
+            ->set('harvestDate', now()->format('Y-m-d'))
+            ->set('notes', 'Primordios detectados en incubadora')
+            ->set('selectedBatchId', $batch->id)
+            // Ejecutar la acción
+            ->call('harvestBatch')
+            ->assertHasNoErrors();
+
+        // 3. Asertar: Verificar que la cosecha se guardó en la base de datos
+        $this->assertDatabaseHas('harvests', [
+            'batch_id' => $batch->id,
+            'weight' => 0.5,
+        ]);
+        
+        // Verificar que el lote sigue activo (si no marcamos shouldFinishBatch)
+        $this->assertEquals('active', $batch->fresh()->status);
+    }
 }
