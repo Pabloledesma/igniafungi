@@ -1,7 +1,10 @@
 <?php
 
+use App\Models\Post;
 use App\Livewire\CartPage;
 use App\Livewire\HomePage;
+use App\Livewire\BlogIndex;
+use App\Livewire\BlogDetail;
 use App\Livewire\CancelPage;
 use Illuminate\Http\Request;
 use App\Livewire\BatchKanban;
@@ -81,5 +84,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/batches/{batch}/losses', [BatchLossController::class, 'store'])
         ->name('batches.losses.store');
 });
+
+// Lista de todos los posts
+Route::get('/blog', BlogIndex::class)->name('blog.index');
+
+// Detalle de un post específico
+Route::get('/blog/{slug}', BlogDetail::class)->name('blog.show');
 
 Route::post('/api/webhooks/bold', [BoldWebhookController::class, 'handle']);
