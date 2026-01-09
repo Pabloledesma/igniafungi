@@ -33,7 +33,10 @@ class PostForm
                     ->required() // Para que coincida con la base de datos
                     ->maxLength(255)
                     ->columnSpanFull(),
-                FileUpload::make('image')->image()->directory('blog'),
+                FileUpload::make('image')
+                    ->image()
+                    ->directory('blog')
+                    ->disk('public'),
                 RichEditor::make('content')
                     ->columnSpanFull()
                     ->fileAttachmentsDirectory('blog-content'),
