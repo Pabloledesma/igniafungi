@@ -55,12 +55,12 @@ class ProductsPage extends Component
 
         // Filtro de Destacados
         if ($this->featured) {
-            $query->where('is_featured', true);
+            $query->where('is_featured', 1);
         }
 
         // Filtro de Stock
         if ($this->in_stock) {
-            $query->where('in_stock', true);
+            $query->where('in_stock', 1);
         }
 
         if($this->price_range != 1000000) {

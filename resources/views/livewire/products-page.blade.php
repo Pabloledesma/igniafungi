@@ -53,7 +53,7 @@
                     <input 
                       id="featured" 
                       type="checkbox" 
-                      wire:model.change="featured" 
+                      wire:model.live="featured" 
                       class="w-3.5 h-3.5 text-orange-600 border-gray-300 rounded focus:ring-orange-500">
                     <span class="ml-2 text-sm text-gray-600 group-hover:text-gold-ignia transition-colors">Es destacado</span>
                   </label>

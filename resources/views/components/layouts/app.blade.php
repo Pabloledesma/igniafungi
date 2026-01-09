@@ -4,7 +4,19 @@
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-        <title>{{ $title ?? 'Ignia Fungi' }}</title>
+        <title>@yield('title', 'Ignia Fungi | Orellanas y Hongos Gourmet en Bogotá')</title>
+        <meta name="description" content="@yield('meta_description', 'Cultivo sostenible de orellanas y hongos gourmet. Frescura y salud desde nuestra granja urbana.')">
+
+        <meta property="og:type" content="website">
+        <meta property="og:url" content="{{ url()->current() }}">
+        <meta property="og:title" content="@yield('title', 'Ignia Fungi')">
+        <meta property="og:description" content="@yield('meta_description', 'Descubre el poder del reino Fungi.')">
+        <meta property="og:image" content="@yield('meta_image', asset('images/og-default.jpg'))">
+
+        <meta property="twitter:card" content="summary_large_image">
+        <meta property="twitter:title" content="@yield('title', 'Ignia Fungi')">
+        <meta property="twitter:description" content="@yield('meta_description', 'Hongos gourmet frescos.')">
+        <meta property="twitter:image" content="@yield('meta_image', asset('images/og-default.jpg'))">
         @vite('resources/css/app.css')    
         @vite('resources/js/app.js')  
         @livewireStyles 
@@ -13,9 +25,12 @@
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <link rel="stylesheet" href="https://preline.co/assets/css/main.css?v=3.0.1">
         @stack('scripts')
+        @stack('schema')
     </head>
-    <body class="bg-neutral-900">
-        @livewire('partials.navbar')
+    <body>
+        @if(!isset($hideNavbar) || !$hideNavbar)
+            @livewire('partials.navbar')
+        @endif
         <main id="app">
             {{ $slot }}
         </main>
@@ -23,5 +38,12 @@
         @livewire('partials.footer')
         @livewireScripts
         <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+        <script>
+            document.addEventListener('livewire:navigated', () => {
+                if (window.HSStaticMethods) {
+                    window.HSStaticMethods.autoInit();
+                }
+            });
+        </script>
     </body>
 </html>
