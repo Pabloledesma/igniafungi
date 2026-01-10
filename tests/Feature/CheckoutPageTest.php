@@ -32,6 +32,46 @@ class CheckoutPageTest extends TestCase
     }
 
     /** @test */
+    public function it_validates_all_required_fields_and_formats()
+    {
+        $product = Product::factory()->create(['price' => 20000, 'stock' => 1]);
+        $this->seedCart($product);
+
+        Livewire::test(CheckoutPage::class)
+            // 1. Probar campos vacíos
+            ->set('first_name', '')
+            ->set('last_name', '')
+            ->set('email', '')
+            ->set('phone', '')
+            ->set('document_number', '')
+            ->set('payment_method', '')
+            ->set('city', '')
+            ->set('delivery_date', '')
+            ->call('placeOrder')
+            ->assertHasErrors([
+                'first_name' => 'required',
+                'last_name' => 'required',
+                'email' => 'required',
+                'phone' => 'required',
+                'document_number' => 'required',
+                'payment_method' => 'required',
+                'city' => 'required',
+            ])
+            // 2. Probar formatos incorrectos
+            ->set('email', 'correo-no-valido')
+            ->set('document_number', 'letras-en-documento')
+            ->call('placeOrder')
+            ->assertHasErrors([
+                'email' => 'email',
+                'document_number' => 'numeric',
+            ])
+            // 3. Probar longitud mínima
+            ->set('first_name', 'Ab')
+            ->call('placeOrder')
+            ->assertHasErrors(['first_name' => 'min']);
+    }
+
+    /** @test */
     public function it_calculates_shipping_cost_for_bogota_correcty()
     {
         // 1. Crear el producto en la base de datos de prueba

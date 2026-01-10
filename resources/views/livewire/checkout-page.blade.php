@@ -186,6 +186,16 @@
 								<div class="text-red-500 text-sm">{{ $message }}</div>
 							@enderror
 						</div>
+						<div>
+							<label class="block text-gray-700 dark:text-white mb-1" for="delivery_date">
+								Fecha de envío
+							</label>
+							<input wire:model="delivery_date" class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('street_address') border-red-500 @enderror" id="street_address" type="text">
+							</input>
+							@error('delivery_date')
+								<div class="text-red-500 text-sm">{{ $message }}</div>
+							@enderror
+						</div>
 						<div class="text-lg font-semibold mb-4">
 							Seleccione el metodo de pago
 						</div>

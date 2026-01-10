@@ -137,7 +137,7 @@ class CartPage extends Component
         }
         
         // Usamos la opción seleccionada por el usuario de la lista de deliveryOptions
-        $selectedDate = $this->deliveryOptions[$this->selected_delivery_index]['label'] ?? null;
+        $selectedDate = $this->deliveryOptions[$this->selected_delivery_index]['date'] ?? null;
 
         session([
             'checkout_shipping' => [
