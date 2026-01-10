@@ -71,6 +71,27 @@ class CheckoutPageTest extends TestCase
             ->assertHasErrors(['first_name' => 'min']);
     }
 
+      /** @test */
+    public function place_order_without_products()
+    {
+
+        // Asegurarnos de que el carrito esté vacío explícitamente
+        CartManagement::clearCartItems();
+        
+        Livewire::test(CheckoutPage::class)
+            // 1. Probar campos vacíos
+            ->set('first_name', 'sdfgsdg')
+            ->set('last_name', 'sdfgsdg')
+            ->set('email', 'test@test')
+            ->set('phone', '23454325')
+            ->set('document_number', '2345325')
+            ->set('payment_method', 'BOLD')
+            ->set('city', 'Bogotá')
+            ->set('delivery_date', '01/01/2023')
+            ->call('placeOrder')
+            ->assertHasErrors(['cart']);
+    }
+
     /** @test */
     public function it_calculates_shipping_cost_for_bogota_correcty()
     {

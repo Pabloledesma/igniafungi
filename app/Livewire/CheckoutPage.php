@@ -116,20 +116,24 @@ class CheckoutPage extends Component
 
     public function placeOrder()
     {
+        $cart_items = CartManagement::getCartItemsFromCookie();
+        // Validación manual del carrito para evitar el error de "No property found"
+        if (empty($cart_items)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'cart' => 'No puedes realizar un pedido con el carrito vacío.',
+            ]);
+        }
         $this->validate([
-            'first_name' => 'required|min:3|max:255',
-            'last_name' => 'required|min:3|max:255',
+            'first_name'      => 'required|min:3',
+            'last_name'       => 'required',
+            'email'           => 'required|email',
+            'phone'           => 'required',
             'document_number' => 'required|numeric',
-            'document_type' => 'required|in:CC,CE,NIT,PP',
-            'phone' => 'required',
-            'email' => 'required|email',
-            'street_address' => 'required|min:3|max:255',
-            'delivery_date' => 'required|date|after_or_equal:today',
-            'city' => 'required|min:3|max:255',
-            'payment_method' => 'required|in:BOLD,COD'
+            'delivery_date'   => 'required',
+            'payment_method'  => 'required',
+            'city'            => 'required',
         ]);
         
-        $cart_items = CartManagement::getCartItemsFromCookie();
         $subtotal = (int) CartManagement::calculateGrandTotal($cart_items);
 
         foreach($cart_items as $item)
