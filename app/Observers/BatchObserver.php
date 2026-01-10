@@ -124,7 +124,7 @@ class BatchObserver
             $prefix = $batch->type === 'grain' ? 'GRA' : 'SUB';
         }
         
-        $datePart = now()->format('dMy'); 
+        $datePart = now()->format('dmy'); 
 
         // 2. Determinar el número correlativo
         if ($keepNumber && $batch->code) {

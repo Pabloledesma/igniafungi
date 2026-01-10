@@ -102,7 +102,7 @@ class BatchTest extends TestCase
         // Verificamos que el código siga el patrón PLE-AAMMDD-XX
         $this->assertNotNull($batch->code);
         $this->assertStringContainsString('PLE', $batch->code);
-        $this->assertEquals(13, strlen($batch->code)); 
+        $this->assertEquals(12, strlen($batch->code)); 
     }
 
     /** @test */

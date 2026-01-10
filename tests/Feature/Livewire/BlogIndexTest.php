@@ -10,6 +10,8 @@ use Tests\TestCase;
 
 class BlogIndexTest extends TestCase
 {
+    use RefreshDatabase;
+    
     public function test_renders_successfully()
     {
         Livewire::test(BlogIndex::class)
