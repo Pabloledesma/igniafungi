@@ -9,6 +9,10 @@
                 </svg>
             </div>
             <h1 class="text-3xl font-extrabold text-white">¡Pedido Recibido!</h1>
+            <div class="flex justify-between text-sm">
+                <span class="text-stone-500">Programado para:</span>
+                <span class="font-bold text-stone-800">{{ $delivery_date ? \Carbon\Carbon::parse($delivery_date)->format('d/m/Y') : 'No seleccionada' }}</span>
+            </div>
             <p class="text-slate-200 mt-2">Pagarás en efectivo al recibir tus productos.</p>
         </div>
         @elseif($order->status === 'paid')

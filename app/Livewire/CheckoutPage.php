@@ -29,7 +29,7 @@ class CheckoutPage extends Component
     public $shipping_method; 
     public $shipping_cost = 0;
     public $data_customer_data;
-    public $delivery_date_label = null;
+    public $delivery_date = null;
     public $city;
     public $state;
     public $zip_code;
@@ -106,7 +106,7 @@ class CheckoutPage extends Component
         
         if ($shipping_data) {
             $this->city = ($shipping_data['is_bogota'] ?? false ) ? 'Bogotá' : null;
-            $this->delivery_date_label = $shipping_data['delivery_date'] ?? null;
+            $this->delivery_date = $shipping_data['delivery_date'] ?? null;
             $this->location = $shipping_data['location'] ?? null;
             $this->shipping_cost = $shipping_data['cost'] ?? 0;
         }
@@ -124,6 +124,7 @@ class CheckoutPage extends Component
             'phone' => 'required',
             'email' => 'required|email',
             'street_address' => 'required|min:3|max:255',
+            'delivery_date' => 'required|date|after_or_equal:today',
             'city' => 'required|min:3|max:255',
             'payment_method' => 'required|in:BOLD,COD'
         ]);
@@ -170,6 +171,11 @@ class CheckoutPage extends Component
 
         $order->items()->createMany($cart_items);
 
+        $order->delivery()->create([
+            'status' => 'pending',
+            'scheduled_at' => $this->delivery_date,
+        ]);
+
         if($this->payment_method == 'BOLD')
         {
             $this->order_id = $order->id;
@@ -204,6 +210,7 @@ class CheckoutPage extends Component
             $this->dispatch('open-bold-checkout', config: $config);
         } else {
             // Pago contra entrega: Redirigir directamente
+            CartManagement::clearCartItems();
             return redirect()->route('order.thanks', ['reference' => $order->reference]);
         }
 

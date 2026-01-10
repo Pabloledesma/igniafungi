@@ -256,7 +256,7 @@
 					<li class="py-3 sm:py-4">
 						<div class="flex justify-between mb-2 font-bold text-lg">
 							<span>Total a Pagar</span>
-							<span>{{ Number::currency($grand_total + $shipping_cost, 'COP') }}</span>
+							<span>{{ Number::currency($grand_total, 'COP') }}</span>
 						</div>
 					</li>
 				</ul>
