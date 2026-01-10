@@ -3,6 +3,8 @@
 namespace App\Observers;
 
 use App\Models\Harvest;
+use App\Models\Product;
+use Illuminate\Support\Facades\Log;
 
 class HarvestObserver 
 {
@@ -11,9 +13,16 @@ class HarvestObserver
      */
     public function created(Harvest $harvest): void
     {
-        if ($harvest->weight >= 5) {
-            // Lógica para notificar a los suscriptores: 
-            // "¡Nueva cosecha de {$harvest->batch->strain->name} disponible!"
+        $batch = $harvest->batch;
+
+        if ($batch && $batch->strain_id) {
+            // Buscamos productos de la misma cepa
+            // EXCLUYENDO aquellos que pertenecen a la categoría 'Deshidratados'
+            Product::where('strain_id', $batch->strain_id)
+                ->whereDoesntHave('category', function ($query) {
+                    $query->where('name', 'like', '%Deshidratado%');
+                })
+                ->increment('stock', $harvest->weight);
         }
     }
 
