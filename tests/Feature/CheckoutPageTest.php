@@ -211,6 +211,45 @@ class CheckoutPageTest extends TestCase
             ->assertDispatched('open-bold-checkout'); // Verifica que se dispare el JS de Bold
     }
 
+    /** @test */
+    public function it_redirects_to_confirmation_without_loading_screen_for_cod()
+    {
+        $product = Product::factory()->create(['price' => 50000, 'stock' => 1]);
+        $this->seedCart($product);
+
+        $test = Livewire::test(CheckoutPage::class)
+            ->set('first_name', 'Socia')
+            ->set('last_name', 'Ignia')
+            ->set('email', 'socia@igniafungi.com')
+            ->set('phone', '3119876543')
+            ->set('document_type', 'CC')
+            ->set('document_number', '87654321')
+            ->set('city', 'Bogotá')
+            ->set('location', 'Chapinero')
+            ->set('street_address', 'Carrera 7 #40-00')
+            ->set('payment_method', 'COD')
+            ->set('delivery_date', now()->addDay()->format('Y-m-d'))
+            ->call('placeOrder');
+            
+            
+        // Obtenemos la última orden creada para saber su referencia exacta
+        $order = Order::latest()->first();
+
+        // Verificamos la redirección con los parámetros exactos
+        $test->assertRedirect(route('order.thanks', [
+            'reference' => $order->reference,
+            'payment'   => 'cod' 
+        ]));
+
+        $this->get(route('order.thanks', [
+            'reference' => $order->reference,
+            'payment'   => 'cod'
+        ]))
+        ->assertStatus(200)
+        ->assertSee('Pedido Recibido')
+        ->assertSee('Pagarás en efectivo al recibir tus productos.');
+    }
+
     // Método auxiliar para llenar el carrito en la sesión/cookie de prueba
     private function seedCart($product, $is_bogota = true, $location = null, $shippingCost = 11000)
     {

@@ -10,6 +10,7 @@ class OrderConfirmation extends Component
 {
     
     public $order;
+    public $delivery_date;
     /**
      * Maneja la redirección después del pago.
      */
@@ -20,9 +21,9 @@ class OrderConfirmation extends Component
 
         // 2. Buscamos la orden. Usamos with() para cargar los productos y evitar N+1
         $this->order = Order::where('reference', $reference)
-                    ->with(['items.product', 'addresses'])
+                    ->with(['items.product', 'addresses', 'delivery'])
                     ->firstOrFail(); // Si no existe, lanza 404
-
+        $this->delivery_date = $this->order->delivery->scheduled_at;
     }
     
     public function render()

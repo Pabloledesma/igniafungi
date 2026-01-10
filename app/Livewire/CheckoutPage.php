@@ -215,7 +215,10 @@ class CheckoutPage extends Component
         } else {
             // Pago contra entrega: Redirigir directamente
             CartManagement::clearCartItems();
-            return redirect()->route('order.thanks', ['reference' => $order->reference]);
+            return redirect()->route('order.thanks', [
+                'reference' => $order->reference,
+                'payment'   => 'cod'
+            ]);
         }
 
         CartManagement::clearCartItems();

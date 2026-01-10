@@ -1,7 +1,7 @@
 <div class="min-h-screen py-10 px-4">
     <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-xl overflow-hidden">
         
-        @if($order->payment_method === 'cod')
+       @if(strtolower($order->payment_method) === 'cod')
         <div class="bg-slate-800 p-6 text-center">
             <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-sm">
                 <svg class="w-10 h-10 text-gold-ignia" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -9,40 +9,9 @@
                 </svg>
             </div>
             <h1 class="text-3xl font-extrabold text-white">¡Pedido Recibido!</h1>
-            <div class="flex justify-between text-sm">
-                <span class="text-stone-500">Programado para:</span>
-                <span class="font-bold text-stone-800">{{ $delivery_date ? \Carbon\Carbon::parse($delivery_date)->format('d/m/Y') : 'No seleccionada' }}</span>
-            </div>
+          
             <p class="text-slate-200 mt-2">Pagarás en efectivo al recibir tus productos.</p>
         </div>
-        @elseif($order->status === 'paid')
-            <div class="bg-gold-ignia p-6 text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-sm">
-                    <svg class="w-10 h-10 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
-                    </svg>
-                </div>
-                <h1 class="text-3xl font-extrabold text-white">¡Pago Confirmado!</h1>
-                <p class="text-green-100 mt-2">Tu pedido ha sido recibido y está en proceso.</p>
-            </div>
-        @elseif($order->status === 'failed')
-            <div class="bg-red-600 p-6 text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-sm">
-                    <svg class="w-10 h-10 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </div>
-                <h1 class="text-3xl font-extrabold text-white">Pago Rechazado</h1>
-                <p class="text-red-100 mt-2">La entidad financiera no autorizó la transacción.</p>
-            </div>
-        @else
-            <div class="bg-slate-700 p-6 text-center">
-                <div class="inline-flex items-center justify-center w-16 h-16 bg-white rounded-full mb-4 shadow-sm">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-700"></div>
-                </div>
-                <h1 class="text-3xl font-extrabold text-white">Verificando Pago</h1>
-                <p class="text-slate-200 mt-2">Estamos confirmando el estado con la pasarela...</p>
-            </div>
         @endif
 
         <div class="p-8 text-slate-800">
@@ -81,6 +50,13 @@
                             <span class="text-base font-bold text-black">Total</span>
                             <span class="text-xl font-black {{ $order->status === 'failed' ? 'text-red-600' : 'text-green-600' }}">
                                 ${{ number_format($order->grand_total) }}
+                            </span>
+                        </div>
+
+                        <div class="flex justify-between text-sm">
+                            <span class="text-stone-500">Programado para:</span>
+                            <span class="font-bold text-stone-800">
+                                {{ $delivery_date ? \Carbon\Carbon::parse($delivery_date)->format('d/m/Y') : 'Pendiente por programar' }}
                             </span>
                         </div>
                     </div>
