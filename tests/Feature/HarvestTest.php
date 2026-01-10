@@ -5,11 +5,13 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use App\Models\Batch;
 use App\Models\Strain;
+use Livewire\Livewire;
 use App\Models\Harvest;
 use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Foundation\Testing\WithFaker;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use App\Filament\Resources\Products\Pages\ListProducts;
 
 class HarvestTest extends TestCase
 {
@@ -54,4 +56,6 @@ class HarvestTest extends TestCase
         $this->assertEquals(3.0, $freshProduct->fresh()->stock, "El hongo fresco debería haber subido a 3kg");
         $this->assertEquals(0, $driedProduct->fresh()->stock, "El hongo deshidratado debería seguir en 0kg");
     }
+
+   
 }

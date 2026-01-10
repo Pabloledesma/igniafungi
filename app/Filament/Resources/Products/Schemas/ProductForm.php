@@ -56,6 +56,9 @@ class ProductForm
                                 ->required()
                                 ->numeric()
                                 ->prefix('$'),
+                            TextInput::make('stock')
+                                ->required()
+                                ->numeric()
                         ]),
 
                         Section::make('Associations')->schema([
