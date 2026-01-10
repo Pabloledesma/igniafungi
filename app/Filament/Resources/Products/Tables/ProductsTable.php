@@ -76,7 +76,7 @@ class ProductsTable
                                 ->minValue(0.1),
                             TextInput::make('cantidad_seco')
                                 ->numeric()
-                                ->required()
+                                ->placeholder('Opcional')
                                 ->minValue(0.01),
                         ])
                         ->action(function (Product $record, array $data) {
