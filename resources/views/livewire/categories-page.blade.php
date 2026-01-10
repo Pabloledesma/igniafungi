@@ -4,7 +4,7 @@
       @foreach($categories as $category)
         <a 
         wire:key="{{ $category->id }}"
-        href="#"
+        href="/products?selected_categories[0]={{ $category->id }}""
         class="group flex flex-col bg-white border shadow-sm rounded-xl hover:shadow-md transition dark:bg-slate-900 dark:border-gray-800 dark:focus:outline-none dark:focus:ring-1 dark:focus:ring-gray-600">
           <div class="p-4 md:p-5">
             <div class="flex justify-between items-center">
