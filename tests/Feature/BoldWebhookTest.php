@@ -34,7 +34,7 @@ class BoldWebhookTest extends TestCase
     public function it_returns_401_if_signature_is_missing_or_invalid()
     {
         $payload = ['type' => 'SALE_APPROVED'];
-        
+
         // Petición sin el header X-Bold-Signature
         $response = $this->postJson('/api/webhooks/bold', $payload);
 
@@ -47,14 +47,14 @@ class BoldWebhookTest extends TestCase
     public function it_processes_all_types_of_approved_payments($payload)
     {
         $referenceInJson = data_get($payload, 'data.metadata.reference');
-        
+
         $order = Order::factory()->create([
             'reference' => $referenceInJson,
             'status' => 'pending'
         ]);
 
         $product = Product::factory()->create(['stock' => 10]);
-        
+
         // Creamos el Item de la orden que vincula ambos
         OrderItem::factory()->create([
             'order_id' => $order->id,
@@ -63,17 +63,17 @@ class BoldWebhookTest extends TestCase
             'unit_amount' => 10000
         ]);
 
-          // 1. Convertir payload a JSON
+        // 1. Convertir payload a JSON
         $jsonPayload = json_encode($payload);
 
         // 2. CODIFICAR EN BASE64 (Esto es lo que faltaba en el test)
         $base64Payload = base64_encode($jsonPayload);
-            // 3. Generar la firma usando el Base64
+        // 3. Generar la firma usando el Base64
         $signature = hash_hmac('sha256', $base64Payload, '');
 
         $response = $this->withHeaders([
-                'x-bold-signature' => $signature,
-            ])->postJson('/api/webhooks/bold', $payload);
+            'x-bold-signature' => $signature,
+        ])->postJson('/api/webhooks/bold', $payload);
 
         // 3. ASSERT
         $response->assertStatus(200);
@@ -104,7 +104,7 @@ class BoldWebhookTest extends TestCase
             'quantity' => 2
         ]);
 
-       $payload = [
+        $payload = [
             'data' => [
                 'status' => 'APPROVED', // IMPORTANTE: Sin esto el switch del controlador no hace nada
                 'metadata' => [
@@ -112,12 +112,12 @@ class BoldWebhookTest extends TestCase
                 ]
             ]
         ];
-          // 1. Convertir payload a JSON
+        // 1. Convertir payload a JSON
         $jsonPayload = json_encode($payload);
 
         // 2. CODIFICAR EN BASE64 (Esto es lo que faltaba en el test)
         $base64Payload = base64_encode($jsonPayload);
-            // 3. Generar la firma usando el Base64
+        // 3. Generar la firma usando el Base64
         $secret = config('services.bold.webhook_secret');
         $signature = hash_hmac('sha256', $base64Payload, $secret);
         // 2. ACT: Enviamos el webhook por primera vez
@@ -138,12 +138,18 @@ class BoldWebhookTest extends TestCase
         $user = User::factory()->create();
         $order = Order::factory()->create([
             'user_id' => $user->id,
-            'reference' => 'REF-OK', 
+            'reference' => 'REF-OK',
             'status' => 'paid'
         ]);
-            
+
+        Delivery::factory()->create([
+            'order_id' => $order->id,
+            'scheduled_at' => now()->addDays(2),
+            'status' => 'scheduled'
+        ]);
+
         $response = $this->actingAs($user)
-                        ->get(route('order.thanks', ['reference' => 'REF-OK']));
+            ->get(route('order.thanks', ['reference' => 'REF-OK']));
 
         $response->assertStatus(200);
         $response->assertSee('REF-OK');
@@ -162,14 +168,14 @@ class BoldWebhookTest extends TestCase
                 'payment_method' => 'tarjeta web'
             ]
         ];
-        
+
         $body = json_encode($payload);
-        
+
         // 1. CODIFICAR EL BODY EN BASE64 (Paso vital según Bold)
         $payloadEncoded = base64_encode($body);
-        
+
         // 2. FIRMAR CON SECRETO VACÍO
-        $secret = ""; 
+        $secret = "";
         $signature = hash_hmac('sha256', $payloadEncoded, $secret);
 
         $response = $this->withHeaders([
