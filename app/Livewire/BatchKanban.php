@@ -43,6 +43,10 @@ class BatchKanban extends Component
     public $batchType = ''; // Puede ser '', 'grain' o 'bulk'
     public $showHarvestFields = false;
 
+    // Filtros
+    public $search = '';
+    public $selectedStrain = '';
+
     public function mount()
     {
         $this->harvestDate = now()->format('Y-m-d');
@@ -295,8 +299,17 @@ class BatchKanban extends Component
                         if ($this->batchType) {
                             $query->where('type', $this->batchType);
                         }
+
+                        if ($this->search) {
+                            $query->where('code', 'like', '%' . $this->search . '%');
+                        }
+
+                        if ($this->selectedStrain) {
+                            $query->where('strain_id', $this->selectedStrain);
+                        }
                     }
-                ])->get()
+                ])->get(),
+            'allStrains' => Strain::orderBy('name')->get()
         ]);
     }
 }

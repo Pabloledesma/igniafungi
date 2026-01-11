@@ -23,9 +23,9 @@ class BatchKanbanTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->user = User::factory()->create();
-        
+
         // Crear Fases maestras
         $this->phases = collect([
             Phase::create(['name' => 'Inoculación', 'slug' => 'inoculation', 'order' => 1]),
@@ -49,7 +49,7 @@ class BatchKanbanTest extends TestCase
         ]);
 
         $this->batch->phases()->attach($this->phases->first()->id, [
-            'user_id' => $this->user->id, 
+            'user_id' => $this->user->id,
             'started_at' => now()
         ]);
     }
@@ -62,12 +62,12 @@ class BatchKanbanTest extends TestCase
             ->assertViewHas('phases');
     }
 
-   /** @test */
+    /** @test */
     public function batch_requires_strain_to_advance_to_inoculation()
     {
         $user = User::factory()->create();
         $this->be($user); // Autenticamos al usuario
-        
+
         // En lugar de factory o seed completo, usamos creación segura:
         $prep = Phase::firstOrCreate(
             ['slug' => 'preparation'],
@@ -85,7 +85,7 @@ class BatchKanbanTest extends TestCase
             'strain_id' => null,
             'status' => 'preparation'
         ]);
-        
+
         // Aseguramos que tenga la fase inicial en la tabla pivote
         $batch->phases()->syncWithoutDetaching([
             $prep->id => ['started_at' => now(), 'user_id' => 1]
@@ -96,10 +96,10 @@ class BatchKanbanTest extends TestCase
             ->test(BatchKanban::class)
             ->set('selectedBatchId', $batch->id)
             ->set('nextPhaseId', $inoculation->id)
-            ->call('confirmTransition') 
-            ->assertHasErrors(['nextPhaseId']);
+            ->call('confirmTransition')
+            ->assertHasErrors(['strainId']);
     }
-    
+
     /** @test */
     public function can_advance_batch_to_next_phase()
     {
@@ -128,7 +128,7 @@ class BatchKanbanTest extends TestCase
             ->set('isLastPhase', true)
             ->set('harvestWeight', 2.5)
             ->set('harvestDate', now()->format('Y-m-d'))
-            ->set('shouldFinishBatch', false) 
+            ->set('shouldFinishBatch', false)
             ->call('harvestBatch');
 
         $this->assertCount(1, $this->batch->fresh()->harvests);
@@ -150,7 +150,7 @@ class BatchKanbanTest extends TestCase
 
         $freshBatch = $this->batch->fresh();
         $this->assertEquals('contaminated', $freshBatch->status);
-        
+
         // Verificar registro de pérdida
         $this->assertDatabaseHas('batch_losses', [
             'batch_id' => $this->batch->id,
@@ -181,7 +181,7 @@ class BatchKanbanTest extends TestCase
         Livewire::actingAs($this->user)
             ->test(BatchKanban::class)
             ->set('selectedBatchId', $this->batch->id)
-            ->set('discardQuantity', 500) 
+            ->set('discardQuantity', 500)
             ->set('discardReason', 'Contaminación')
             ->call('processDiscard')
             ->assertHasErrors(['discardQuantity']);
@@ -211,9 +211,9 @@ class BatchKanbanTest extends TestCase
         Livewire::actingAs($user)
             ->test(BatchKanban::class)
             ->set('selectedBatchId', $batch->id)
-            ->set('lossQuantity', 10) 
+            ->set('lossQuantity', 10)
             ->set('lossReason', 'Contaminación')
-            ->call('saveLoss') 
+            ->call('saveLoss')
             ->assertStatus(200);
 
         $this->assertEquals(90, $batch->refresh()->quantity);
@@ -225,18 +225,19 @@ class BatchKanbanTest extends TestCase
         // 1. Preparar datos: Crear una cepa, una fase de incubación y un lote
         $strain = Strain::factory()->create(['name' => 'Orellana Rosa']);
         $incubationPhase = \App\Models\Phase::firstOrCreate(
-        ['slug' => 'incubation'], // Criterio de búsqueda
-        [
-            'name' => 'Incubación',  // Requerido por la BD
-            'order' => 1
-        ]);
-        
+            ['slug' => 'incubation'], // Criterio de búsqueda
+            [
+                'name' => 'Incubación',  // Requerido por la BD
+                'order' => 1
+            ]
+        );
+
         $batch = Batch::factory()->create([
             'strain_id' => $strain->id,
             'status' => 'active'
         ]);
 
-       $batch->phases()->attach($incubationPhase->id, [
+        $batch->phases()->attach($incubationPhase->id, [
             'started_at' => now(),
             'user_id' => \App\Models\User::factory()->create()->id, // Agregado porque es fillable
             'notes' => 'Iniciado en test'
@@ -262,7 +263,7 @@ class BatchKanbanTest extends TestCase
             'batch_id' => $batch->id,
             'weight' => 0.5,
         ]);
-        
+
         // Verificar que el lote sigue activo (si no marcamos shouldFinishBatch)
         $this->assertEquals('active', $batch->fresh()->status);
     }

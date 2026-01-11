@@ -16,6 +16,24 @@
                     SUSTRATO (BULK)
                 </button>
             </div>
+            
+            <div class="h-6 w-px bg-gray-300 mx-4"></div>
+
+            {{-- Buscador --}}
+            <div class="relative">
+                <input type="text" wire:model.live.debounce.300ms="search" placeholder="Buscar lote..." 
+                    class="pl-3 pr-4 py-2 border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
+
+            {{-- Filtro Cepa --}}
+            <div>
+                <select wire:model.live="selectedStrain" class="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 py-2 pl-3 pr-8">
+                    <option value="">Todas las Cepas</option>
+                    @foreach($allStrains as $strain)
+                        <option value="{{ $strain->id }}">{{ $strain->name }}</option>
+                    @endforeach
+                </select>
+            </div>
         </div>
     <div class="flex-1 flex overflow-x-auto p-6 gap-4 items-start h-full">
         @foreach($phases as $phase)

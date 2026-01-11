@@ -16,7 +16,7 @@ class BatchObserver
     {
         self::$processedBatches = [];
     }
-    
+
     /**
      * Contexto: Antes de insertar en la BD (Before Insert)
      */
@@ -26,9 +26,11 @@ class BatchObserver
             $batch->user_id = auth()->id();
         }
 
-     
-        $batch->code =$this->generateBatchCode($batch);
-        
+
+        if (!$batch->code) {
+            $batch->code = $this->generateBatchCode($batch);
+        }
+
 
         // Aseguramos que el status inicial sea preparación si no viene uno definido
         if (!$batch->status) {
@@ -64,16 +66,16 @@ class BatchObserver
     {
         if ($batch->isDirty('strain_id') && $batch->strain_id !== null) {
             $batch->code = $this->generateBatchCode($batch, keepNumber: true);
-        
+
             Log::info("Prefijo de lote actualizado: {$batch->code}");
         }
-        
-        if ($batch->isDirty('quantity') && (int)$batch->quantity === 0) {
+
+        if ($batch->isDirty('quantity') && (int) $batch->quantity === 0) {
             $batch->status = 'finalized';
-            
+
             $now = now()->format('Y-m-d H:i');
             $user_name = auth()->user()->name ?? 'Sistema';
-            
+
             if (!str_contains($batch->observations, 'LOTE FINALIZADO')) {
                 $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
             }
@@ -83,7 +85,7 @@ class BatchObserver
     /**
      * Lógica para el Kanban: Evita lotes huérfanos
      */
-   private function assignInitialPhase(Batch $batch): void
+    private function assignInitialPhase(Batch $batch): void
     {
         // 1. Intentamos obtenerlo de la propiedad pública del objeto (si se definió en el modelo)
         $phaseId = $batch->phase_id;
@@ -93,23 +95,23 @@ class BatchObserver
             $snapshot = request()->input('components.0.snapshot');
             if ($snapshot) {
                 $decoded = json_decode($snapshot, true);
-                
+
                 // Según tu DD, los datos están en data -> data -> 0 -> phase_id
                 $formData = $decoded['data']['data'] ?? [];
-                
+
                 // Verificamos si es un arreglo indexado (como en tu imagen) o asociativo
-                $phaseId = isset($formData[0]['phase_id']) 
-                    ? $formData[0]['phase_id'] 
+                $phaseId = isset($formData[0]['phase_id'])
+                    ? $formData[0]['phase_id']
                     : ($formData['phase_id'] ?? null);
             }
         }
-        
+
         if ($phaseId) {
             $batch->phases()->attach($phaseId, [
                 'user_id' => $batch->user_id ?? (auth()->id() ?? 1),
                 'started_at' => now(),
             ]);
-            
+
             Log::info("Lote {$batch->code} asignado a fase ID: {$phaseId}");
         }
     }
@@ -123,8 +125,8 @@ class BatchObserver
         } else {
             $prefix = $batch->type === 'grain' ? 'GRA' : 'SUB';
         }
-        
-        $datePart = now()->format('dmy'); 
+
+        $datePart = now()->format('dmy');
 
         // 2. Determinar el número correlativo
         if ($keepNumber && $batch->code) {
@@ -149,10 +151,10 @@ class BatchObserver
 
     private function deductInventory(Batch $batch): void
     {
-        
+
         // Forzamos la carga de la receta si no está presente
         $recipe = $batch->recipe()->with('supplies')->first();
-        
+
         if (!$recipe || $recipe->supplies->isEmpty()) {
             Log::warning("El lote {$batch->id} no tiene receta o insumos vinculados.");
             return;
@@ -169,15 +171,15 @@ class BatchObserver
                 'valor_receta' => $value
             ]);
 
-            $amountToDeduct = ($mode === 'percentage') 
-                ? ($batch->weigth_dry * $value) / 100 
+            $amountToDeduct = ($mode === 'percentage')
+                ? ($batch->weigth_dry * $value) / 100
                 : $value * $batch->quantity;
 
-           if ($amountToDeduct > 0) {
+            if ($amountToDeduct > 0) {
                 // USAR decrement() directamente en la base de datos
                 // Esto es más seguro y evita problemas de concurrencia
                 $supply->decrement('quantity', $amountToDeduct);
-                
+
                 $batch->observations .= "\n- [Insumo] {$supply->name}: {$amountToDeduct} descontados.";
             }
         }
@@ -201,7 +203,7 @@ class BatchObserver
             } else {
                 // Si no existe el insumo o no hay stock suficiente
                 $batch->observations .= "\n- ⚠️ ADVERTENCIA: No se pudo descontar empaque ({$bagName}). Stock insuficiente o insumo no encontrado.";
-                
+
                 // Opcional: Notificación visual en Filament (si se guarda en sesión)
                 Notification::make()
                     ->title('Stock de bolsas insuficiente')
@@ -210,7 +212,7 @@ class BatchObserver
                     ->send();
             }
         }
-        
+
         $batch->saveQuietly();
     }
 }
