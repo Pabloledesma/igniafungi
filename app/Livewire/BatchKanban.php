@@ -4,6 +4,7 @@ namespace App\Livewire;
 
 use App\Models\Batch;
 use App\Models\Phase;
+use App\Models\Strain;
 use Livewire\Component;
 use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\DB;
@@ -23,6 +24,8 @@ class BatchKanban extends Component
     public $selectedBatchId;
     public $notes = '';
     public $nextPhaseId;
+    public $strainId;
+    public $strains = [];
 
     // Propiedades de Cosecha
     public $harvestWeight;
@@ -56,6 +59,13 @@ class BatchKanban extends Component
         $nextPhase = Phase::where('order', '>', $currentPhase->order)
             ->orderBy('order')
             ->first();
+
+        // Si vamos a inocular, cargamos las cepas
+        if ($nextPhase && $nextPhase->slug === 'inoculation') {
+            $this->strains = Strain::all();
+        } else {
+            $this->strains = [];
+        }
 
         if ($nextPhase) {
             $this->nextPhaseId = $nextPhase->id;
@@ -147,10 +157,15 @@ class BatchKanban extends Component
         $nextPhase = Phase::find($this->nextPhaseId);
 
         // Validación: Si pasa a inoculacion, debe tener genética
-        if ($nextPhase && $nextPhase->slug === 'inoculation' && !$batch->strain_id) {
-            throw \Illuminate\Validation\ValidationException::withMessages([
-                'nextPhaseId' => 'Debes asignar una genética antes de inocular e iniciar incubación.',
-            ]);
+        if ($nextPhase && $nextPhase->slug === 'inoculation') {
+            if (!$batch->strain_id && !$this->strainId) {
+                $this->addError('strainId', 'Debes asignar una genética antes de inocular.');
+                return;
+            }
+            // Asignamos la genética si se seleccionó una
+            if ($this->strainId) {
+                $batch->update(['strain_id' => $this->strainId]);
+            }
         }
 
         $batch->transitionTo($nextPhase, $this->notes);
@@ -238,7 +253,7 @@ class BatchKanban extends Component
 
     public function close()
     {
-        $this->reset(['selectedBatchId', 'showModal', 'notes', 'nextPhaseId', 'harvestWeight', 'shouldFinishBatch']);
+        $this->reset(['selectedBatchId', 'showModal', 'notes', 'nextPhaseId', 'harvestWeight', 'shouldFinishBatch', 'strainId', 'strains']);
     }
 
     public function closeDiscard()

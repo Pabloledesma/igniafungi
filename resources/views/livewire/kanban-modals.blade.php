@@ -1,4 +1,4 @@
- @if($showModal)
+@if($showModal)
     <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-slate-900/80" wire:click="close"></div>
 
@@ -9,11 +9,11 @@
 
             @if($showHarvestFields)
                 <div class="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-[10px] text-yellow-700">
-                    <i class="fas fa-exclamation-triangle mr-1"></i> 
+                    <i class="fas fa-exclamation-triangle mr-1"></i>
                     ¿Primordios detectados? Puedes cosechar ahora.
                 </div>
-                <button wire:click="openTransitionModal({{ $batch->id }})" 
-                        class="mt-1 text-orange-600 hover:underline text-xs font-bold uppercase">
+                <button wire:click="openTransitionModal({{ $batch->id }})"
+                    class="mt-1 text-orange-600 hover:underline text-xs font-bold uppercase">
                     Cosecha Temprana / Mover
                 </button>
             @endif
@@ -22,17 +22,18 @@
                 @if($isLastPhase)
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Peso obtenido (kg)</label>
-                        <input type="number" step="0.001" wire:model="harvestWeight" placeholder="0.000" 
+                        <input type="number" step="0.001" wire:model="harvestWeight" placeholder="0.000"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-green-500 focus:border-green-500">
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Fecha de Cosecha</label>
-                        <input type="date" wire:model="harvestDate" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-green-500">
+                        <input type="date" wire:model="harvestDate"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-green-500">
                     </div>
 
                     <div class="flex items-center p-3 bg-yellow-50 rounded-lg border border-yellow-100">
-                        <input type="checkbox" wire:model="shouldFinishBatch" id="finishCheck" 
+                        <input type="checkbox" wire:model="shouldFinishBatch" id="finishCheck"
                             class="h-4 w-4 text-green-600 border-gray-300 rounded focus:ring-green-500">
                         <label for="finishCheck" class="ml-2 block text-sm text-yellow-800 font-semibold">
                             ¿Finalizar bloque definitivamente? (No habrá más oleadas)
@@ -40,9 +41,23 @@
                     </div>
                 @endif
 
+                @if(count($strains) > 0)
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Seleccionar Genética (Cepa)</label>
+                        <select wire:model="strainId"
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">-- Elige una Cepa --</option>
+                            @foreach($strains as $strain)
+                                <option value="{{ $strain->id }}">{{ $strain->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('strainId') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
+                    </div>
+                @endif
+
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Observaciones</label>
-                    <textarea wire:model="notes" rows="3" 
+                    <textarea wire:model="notes" rows="3"
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500"
                         placeholder="Ej: Primera oleada con sombreros grandes..."></textarea>
                 </div>
@@ -50,21 +65,23 @@
 
             <div class="mt-6 flex justify-end gap-3">
                 <button wire:click="close" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Cancelar</button>
-                
+
                 @if($isLastPhase)
-                    <button wire:click="harvestBatch" class="px-4 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700">
+                    <button wire:click="harvestBatch"
+                        class="px-4 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700">
                         Registrar Cosecha
                     </button>
                 @else
-                    <button wire:click="confirmTransition" class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
+                    <button wire:click="confirmTransition"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
                         Confirmar Avance
                     </button>
                 @endif
             </div>
         </div>
     </div>
-    @endif
-    @if($showLossModal)
+@endif
+@if($showLossModal)
     <div class="fixed inset-0 z-[9999] overflow-y-auto">
         <div class="flex items-center justify-center min-h-screen p-4">
             <div class="fixed inset-0 bg-slate-900/90 backdrop-blur-sm" wire:click="$set('showLossModal', false)"></div>
@@ -78,7 +95,8 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Cantidad afectada</label>
                         <input type="number" wire:model="lossQuantity" class="w-full rounded-lg border-gray-300">
-                        <p class="text-[10px] text-gray-500 mt-1">Total del lote: {{ $selectedBatch?->quantity }} unidades</p>
+                        <p class="text-[10px] text-gray-500 mt-1">Total del lote: {{ $selectedBatch?->quantity }} unidades
+                        </p>
                     </div>
 
                     <div>
@@ -99,40 +117,49 @@
                 </div>
 
                 <div class="mt-6 flex gap-3">
-                    <button wire:click="$set('showLossModal', false)" class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Cancelar</button>
-                    <button wire:click="processLoss" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold">Registrar</button>
+                    <button wire:click="$set('showLossModal', false)"
+                        class="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Cancelar</button>
+                    <button wire:click="processLoss"
+                        class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold">Registrar</button>
                 </div>
             </div>
         </div>
     </div>
-    @endif
-    @if($showDiscardModal)
+@endif
+@if($showDiscardModal)
     <div class="fixed inset-0 z-[9999] flex items-center justify-center p-4">
         <div class="fixed inset-0 bg-slate-900/80" wire:click="closeDiscard"></div>
 
         <div class="relative bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <h3 class="text-xl font-bold text-red-600 mb-4 flex items-center gap-2">
-                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
                 Descartar / Sacar Unidades
             </h3>
 
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Cantidad a sacar manualmente</label>
-                    <input type="number" step="0.01" wire:model="discardQuantity" 
-                        {{ $isTotalDiscard ? 'disabled' : '' }}
+                    <input type="number" step="0.01" wire:model="discardQuantity" {{ $isTotalDiscard ? 'disabled' : '' }}
                         class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-red-500 focus:border-red-500 {{ $isTotalDiscard ? 'bg-gray-100' : 'bg-white' }}">
                 </div>
 
                 <div class="p-3 bg-red-50 border border-red-200 rounded-lg">
                     <label class="flex items-center cursor-pointer">
-                        <input type="checkbox" wire:model.live="isTotalDiscard" class="w-5 h-5 text-red-600 border-gray-300 rounded focus:ring-red-500">
+                        <input type="checkbox" wire:model.live="isTotalDiscard"
+                            class="w-5 h-5 text-red-600 border-gray-300 rounded focus:ring-red-500">
                         <span class="ml-3 text-sm font-bold text-red-700">DESCARTAR TODO EL LOTE</span>
                     </label>
-                    
+
                     @if($isTotalDiscard)
                         <div class="mt-2 flex items-start gap-2 text-red-600 animate-pulse">
-                            <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path></svg>
+                            <svg class="w-5 h-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd"
+                                    d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                    clip-rule="evenodd"></path>
+                            </svg>
                             <p class="text-xs font-bold uppercase italic">
                                 ⚠️ ¡ADVERTENCIA! Esta acción sacará el bloque completo de producción. ¿Estás seguro?
                             </p>
@@ -142,7 +169,8 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Motivo</label>
-                    <select wire:model="discardReason" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-red-500 focus:border-red-500 bg-white">
+                    <select wire:model="discardReason"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-red-500 focus:border-red-500 bg-white">
                         <option value="Contaminación">Contaminación</option>
                         <option value="Agotado">Bloque Agotado (Fin de ciclo)</option>
                         <option value="Dañado">Daño Físico</option>
@@ -151,18 +179,20 @@
 
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Observaciones</label>
-                    <textarea wire:model="discardNotes" rows="2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-red-500 focus:border-red-500 bg-white" placeholder="Detalles..."></textarea>
+                    <textarea wire:model="discardNotes" rows="2"
+                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-red-500 focus:border-red-500 bg-white"
+                        placeholder="Detalles..."></textarea>
                 </div>
             </div>
 
             <div class="mt-6 flex justify-end gap-3">
                 <button wire:click="closeDiscard" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Cancelar</button>
-                <button wire:click="processDiscard" 
+                <button wire:click="processDiscard"
                     class="px-4 py-2 text-white rounded-lg font-bold transition-all
-                    {{ $isTotalDiscard ? 'bg-black hover:bg-red-700 animate-bounce' : 'bg-red-600 hover:bg-red-700' }}">
+                        {{ $isTotalDiscard ? 'bg-black hover:bg-red-700 animate-bounce' : 'bg-red-600 hover:bg-red-700' }}">
                     {{ $isTotalDiscard ? '¡SÍ, DESCARTAR TODO!' : 'Confirmar Descarte' }}
                 </button>
             </div>
         </div>
     </div>
-    @endif
+@endif
