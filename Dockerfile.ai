@@ -1,0 +1,23 @@
+# Usamos una base ligera de Ubuntu
+FROM ubuntu:22.04
+
+# Evitar preguntas interactivas durante la instalación
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Instalar dependencias básicas para desarrollo
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    nodejs \
+    npm \
+    python3 \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Crear un usuario no-root por seguridad
+RUN useradd -m igniadev
+USER igniadev
+WORKDIR /home/igniadev/project
+
+# El contenedor estará listo para recibir las órdenes del agente
+CMD ["/bin/bash"]
