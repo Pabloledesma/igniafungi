@@ -25,9 +25,9 @@ class BatchKanban extends Component
     public $nextPhaseId;
 
     // Propiedades de Cosecha
-    public $harvestWeight; 
+    public $harvestWeight;
     public $harvestDate;
-    public $shouldFinishBatch = false; 
+    public $shouldFinishBatch = false;
 
     // Propiedades de Descarte
     public $discardQuantity;
@@ -54,8 +54,8 @@ class BatchKanban extends Component
         $currentPhase = $batch->current_phase;
 
         $nextPhase = Phase::where('order', '>', $currentPhase->order)
-                        ->orderBy('order')
-                        ->first();
+            ->orderBy('order')
+            ->first();
 
         if ($nextPhase) {
             $this->nextPhaseId = $nextPhase->id;
@@ -77,12 +77,12 @@ class BatchKanban extends Component
         ]);
 
         $batch = Batch::find($this->selectedBatchId);
-        
+
         if ($batch) {
             $batch->recordLoss(
-                $this->lossQuantity, 
-                $this->lossReason, 
-                auth()->id(), 
+                $this->lossQuantity,
+                $this->lossReason,
+                auth()->id(),
                 $this->lossDetails
             );
 
@@ -100,9 +100,9 @@ class BatchKanban extends Component
                 'harvestDate' => 'required|date',
                 'notes' => 'nullable|string'
             ]);
-       } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (\Illuminate\Validation\ValidationException $e) {
             // Esto te mostrará en la consola del navegador qué campo falta
-            $this->alert($e->validator->errors(), 'error'); 
+            $this->alert($e->validator->errors(), 'error');
         }
 
         $batch = Batch::findOrFail($this->selectedBatchId);
@@ -119,7 +119,7 @@ class BatchKanban extends Component
 
             if ($this->shouldFinishBatch) {
                 $batch->update(['status' => 'harvested']);
-                
+
                 $batch->phases()->updateExistingPivot($batch->current_phase->id, [
                     'finished_at' => now(),
                     'notes' => $this->notes . " (Bloque finalizado)"
@@ -145,14 +145,14 @@ class BatchKanban extends Component
         ]);
         $batch = Batch::find($this->selectedBatchId);
         $nextPhase = Phase::find($this->nextPhaseId);
-        
+
         // Validación: Si pasa a inoculacion, debe tener genética
         if ($nextPhase && $nextPhase->slug === 'inoculation' && !$batch->strain_id) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'nextPhaseId' => 'Debes asignar una genética antes de inocular e iniciar incubación.',
             ]);
         }
-        
+
         $batch->transitionTo($nextPhase, $this->notes);
         $this->close();
         $this->alert("Lote {$batch->code} movido a {$nextPhase->name}", 'success');
@@ -166,14 +166,14 @@ class BatchKanban extends Component
         $this->showDiscardModal = true;
         $this->discardQuantity = 0;
         $this->discardReason = 'Contaminación';
-        $this->isTotalDiscard = false; 
+        $this->isTotalDiscard = false;
     }
 
     public function updatedIsTotalDiscard($value)
     {
         if ($value && $this->selectedBatchId) {
-        // Traemos solo el valor de la columna quantity, sin hidratar el modelo completo
-        $this->discardQuantity = Batch::where('id', $this->selectedBatchId)->value('quantity');
+            // Traemos solo el valor de la columna quantity, sin hidratar el modelo completo
+            $this->discardQuantity = Batch::where('id', $this->selectedBatchId)->value('quantity');
         } else {
             $this->discardQuantity = 0;
         }
@@ -182,7 +182,7 @@ class BatchKanban extends Component
     public function processDiscard()
     {
         $id = $this->selectedBatchId;
-        
+
         if (is_array($id)) {
             // Si es un array tipo ['id' => 5] o [0 => 5], sacamos el valor
             $id = collect($id)->flatten()->first();
@@ -209,9 +209,9 @@ class BatchKanban extends Component
         DB::transaction(function () use ($batch) {
             // 1. Registrar la pérdida en tu tabla de mermas
             $batch->recordLoss(
-                $this->discardQuantity, 
-                $this->discardReason, 
-                auth()->id(), 
+                $this->discardQuantity,
+                $this->discardReason,
+                auth()->id(),
                 $this->discardNotes
             );
 
@@ -219,12 +219,12 @@ class BatchKanban extends Component
             if ($this->isTotalDiscard || $this->discardQuantity >= $batch->quantity) {
                 // Si el motivo es Agotado usamos 'finalized', si no 'contaminated'
                 $newStatus = ($this->discardReason === 'Agotado') ? 'finalized' : 'contaminated';
-                
+
                 $batch->update(['status' => $newStatus]);
 
                 // Cerramos la fase actual
                 $batch->phases()->wherePivot('finished_at', null)->updateExistingPivot(
-                    $batch->current_phase->id, 
+                    $batch->current_phase->id,
                     ['finished_at' => now()]
                 );
             }
@@ -249,17 +249,17 @@ class BatchKanban extends Component
 
     private function alert($message, $messageType = 'success')
     {
-        if($messageType == 'success') {
+        if ($messageType == 'success') {
             LivewireAlert::title('Éxito')
                 ->position('bottom-end')
                 ->success()
                 ->text($message)
                 ->show();
 
-        } 
-          
-        if($messageType == 'error') {
-         LivewireAlert::title('Error')
+        }
+
+        if ($messageType == 'error') {
+            LivewireAlert::title('Error')
                 ->position('bottom-end')
                 ->error()
                 ->text($message)
@@ -271,15 +271,17 @@ class BatchKanban extends Component
     {
         return view('livewire.batch-kanban', [
             'phases' => Phase::orderBy('order')
-                ->with(['batches' => function($query) {
-                    // Incluimos todos los estados que representan un lote en producción
-                    $query->whereIn('batches.status', ['active', 'contaminated', 'finalized'])
-                        ->wherePivot('finished_at', null)
-                        ->withCount('harvests');
-                    if ($this->batchType) {
-                        $query->where('type', $this->batchType);
+                ->with([
+                    'batches' => function ($query) {
+                        // Incluimos todos los lotes que tengan una fase activa (finished_at = null)
+                        // Eliminamos el filtro estricto de status ('active', etc) ya que la BD usa nombres de fases
+                        $query->wherePivot('finished_at', null)
+                            ->withCount('harvests');
+                        if ($this->batchType) {
+                            $query->where('type', $this->batchType);
+                        }
                     }
-                }])->get()
+                ])->get()
         ]);
     }
 }
