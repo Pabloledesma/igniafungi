@@ -17,13 +17,13 @@ class Batch extends Model
     use HasFactory;
 
     protected $fillable = [
-        'parent_batch_id', 
-        'strain_id', 
-        'recipe_id', 
-        'user_id', 
-        'code', 
+        'parent_batch_id',
+        'strain_id',
+        'recipe_id',
+        'user_id',
+        'code',
         'weigth_dry',
-        'inoculation_date', 
+        'inoculation_date',
         'quantity',
         'contaminated_quantity',
         'bag_weight',
@@ -31,7 +31,8 @@ class Batch extends Model
         'grain_type',
         'container_type',
         'status',
-        'observations'
+        'observations',
+        'production_cost'
     ];
 
     public $phase_id;
@@ -45,7 +46,7 @@ class Batch extends Model
         return $this->belongsTo(Recipe::class);
     }
 
-    public function strain() : BelongsTo
+    public function strain(): BelongsTo
     {
         return $this->belongsTo(Strain::class);
     }
@@ -56,9 +57,9 @@ class Batch extends Model
         return $this->hasMany(Harvest::class);
     }
 
-    public function user() 
-    { 
-        return $this->belongsTo(User::class); 
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 
     // Relación hacia el lote original (Padre)
@@ -111,7 +112,7 @@ class Batch extends Model
                 // 1. Validar que weigth_dry sea numérico y mayor a cero
                 // Usamos floatval por si en la base de datos viene como string
                 $dryWeight = floatval($this->weigth_dry);
-                
+
                 if ($dryWeight <= 0) {
                     return 0;
                 }
@@ -152,7 +153,7 @@ class Batch extends Model
         if (!$phaseId) {
             throw new \Exception("No se puede registrar una pérdida: el lote {$this->code} no tiene una fase activa.");
         }
-        
+
         return $this->losses()->create([
             'phase_id' => $phaseId,
             'quantity' => $qty,
@@ -170,7 +171,7 @@ class Batch extends Model
 
             // Si es descarte total, cerramos la fase actual en la tabla PIVOTE
             $currentPhase = $this->phases()->wherePivot('finished_at', null)->first();
-            
+
             if ($currentPhase) {
                 $this->phases()->updateExistingPivot($currentPhase->id, [
                     'finished_at' => now()
@@ -184,7 +185,7 @@ class Batch extends Model
     public function getDaysInCurrentPhaseAttribute()
     {
         $current = $this->phases()->wherePivot('finished_at', null)->first();
-    
+
         if (!$current || !$current->pivot->started_at) {
             return 0;
         }
