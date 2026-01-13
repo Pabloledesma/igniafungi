@@ -1,10 +1,11 @@
 <div class="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-gray-100">
     <div class="mb-6 flex items-center space-x-4 bg-white p-4 rounded-lg shadow-sm">
-        {{-- Buscador --}}
-        <div class="relative">
-            <input type="text" wire:model.live.debounce.300ms="search" placeholder="Buscar lote..." 
-                class="pl-3 pr-4 py-2 border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
-        </div>
+
+            {{-- Buscador --}}
+            <div class="relative">
+                <input type="text" wire:model.live.debounce.300ms="search" placeholder="Buscar lote..." 
+                    class="pl-3 pr-4 py-2 border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
+            </div>
 
         {{-- Filtro Cepa --}}
         <div>

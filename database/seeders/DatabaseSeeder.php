@@ -24,11 +24,14 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             PhaseSeeder::class,
             ProductSeeder::class,
+            SupplySeeder::class,
+            RecipeSeeder::class,
         ]);
 
         $phases = Phase::orderBy('order')->get();
         $strains = Strain::all();
-        $recipe = Recipe::factory()->create(['name' => 'Receta Base Estándar']);
+        // Usar una receta existente o la creada por el seeder
+        $recipe = Recipe::first() ?? Recipe::factory()->create(['name' => 'Receta Base Estándar']);
         $pablo = User::where('email', 'gerencia@igniafungi.com')->first();
 
         foreach ($phases as $phase) {
@@ -62,6 +65,6 @@ class DatabaseSeeder extends Seeder
                 }
             }
         }
-    } 
-       
+    }
+
 }

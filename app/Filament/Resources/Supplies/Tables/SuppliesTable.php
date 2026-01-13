@@ -20,27 +20,23 @@ class SuppliesTable
                     ->sortable()
                     ->weight('bold'),
 
-                TextColumn::make('category')
+                TextColumn::make('supplyCategory.name')
                     ->label('Categoría')
                     ->badge()
-                    ->colors([
-                        'primary' => 'substrate',
-                        'warning' => 'grain',
-                        'info' => 'liquid',
-                        'gray' => 'packaging',
-                    ]),
+                    ->sortable(),
 
-            TextColumn::make('quantity')
-                ->label('Stock Actual')
-                ->suffix(fn ($record) => ' ' . $record->unit) // Agrega "kg" o "L" al final
-                ->color(fn ($record) => $record->quantity <= $record->min_stock ? 'danger' : 'success') // Rojo si falta, Verde si hay
-                ->weight('bold')
-                ->sortable(),
+                TextColumn::make('quantity')
+                    ->label('Stock Actual')
+                    ->suffix(fn($record) => ' ' . $record->unit) // Agrega "kg" o "L" al final
+                    ->color(fn($record) => $record->quantity <= $record->min_stock ? 'danger' : 'success') // Rojo si falta, Verde si hay
+                    ->weight('bold')
+                    ->sortable(),
 
-            TextColumn::make('cost_per_unit')
-                ->label('Costo Unit.')
-                ->money('USD')
-                ->sortable(),
+                TextColumn::make('cost_per_unit')
+                    ->label('Costo Unit.')
+                    ->numeric(decimalPlaces: 0)
+                    ->prefix('$')
+                    ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

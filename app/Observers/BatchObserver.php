@@ -160,19 +160,40 @@ class BatchObserver
             return;
         }
 
+        // 1. CALCULAR PESO TOTAL HIDRATADO
+        // El weight_dry es solo la parte seca (ej: 43%). Necesitamos el 100% para deducir correctamente el Agua y los demás.
+        $dryPercentageSum = 0;
+
+        foreach ($recipe->supplies as $supply) {
+            if ($supply->pivot->calculation_mode === 'percentage' && stripos($supply->name, 'Agua') === false) {
+                $dryPercentageSum += $supply->pivot->value;
+            }
+        }
+
+        // Evitar división por cero
+        $totalHydratedWeight = ($dryPercentageSum > 0)
+            ? $batch->weigth_dry / ($dryPercentageSum / 100)
+            : $batch->weigth_dry;
+
+        Log::info("Cálculo de inventario:", [
+            'peso_seco' => $batch->weigth_dry,
+            'suma_porcentajes_secos' => $dryPercentageSum,
+            'peso_total_calculado' => $totalHydratedWeight
+        ]);
+
         foreach ($recipe->supplies as $supply) {
             // Accedemos explícitamente a los datos del pivote
             $mode = $supply->pivot->calculation_mode;
             $value = $supply->pivot->value;
 
             // Log de depuración interna para ver si los valores del pivote existen
-            Log::info("Procesando insumo: {$supply->name}", [
-                'modo' => $mode,
-                'valor_receta' => $value
-            ]);
+            /*   Log::info("Procesando insumo: {$supply->name}", [
+                   'modo' => $mode,
+                   'valor_receta' => $value
+               ]); */
 
             $amountToDeduct = ($mode === 'percentage')
-                ? ($batch->weigth_dry * $value) / 100
+                ? ($totalHydratedWeight * $value) / 100
                 : $value * $batch->quantity;
 
             if ($amountToDeduct > 0) {
@@ -180,7 +201,7 @@ class BatchObserver
                 // Esto es más seguro y evita problemas de concurrencia
                 $supply->decrement('quantity', $amountToDeduct);
 
-                $batch->observations .= "\n- [Insumo] {$supply->name}: {$amountToDeduct} descontados.";
+                $batch->observations .= "\n- [Insumo] {$supply->name}: " . round($amountToDeduct, 4) . " {$supply->unit} descontados.";
             }
         }
 
