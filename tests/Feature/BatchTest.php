@@ -18,14 +18,14 @@ use App\Filament\Resources\Batches\Pages\ListBatches;
 class BatchTest extends TestCase
 {
     use RefreshDatabase;
-    
+
     protected function setUp(): void
     {
         parent::setUp();
         // Limpiamos el rastro del observer antes de cada test
         \App\Observers\BatchObserver::clearProcessed();
     }
-    
+
     /** @test */
     public function a_batch_belongs_to_a_strain()
     {
@@ -43,7 +43,7 @@ class BatchTest extends TestCase
         // 1. Arrange: 
         // Lote con 2kg de sustrato seco (ignoramos la humedad para el cálculo final)
         $batch = Batch::factory()->create([
-            'weigth_dry' => 2.00 
+            'weigth_dry' => 2.00
         ]);
 
         // Simulamos 2 cosechas: 
@@ -62,13 +62,13 @@ class BatchTest extends TestCase
         $this->assertEquals(100, $efficiency);
     }
 
-      /** @test */
+    /** @test */
     public function can_download_qr_label_pdf()
     {
         // 1. Arrange (Preparar)
         // Necesitamos un usuario para entrar al panel
         $user = User::factory()->create();
-         // 2. Act & Assert (Actuar y Verificar)
+        // 2. Act & Assert (Actuar y Verificar)
         // Simulamos ser el usuario y entrar al componente "ListBatches"
         $this->actingAs($user);
         $strain = Strain::factory()->create(['name' => 'Pleurotus']);
@@ -91,7 +91,7 @@ class BatchTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
         $strain = Strain::factory()->create(['name' => 'Pleurotus']);
-        
+
         // Creamos el lote sin pasarle código
         $batch = Batch::create([
             'strain_id' => $strain->id,
@@ -102,7 +102,7 @@ class BatchTest extends TestCase
         // Verificamos que el código siga el patrón PLE-AAMMDD-XX
         $this->assertNotNull($batch->code);
         $this->assertStringContainsString('PLE', $batch->code);
-        $this->assertEquals(12, strlen($batch->code)); 
+        $this->assertEquals(12, strlen($batch->code));
     }
 
     /** @test */
@@ -157,6 +157,17 @@ class BatchTest extends TestCase
             'value' => 10,
         ]);
 
+        // [FIX] Agregar un insumo de relleno para que la suma seca sea 100%
+        // Con la nueva lógica, si solo hay 10%, el sistema asume que el resto es agua y multiplica el peso x10.
+        // Al poner 90% de Relleno, suma 100%, entonces Peso Húmedo = Peso Seco (40kg).
+        $relleno = Supply::create(['name' => 'Relleno', 'quantity' => 1000, 'category' => 'substrate', 'unit' => 'kg']);
+        RecipeSupply::create([
+            'recipe_id' => $recipe->id,
+            'supply_id' => $relleno->id,
+            'calculation_mode' => 'percentage',
+            'value' => 90,
+        ]);
+
         // 1 Bolsa por unidad de lote
         RecipeSupply::create([
             'recipe_id' => $recipe->id,
@@ -187,17 +198,17 @@ class BatchTest extends TestCase
         $this->assertEquals(80, $bolsas->quantity);
     }
 
-        /** @test */
+    /** @test */
     public function it_uses_correct_prefix_based_on_strain_presence()
     {
         $strain = Strain::factory()->create(['name' => 'Orellana']);
         $user = User::factory()->create();
         $this->actingAs($user);
 
-         // Crear la Receta
+        // Crear la Receta
         $recipe = Recipe::create(['name' => 'Fórmula Maestra']);
 
-           // Crear Insumos con stock inicial
+        // Crear Insumos con stock inicial
         $aserrin = Supply::create([
             'name' => 'Aserrín',
             'quantity' => 100, // kg
@@ -268,7 +279,7 @@ class BatchTest extends TestCase
         ]);
 
         $strain = Strain::factory()->create(['name' => 'Orellana']);
-        
+
         // Simulamos la inoculación
         $batch->update(['strain_id' => $strain->id]);
 
@@ -290,7 +301,7 @@ class BatchTest extends TestCase
             'weigth_dry' => 10,
             'code' => 'SUB-08Jan26-55', // Forzamos un código inicial
         ]);
-        
+
         // Simulamos lo que hace Filament: pasar el phase_id al objeto
         $batch->phase_id = $incubation->id; // Propiedad pública virtual
         $batch->save();

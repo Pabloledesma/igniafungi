@@ -14,6 +14,12 @@ class SupplyDiscountTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        \App\Observers\BatchObserver::clearProcessed();
+    }
+
     /** @test */
     public function it_correctly_calculates_hydrated_weight_based_on_dry_weight_for_deductions()
     {
