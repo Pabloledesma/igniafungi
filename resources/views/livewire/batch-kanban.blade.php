@@ -1,23 +1,5 @@
 <div class="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-gray-100">
     <div class="mb-6 flex items-center space-x-4 bg-white p-4 rounded-lg shadow-sm">
-            <span class="text-sm font-bold text-gray-500 uppercase tracking-wider">Filtrar por:</span>
-            
-            <div class="flex bg-gray-100 p-1 rounded-md">
-                <button wire:click="$set('batchType', '')" 
-                    class="px-4 py-2 text-xs font-bold rounded-md transition-colors {{ $batchType === '' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700' }}">
-                    TODOS
-                </button>
-                <button wire:click="$set('batchType', 'grain')" 
-                    class="px-4 py-2 text-xs font-bold rounded-md transition-colors {{ $batchType === 'grain' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700' }}">
-                    SEMILLA (GRAIN)
-                </button>
-                <button wire:click="$set('batchType', 'bulk')" 
-                    class="px-4 py-2 text-xs font-bold rounded-md transition-colors {{ $batchType === 'bulk' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700' }}">
-                    SUSTRATO (BULK)
-                </button>
-            </div>
-            
-            <div class="h-6 w-px bg-gray-300 mx-4"></div>
 
             {{-- Buscador --}}
             <div class="relative">
