@@ -24,6 +24,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             PhaseSeeder::class,
             ProductSeeder::class,
+            SupplySeeder::class,
         ]);
 
         $phases = Phase::orderBy('order')->get();
@@ -62,6 +63,6 @@ class DatabaseSeeder extends Seeder
                 }
             }
         }
-    } 
-       
+    }
+
 }
