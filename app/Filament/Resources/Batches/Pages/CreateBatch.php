@@ -12,10 +12,15 @@ class CreateBatch extends CreateRecord
     protected function afterCreate(): void
     {
         $batch = $this->record;
-        
+
         // Registramos la fase inicial en el historial de fases (pivote)
         $batch->phases()->attach($batch->phase_id, [
             'started_at' => now(),
         ]);
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return $this->getResource()::getUrl('index');
     }
 }
