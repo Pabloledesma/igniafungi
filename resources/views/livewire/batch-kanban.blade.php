@@ -1,40 +1,21 @@
 <div class="flex flex-col h-[calc(100vh-64px)] overflow-hidden bg-gray-100">
     <div class="mb-6 flex items-center space-x-4 bg-white p-4 rounded-lg shadow-sm">
-            <span class="text-sm font-bold text-gray-500 uppercase tracking-wider">Filtrar por:</span>
-            
-            <div class="flex bg-gray-100 p-1 rounded-md">
-                <button wire:click="$set('batchType', '')" 
-                    class="px-4 py-2 text-xs font-bold rounded-md transition-colors {{ $batchType === '' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700' }}">
-                    TODOS
-                </button>
-                <button wire:click="$set('batchType', 'grain')" 
-                    class="px-4 py-2 text-xs font-bold rounded-md transition-colors {{ $batchType === 'grain' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700' }}">
-                    SEMILLA (GRAIN)
-                </button>
-                <button wire:click="$set('batchType', 'bulk')" 
-                    class="px-4 py-2 text-xs font-bold rounded-md transition-colors {{ $batchType === 'bulk' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700' }}">
-                    SUSTRATO (BULK)
-                </button>
-            </div>
-            
-            <div class="h-6 w-px bg-gray-300 mx-4"></div>
-
-            {{-- Buscador --}}
-            <div class="relative">
-                <input type="text" wire:model.live.debounce.300ms="search" placeholder="Buscar lote..." 
-                    class="pl-3 pr-4 py-2 border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
-            </div>
-
-            {{-- Filtro Cepa --}}
-            <div>
-                <select wire:model.live="selectedStrain" class="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 py-2 pl-3 pr-8">
-                    <option value="">Todas las Cepas</option>
-                    @foreach($allStrains as $strain)
-                        <option value="{{ $strain->id }}">{{ $strain->name }}</option>
-                    @endforeach
-                </select>
-            </div>
+        {{-- Buscador --}}
+        <div class="relative">
+            <input type="text" wire:model.live.debounce.300ms="search" placeholder="Buscar lote..." 
+                class="pl-3 pr-4 py-2 border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
         </div>
+
+        {{-- Filtro Cepa --}}
+        <div>
+            <select wire:model.live="selectedStrain" class="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 py-2 pl-3 pr-8">
+                <option value="">Todas las Cepas</option>
+                @foreach($allStrains as $strain)
+                    <option value="{{ $strain->id }}">{{ $strain->name }}</option>
+                @endforeach
+            </select>
+        </div>
+    </div>
     <div class="flex-1 flex overflow-x-auto p-6 gap-4 items-start h-full">
         @foreach($phases as $phase)
             <div class="flex-shrink-0 w-80 bg-gray-200 rounded-lg shadow-sm flex flex-col max-h-full">
