@@ -37,6 +37,18 @@ class RecipeSeeder extends Seeder
             ]);
         }
 
+        // 1.1. Reparar Receta Base Estándar (Creada por DatabaseSeeder antiguo o factory)
+        $legacyRecipe = Recipe::where('name', 'Receta Base Estándar')->first();
+        if ($legacyRecipe && $sawdust && $bran && $gypsum && $lime && $viruta) {
+            $legacyRecipe->supplies()->syncWithoutDetaching([
+                $sawdust->id => ['calculation_mode' => 'percentage', 'value' => 24],
+                $viruta->id => ['calculation_mode' => 'percentage', 'value' => 11],
+                $bran->id => ['calculation_mode' => 'percentage', 'value' => 6],
+                $gypsum->id => ['calculation_mode' => 'percentage', 'value' => 1.5],
+                $lime->id => ['calculation_mode' => 'percentage', 'value' => 0.5],
+            ]);
+        }
+
         // 2. Receta de Agar PDA (Papa Dextrosa Agar - Simulado con Malta/Agar)
         $agarRecipe = Recipe::firstOrCreate(
             ['name' => 'Agar Malta (MEA)'],

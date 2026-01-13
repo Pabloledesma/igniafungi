@@ -234,6 +234,11 @@ class BatchObserver
             }
         }
 
+        // 3. CALCULAR Y GUARDAR COSTO DE PRODUCCIÓN
+        $estimatedCost = $recipe->getEstimatedCost($totalHydratedWeight, $batch->quantity);
+        $batch->production_cost = $estimatedCost;
+        $batch->observations .= "\n- [Financiero] Costo Estimado: $" . number_format($estimatedCost, 0);
+
         $batch->saveQuietly();
     }
 }
