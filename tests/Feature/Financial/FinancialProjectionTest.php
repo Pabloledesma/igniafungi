@@ -64,7 +64,7 @@ class FinancialProjectionTest extends TestCase
         $method->setAccessible(true);
         $data = $method->invoke($widget);
 
-        $projectedData = $data['datasets'][2]['data']; // Index 2 is Projection
+        $projectedData = $data['datasets'][3]['data']; // Index 3 is Total Projection (Index 2 is Pre-sold)
 
         // Indices are 0-based. Day 6 is index 5.
         // Day 1 to Day 5 should be 0 (or null? code sets null for past, but 0/current for future accum).

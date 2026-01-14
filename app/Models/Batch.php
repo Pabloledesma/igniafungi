@@ -192,4 +192,27 @@ class Batch extends Model
 
         return Carbon::parse($current->pivot->started_at)->diffInDays(now());
     }
+
+    public function orderItems(): HasMany
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+    public function getEstimatedYieldAttribute()
+    {
+        // Assumption: 500g per batch unit.
+        // Can be refined later with Strain specific yield.
+        return $this->quantity * 500;
+    }
+
+    public function getPreSoldQuantityAttribute()
+    {
+        // Sum quantity of order items linked to this batch, 
+        // exclude cancelled orders.
+        return $this->orderItems()
+            ->whereHas('order', function ($q) {
+                $q->where('status', '!=', 'cancelled');
+            })
+            ->sum('quantity');
+    }
 }

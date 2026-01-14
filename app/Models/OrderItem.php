@@ -9,13 +9,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OrderItem extends Model
 {
     use HasFactory;
-    
+
     protected $fillable = [
         'order_id',
         'product_id',
         'quantity',
         'unit_amount',
-        'total_amount'
+        'total_amount',
+        'batch_id'
     ];
 
     public function order(): BelongsTo
@@ -26,5 +27,10 @@ class OrderItem extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function batch(): BelongsTo
+    {
+        return $this->belongsTo(Batch::class);
     }
 }
