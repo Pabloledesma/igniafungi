@@ -1,3 +1,6 @@
+@section('title', 'Hongos Frescos en Bogotá, Orellanas y Shiitake | Ignia Fungi')
+@section('meta_description', 'Compra hongos frescos en Bogotá: Orellanas, Shiitake y Melena de León. Cultivo urbano y sostenible con preventas gourmet.')
+
 <div>
   {{-- Hero section Start --}}
   <div class="w-full h-screen relative overflow-hidden flex items-center justify-center bg-stone-950">
@@ -13,8 +16,10 @@
         <div class="max-w-3xl">
 
           <h1 class="block text-3xl font-bold text-orange-100 sm:text-4xl lg:text-6xl lg:leading-tight">
-            La Fuerza del Fuego, <span class="text-gold-ignia">El Poder del Reino Fungi</span>
+            Hongos Frescos en Bogotá <span class="text-gold-ignia">Orellanas y Shiitake</span>
           </h1>
+          <p class="mt-2 text-xl text-orange-200/80 italic font-serif">"La Fuerza del Fuego, El Poder del Reino Fungi"
+          </p>
 
           <p class="mt-5 text-lg text-stone-200 max-w-2xl mx-auto drop-shadow-md">
             En Ignia Fungi creemos en la transformación. Descubre la medicina ancestral y la belleza oculta de los
