@@ -22,5 +22,6 @@ class AppServiceProvider extends ServiceProvider
         \App\Models\Batch::observe(\App\Observers\BatchObserver::class);
         \App\Models\BatchLoss::observe(\App\Observers\LossObserver::class);
         \App\Models\Harvest::observe(\App\Observers\HarvestObserver::class);
+        \App\Models\Order::observe(\App\Observers\OrderObserver::class);
     }
 }

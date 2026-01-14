@@ -35,43 +35,45 @@ class AdminPanelProvider extends PanelProvider
             ->path('admin')
             ->login()
             ->colors([
-                'primary' => Color::Amber,
-            ])
+                    'primary' => Color::Amber,
+                ])
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\Filament\Pages')
             ->pages([
-                Dashboard::class,
-            ])
+                    Dashboard::class,
+                ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\Filament\Widgets')
             ->widgets([
-                AccountWidget::class,
-                FilamentInfoWidget::class,
-                LossOverview::class,
-                LossChart::class,
-                HarvestChart::class,
-                EficienciaPorCepa::class
-            ])
+                    \App\Filament\Widgets\FinancialTrendChart::class,
+                    \App\Filament\Widgets\BreakEvenWidget::class,
+                    AccountWidget::class,
+                    FilamentInfoWidget::class,
+                    LossOverview::class,
+                    LossChart::class,
+                    HarvestChart::class,
+                    EficienciaPorCepa::class
+                ])
             ->middleware([
-                EncryptCookies::class,
-                AddQueuedCookiesToResponse::class,
-                StartSession::class,
-                AuthenticateSession::class,
-                ShareErrorsFromSession::class,
-                VerifyCsrfToken::class,
-                SubstituteBindings::class,
-                DisableBladeIconComponents::class,
-                DispatchServingFilamentEvent::class,
-            ])
+                    EncryptCookies::class,
+                    AddQueuedCookiesToResponse::class,
+                    StartSession::class,
+                    AuthenticateSession::class,
+                    ShareErrorsFromSession::class,
+                    VerifyCsrfToken::class,
+                    SubstituteBindings::class,
+                    DisableBladeIconComponents::class,
+                    DispatchServingFilamentEvent::class,
+                ])
             ->authMiddleware([
-                Authenticate::class,
-            ])->navigationItems([
-                NavigationItem::make('Producción (Kanban)')
-                    ->url(fn (): string => route('kanban'))
-                    ->icon('heroicon-o-presentation-chart-bar') // Icono llamativo
-                    ->activeIcon('heroicon-s-presentation-chart-bar')
-                    ->group('Producción') // Opcional: agrupar enlaces
-                    ->sort(1)
-                    ->visible(fn() => auth()->check()),
-            ]);
+                    Authenticate::class,
+                ])->navigationItems([
+                    NavigationItem::make('Producción (Kanban)')
+                        ->url(fn(): string => route('kanban'))
+                        ->icon('heroicon-o-presentation-chart-bar') // Icono llamativo
+                        ->activeIcon('heroicon-s-presentation-chart-bar')
+                        ->group('Producción') // Opcional: agrupar enlaces
+                        ->sort(1)
+                        ->visible(fn() => auth()->check()),
+                ]);
     }
 }
