@@ -8,14 +8,15 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 class Delivery extends Model
 {
     use HasFactory;
-    
+
     protected $fillable = [
-        'order_id', 
-        'status', 
-        'carrier', 
-        'tracking_number', 
-        'scheduled_at', 
-        'shipped_at'
+        'order_id',
+        'status',
+        'carrier',
+        'tracking_number',
+        'scheduled_at',
+        'shipped_at',
+        'delivery_notes'
     ];
 
     public function order(): BelongsTo
