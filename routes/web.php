@@ -24,9 +24,11 @@ use App\Livewire\Auth\ForgotPasswordPage;
 use App\Http\Controllers\BatchLossController;
 use App\Http\Controllers\BatchPhaseController;
 use App\Http\Controllers\BoldWebhookController;
+use App\Http\Controllers\SitemapController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 
 Route::get('/', HomePage::class)->name('home');
+Route::get('/sitemap.xml', [SitemapController::class, 'index']);
 Route::get('/categories', CategoriesPage::class)->name('categories');
 Route::get('/products', ProductsPage::class)->name('products');
 Route::get('/products/{slug}', ProductDetailPage::class);
@@ -35,7 +37,7 @@ Route::get('/sobre-nosotros', AboutUs::class)->name('about');
 Route::get('/blog', BlogIndex::class)->name('blog.index');
 Route::get('/blog/{slug}', BlogDetail::class)->name('blog.show');
 
-Route::middleware('guest')->group(function (){
+Route::middleware('guest')->group(function () {
     Route::get('/login', LoginPage::class)->name('login');
     Route::get('/register', RegisterPage::class);
     Route::get('/forgot', ForgotPasswordPage::class)->name('password.request');
@@ -44,7 +46,7 @@ Route::middleware('guest')->group(function (){
 
 // 1. La vista que dice "Por favor verifica tu correo"
 Route::get('/email/verify', function () {
-    return view('auth.verify-email'); 
+    return view('auth.verify-email');
 })->middleware('auth')->name('verification.notice');
 
 // 2. El manejador del clic en el correo
@@ -59,8 +61,8 @@ Route::post('/email/verification-notification', function (Request $request) {
     return back()->with('message', 'Verification link sent!');
 })->middleware(['auth', 'throttle:6,1'])->name('verification.send');
 
-Route::middleware(['auth', 'verified'])->group(function (){
-    Route::get('/logout', function(){
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/logout', function () {
         auth()->logout();
         return redirect()->intended('/');
     })->name('logout');
@@ -73,7 +75,7 @@ Route::middleware(['auth', 'verified'])->group(function (){
 });
 
 Route::middleware(['auth'])->group(function () {
-    Route::post('/batches/{batch}/transition', [BatchPhaseController::class, 'transition']) 
+    Route::post('/batches/{batch}/transition', [BatchPhaseController::class, 'transition'])
         ->name('batches.transition');
     Route::post('/batches/{batch}/losses', [BatchLossController::class, 'store'])
         ->name('batches.losses.store');

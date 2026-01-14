@@ -1,3 +1,6 @@
+@section('title', 'Hongos Frescos en Bogotá, Orellanas y Shiitake | Ignia Fungi')
+@section('meta_description', 'Compra hongos frescos en Bogotá: Orellanas, Shiitake y Melena de León. Cultivo urbano y sostenible con preventas gourmet.')
+
 <div>
   {{-- Hero section Start --}}
   <div class="w-full h-screen relative overflow-hidden flex items-center justify-center bg-stone-950">
@@ -13,8 +16,10 @@
         <div class="max-w-3xl">
 
           <h1 class="block text-3xl font-bold text-orange-100 sm:text-4xl lg:text-6xl lg:leading-tight">
-            La Fuerza del Fuego, <span class="text-gold-ignia">El Poder del Reino Fungi</span>
+            Hongos Frescos en Bogotá <span class="text-gold-ignia">Orellanas y Shiitake</span>
           </h1>
+          <p class="mt-2 text-xl text-orange-200/80 italic font-serif">"La Fuerza del Fuego, El Poder del Reino Fungi"
+          </p>
 
           <p class="mt-5 text-lg text-stone-200 max-w-2xl mx-auto drop-shadow-md">
             En Ignia Fungi creemos en la transformación. Descubre la medicina ancestral y la belleza oculta de los
@@ -216,5 +221,92 @@
     </div>
   </div>
   {{-- Category section End --}}
+
+  {{-- Reviews Section Start --}}
+  <div class="bg-stone-950 py-20 border-t border-white/5 relative z-20">
+    <div class="max-w-[85rem] px-4 sm:px-6 lg:px-8 mx-auto">
+      <div class="max-w-xl mx-auto text-center mb-16">
+        <h2 class="text-3xl font-bold text-white mb-4">Lo que dicen nuestros <span
+            class="text-gold-ignia">Clientes</span></h2>
+        <p class="text-stone-400">La comunidad fungi crece cada día. Historias reales de sanación y sabor.</p>
+      </div>
+
+      @if(count($reviews) > 0)
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+          @foreach($reviews as $review)
+            <div wire:key="{{ $loop->index }}"
+              class="bg-stone-900 border border-stone-800 p-6 rounded-2xl relative flex flex-col h-full">
+              <div class="flex items-center gap-x-1 text-gold-ignia mb-4">
+                @for($i = 0; $i < 5; $i++)
+                  @if($i < $review->rating)
+                    <svg class="size-4 fill-current" viewBox="0 0 20 20">
+                      <path
+                        d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  @else
+                    <svg class="size-4 text-stone-700 fill-current" viewBox="0 0 20 20">
+                      <path
+                        d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  @endif
+                @endfor
+              </div>
+
+              <div class="flex-grow">
+                <p class="text-stone-300 italic mb-6 line-clamp-4">"{{ $review->text }}"</p>
+              </div>
+
+              <div class="flex items-center gap-x-4 mt-auto pt-4 border-t border-stone-800">
+                <div class="shrink-0">
+                  @if(!empty($review->profile_photo_url))
+                    <img src="{{ $review->profile_photo_url }}" alt="{{ $review->author_name }}"
+                      class="w-10 h-10 rounded-full object-cover">
+                  @else
+                    <div class="w-10 h-10 rounded-full bg-stone-700 flex items-center justify-center text-white font-bold">
+                      {{ substr($review->author_name, 0, 1) }}
+                    </div>
+                  @endif
+                </div>
+                <div>
+                  <h4 class="text-white font-semibold text-sm">{{ $review->author_name }}</h4>
+                  <p class="text-xs text-stone-500">{{ $review->relative_time_description }}</p>
+                </div>
+                <img src="https://upload.wikimedia.org/wikipedia/commons/2/2f/Google_2015_logo.svg"
+                  class="h-5 ml-auto opacity-50 contrast-0 grayscale invert" alt="Google">
+              </div>
+            </div>
+          @endforeach
+        </div>
+      @else
+        <div
+          class="max-w-3xl mx-auto text-center mb-12 p-8 rounded-2xl bg-gradient-to-br from-stone-900 to-stone-800 border border-gold-ignia/20 shadow-[0_0_30px_rgba(234,179,8,0.05)]">
+          <h3 class="text-2xl font-bold text-orange-100 mb-4 font-serif">¿Ya probaste nuestra cosecha?</h3>
+          <p class="text-stone-300 mb-8 max-w-xl mx-auto">Tu opinión es vital para que nuestro micelio siga creciendo.
+            Cuéntanos tu experiencia y ayuda a otros a descubrir el poder de los hongos.</p>
+
+          <a href="https://g.page/r/CeaSqLtP62KVEBI/review" target="_blank"
+            class="inline-flex items-center gap-3 px-8 py-3 bg-gold-ignia/90 hover:bg-gold-ignia text-stone-950 font-bold rounded-full transition-all duration-300 hover:scale-105 hover:shadow-[0_0_20px_rgba(234,179,8,0.4)]">
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 15h-2v-6h2v6zm-1-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1z" />
+            </svg>
+            Déjanos tu opinión en Google
+          </a>
+        </div>
+      @endif
+
+      <div class="text-center">
+        <a href="https://g.page/r/CeaSqLtP62KVEBI/review" target="_blank"
+          class="inline-flex justify-center items-center gap-x-3 text-center bg-white hover:bg-gray-100 border border-transparent text-black text-sm font-medium rounded-full py-3 px-6 transition-all duration-300 shadow-lg hover:shadow-xl">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z" />
+          </svg>
+          Leer más reseñas en Google
+        </a>
+      </div>
+    </div>
+  </div>
+  {{-- Reviews Section End --}}
   <x-whatsapp-btn />
 </div>
