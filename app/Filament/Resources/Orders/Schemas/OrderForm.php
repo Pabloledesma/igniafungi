@@ -116,40 +116,120 @@ class OrderForm
                                 ->columnSpanFull()
                                 ->required(),
 
+                            TextInput::make('delivery.delivery_notes')
+                                ->label('Notas de Entrega (Para Preventas)')
+                                ->placeholder('Ej: Entregar solo en la mañana...')
+                                ->visible(function (callable $get) {
+                                    // Check if any item in the repeater is a pre-order
+                                    $items = $get('items') ?? [];
+                                    foreach ($items as $item) {
+                                        if (!empty($item['is_preorder'])) {
+                                            return true;
+                                        }
+                                    }
+                                    return false;
+                                })
+                                ->columnSpanFull(),
+
                             Section::make('Order Items')->schema([
                                 Repeater::make('items')
                                     ->relationship()
                                     ->schema([
+                                            \Filament\Forms\Components\Checkbox::make('is_preorder')
+                                                ->label('¿Es Preventa?')
+                                                ->columnSpanFull()
+                                                ->reactive()
+                                                ->afterStateUpdated(function ($state, callable $set) {
+                                                    if (!$state) {
+                                                        $set('strain_id', null);
+                                                        $set('batch_id', null);
+                                                    } else {
+                                                        $set('product_id', null);
+                                                    }
+                                                }),
+
                                             Select::make('product_id')
                                                 ->label('Product')
                                                 ->relationship('product', 'name')
                                                 ->searchable()
                                                 ->preload()
-                                                ->required()
-                                                ->distinct()
-                                                ->columnSpan(3)
+                                                ->required() // Always required now
+                                                ->disabled(fn(callable $get) => $get('is_preorder')) // Disabled if pre-order
                                                 ->reactive()
-                                                ->disableOptionsWhenSelectedInSiblingRepeaterItems()
                                                 ->afterStateUpdated(fn($state, callable $set) => $set('unit_amount', Product::find($state)?->price ?? 0))
                                                 ->afterStateUpdated(fn($state, callable $set) => $set('total_amount', Product::find($state)?->price ?? 0))
-                                                ->afterStateUpdated(fn($state, callable $set) => $set('batch_id', null)),
+                                                ->afterStateUpdated(fn($state, callable $set) => $set('batch_id', null))
+                                                ->columnSpan(3)
+                                                ->dehydrated(true),
+
+                                            Select::make('strain_id')
+                                                ->label('Cepa (Para Preventa)')
+                                                ->options(function () {
+                                                    return \App\Models\Strain::whereHas('batches', function ($q) {
+                                                        $q->whereIn('status', ['incubation', 'fruiting']);
+                                                    })->pluck('name', 'id');
+                                                })
+                                                ->searchable()
+                                                ->preload()
+                                                ->visible(fn(callable $get) => $get('is_preorder'))
+                                                ->required(fn(callable $get) => $get('is_preorder'))
+                                                ->columnSpan(3)
+                                                ->reactive()
+                                                ->afterStateUpdated(function ($state, callable $set, callable $get) {
+                                                    $set('batch_id', null);
+                                                    if ($state) {
+                                                        // Try to find a product for this strain to get price
+                                                        $product = Product::where('strain_id', $state)->first();
+
+                                                        if ($product) {
+                                                            $set('product_id', $product->id);
+                                                            $set('unit_amount', $product->price);
+                                                            $set('total_amount', $product->price * $get('quantity'));
+                                                        }
+                                                    }
+                                                }),
 
                                             Select::make('batch_id')
-                                                ->label('Batch / Lote')
+                                                ->label('Lote en Producción')
+                                                ->visible(fn(callable $get) => $get('is_preorder'))
+                                                ->required(fn(callable $get) => $get('is_preorder'))
                                                 ->options(function (callable $get) {
-                                                    $productId = $get('product_id');
-                                                    if (!$productId) {
+                                                    $strainId = $get('strain_id');
+                                                    if (!$strainId)
                                                         return [];
-                                                    }
-                                                    $product = Product::find($productId);
-                                                    if (!$product || !$product->strain_id) {
-                                                        return [];
-                                                    }
-                                                    return \App\Models\Batch::where('strain_id', $product->strain_id)
+
+                                                    return \App\Models\Batch::where('strain_id', $strainId)
+                                                        ->whereIn('status', ['incubation', 'fruiting'])
+                                                        ->get()
                                                         ->pluck('code', 'id');
                                                 })
                                                 ->searchable()
                                                 ->preload()
+                                                ->columnSpan(3)
+                                                ->reactive()
+                                                ->afterStateUpdated(fn($state, callable $set) => $set('quantity', 1)),
+
+                                            Placeholder::make('estimated_harvest_date')
+                                                ->label('Fecha Estimada de Cosecha')
+                                                ->visible(fn(callable $get) => $get('is_preorder') && $get('batch_id'))
+                                                ->content(function (callable $get) {
+                                                    $batchId = $get('batch_id');
+                                                    if (!$batchId)
+                                                        return '---';
+
+                                                    $batch = \App\Models\Batch::find($batchId);
+                                                    if (!$batch)
+                                                        return '---';
+
+                                                    $currentPhase = $batch->phases->where('pivot.finished_at', null)->first();
+                                                    $days = $batch->strain->incubation_days ?? 15;
+                                                    if ($currentPhase && $currentPhase->name === 'Fructificación')
+                                                        $days = 7;
+
+                                                    return $currentPhase && $currentPhase->pivot->started_at
+                                                        ? \Carbon\Carbon::parse($currentPhase->pivot->started_at)->addDays($days)->format('d F, Y')
+                                                        : 'Desconocido';
+                                                })
                                                 ->columnSpan(3),
 
                                             TextInput::make('quantity')
@@ -159,12 +239,11 @@ class OrderForm
                                                 ->minValue(1)
                                                 ->columnSpan(2)
                                                 ->reactive()
-                                                ->maxValue(10)
+                                                ->maxValue(1000)
                                                 ->afterStateUpdated(fn($state, callable $set, callable $get) => $set('total_amount', $state * $get('unit_amount'))),
 
                                             TextInput::make('unit_amount')
                                                 ->numeric()
-                                                ->disabled()
                                                 ->dehydrated()
                                                 ->columnSpan(2)
                                                 ->required(),
