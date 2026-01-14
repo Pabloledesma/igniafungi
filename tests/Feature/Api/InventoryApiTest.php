@@ -44,15 +44,17 @@ class InventoryApiTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonFragment([
-                    'name' => 'Golden Teacher',
-                    'has_stock' => true,
+                    'strain_name' => 'Golden Teacher',
+                    'status' => 'Disponible',
                 ])
             ->assertJsonStructure([
-                    '*' => ['name', 'has_stock', 'next_harvest_date']
+                    'data' => [
+                        '*' => ['strain_name', 'status', 'estimated_date']
+                    ]
                 ]);
 
         // Ensure sensitive fields are missing
-        $data = $response->json()[0];
+        $data = $response->json()['data'][0];
         $this->assertArrayNotHasKey('id', $data);
         $this->assertArrayNotHasKey('available_stock', $data); // Exact quantity hidden
         $this->assertArrayNotHasKey('incubation_days', $data);
@@ -95,9 +97,9 @@ class InventoryApiTest extends TestCase
         // Let's test via public API since it exposes this logic
         $response = $this->getJson('/api/public/availability');
 
-        $data = collect($response->json())->firstWhere('name', $strain->name);
+        $data = collect($response->json()['data'])->firstWhere('strain_name', $strain->name);
 
         // Expecting Jun 6 (earliest)
-        $this->assertEquals('2026-06-06', $data['next_harvest_date']);
+        $this->assertEquals('2026-06-06', $data['estimated_date']);
     }
 }

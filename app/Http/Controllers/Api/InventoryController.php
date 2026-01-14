@@ -45,18 +45,6 @@ class InventoryController extends Controller
     public function publicAvailability()
     {
         $strains = Strain::all();
-        // Return only safe data: Name, Has Stock (bool), Next Harvest Date
-        $data = $strains->map(function ($strain) {
-            $stock = $this->inventoryService->getAvailableStock($strain->id);
-            $nextHarvest = $this->inventoryService->getNextHarvestDate($strain->id);
-
-            return [
-                'name' => $strain->name,
-                'has_stock' => $stock > 0,
-                'next_harvest_date' => $nextHarvest,
-            ];
-        });
-
-        return response()->json($data);
+        return \App\Http\Resources\PublicAvailabilityResource::collection($strains);
     }
 }
