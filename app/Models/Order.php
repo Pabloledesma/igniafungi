@@ -84,7 +84,7 @@ class Order extends Model
                 // Llamamos a la función del modelo Product
                 $item->product->reduceStock($item->quantity);
             }
-            
+
             // Aquí podrías disparar el agendamiento de entrega
             $this->delivery()->create([
                 'status' => 'scheduled',
@@ -108,4 +108,8 @@ class Order extends Model
         }
     }
 
+    public function getReviewUrlAttribute(): string
+    {
+        return 'https://g.page/r/CeaSqLtP62KVEBI/review';
+    }
 }

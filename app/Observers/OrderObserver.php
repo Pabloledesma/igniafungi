@@ -25,6 +25,11 @@ class OrderObserver
         if ($order->isDirty('payment_status') && $order->payment_status === 'paid') {
             $this->createTransaction($order);
         }
+
+        // Check if status changed to 'delivered'
+        if ($order->isDirty('status') && $order->status === 'delivered') {
+            \Illuminate\Support\Facades\Log::info("Orden {$order->reference} entregada. Solicitando reseña: {$order->review_url}");
+        }
     }
 
     private function createTransaction(Order $order): void

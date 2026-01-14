@@ -16,7 +16,7 @@ class SitemapTest extends TestCase
         $response = $this->get('/sitemap.xml');
 
         $response->assertStatus(200);
-        $response->assertHeader('Content-Type', 'text/xml; charset=UTF-8');
+        $response->assertHeader('Content-Type', 'text/xml; charset=utf-8');
     }
 
     public function test_sitemap_contains_static_routes()
