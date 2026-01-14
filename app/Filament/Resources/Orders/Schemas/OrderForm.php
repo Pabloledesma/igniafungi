@@ -201,7 +201,11 @@ class OrderForm
                                                     return \App\Models\Batch::where('strain_id', $strainId)
                                                         ->whereIn('status', ['incubation', 'fruiting'])
                                                         ->get()
-                                                        ->pluck('code', 'id');
+                                                        ->mapWithKeys(function ($batch) {
+                                                            $service = new \App\Services\InventoryService();
+                                                            $avail = $service->getBatchAvailableStock($batch);
+                                                            return [$batch->id => "Lote {$batch->code} (Disp: {$avail})"];
+                                                        });
                                                 })
                                                 ->searchable()
                                                 ->preload()
@@ -239,7 +243,16 @@ class OrderForm
                                                 ->minValue(1)
                                                 ->columnSpan(2)
                                                 ->reactive()
-                                                ->maxValue(1000)
+                                                ->maxValue(function (callable $get) {
+                                                    if ($get('is_preorder') && $batchId = $get('batch_id')) {
+                                                        $batch = \App\Models\Batch::find($batchId);
+                                                        if ($batch) {
+                                                            $service = new \App\Services\InventoryService();
+                                                            return $service->getBatchAvailableStock($batch);
+                                                        }
+                                                    }
+                                                    return 1000;
+                                                })
                                                 ->afterStateUpdated(fn($state, callable $set, callable $get) => $set('total_amount', $state * $get('unit_amount'))),
 
                                             TextInput::make('unit_amount')
