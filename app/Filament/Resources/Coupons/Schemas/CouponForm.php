@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Coupons\Schemas;
 
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Schema;
@@ -15,7 +16,11 @@ class CouponForm
             ->components([
                 TextInput::make('code')
                     ->required(),
-                TextInput::make('discount_type')
+                Select::make('discount_type')
+                    ->options([
+                        'fixed' => 'Fixed',
+                        'percentage' => 'Percentage',
+                    ])
                     ->required()
                     ->default('fixed'),
                 TextInput::make('discount_value')

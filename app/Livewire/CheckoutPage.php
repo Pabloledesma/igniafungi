@@ -98,6 +98,17 @@ class CheckoutPage extends Component
             return;
         }
 
+        // ONE COUPON PER CUSTOMER CHECK
+        $hasUsedCoupon = Order::where('user_id', auth()->id())
+            ->whereNotNull('coupon_code')
+            ->exists();
+
+        if ($hasUsedCoupon) {
+            session()->flash('error', 'Lo sentimos, ya has redimido un código promocional anteriormente. Solo se permite un cupón por cliente.');
+            $this->coupon_code_input = '';
+            return;
+        }
+
         $this->applied_coupon_code = $coupon->code;
         $this->calculateShipping();
         session()->flash('success', 'Cupón aplicado con éxito!');
@@ -344,6 +355,26 @@ class CheckoutPage extends Component
             'payment_method' => 'required',
             'city' => 'required',
         ]);
+
+        // Race condition / Backend validation check for coupons
+        if ($this->applied_coupon_code) {
+            $hasUsedCoupon = Order::where('user_id', auth()->id())
+                ->whereNotNull('coupon_code')
+                ->exists();
+
+            if ($hasUsedCoupon) {
+                // Remove invalid coupon
+                $this->applied_coupon_code = null;
+                $this->discount_amount = 0;
+                $this->calculateShipping(); // Recalculate without discount
+
+                // Notify user
+                session()->flash('error', 'Lo sentimos, ya has redimido un código promocional anteriormente. Solo se permite un cupón por cliente.');
+                $this->dispatch('limit-alert', message: 'Lo sentimos, ya has redimido un código promocional anteriormente.');
+
+                return; // Stop processing
+            }
+        }
 
         $subtotal = (int) CartManagement::calculateGrandTotal($cart_items);
 
