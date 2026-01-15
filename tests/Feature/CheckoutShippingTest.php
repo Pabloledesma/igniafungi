@@ -16,6 +16,7 @@ class CheckoutShippingTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        \Carbon\Carbon::setTestNow(); // Clear any mocked time from previous tests
         CartManagement::clearCartItems();
         $user = \App\Models\User::factory()->create();
         $this->actingAs($user);
@@ -157,5 +158,25 @@ class CheckoutShippingTest extends TestCase
             ->set('shipping_method', 'bogota')
             ->call('calculateShipping')
             ->assertSet('delivery_date', '2026-02-10');
+    }
+
+    /** @test */
+    public function it_initializes_from_session()
+    {
+        session([
+            'checkout_shipping' => [
+                'is_bogota' => true,
+                'location' => 'Suba',
+                'cost' => 10000,
+                'delivery_date' => '2026-02-20'
+            ]
+        ]);
+
+        Livewire::test(CheckoutPage::class)
+            // Mount should read session
+            ->assertSet('is_bogota', true)
+            ->assertSet('shipping_method', 'bogota')
+            ->assertSet('location', 'Suba')
+            ->assertSet('delivery_date', '2026-02-20');
     }
 }

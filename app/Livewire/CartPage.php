@@ -13,9 +13,11 @@ class CartPage extends Component
 {
     public $cart_items = [];
     public $grand_total;
-    public $is_bogota = true;
+    public $city = 'Bogotá'; // Default to Bogotá
+    public $is_bogota = true; // Kept for backward compatibility logic
     public $selected_delivery_index = 0;
     public $location;
+    public $cities = [];
 
     public function getProgressData()
     {
@@ -107,11 +109,59 @@ class CartPage extends Component
     {
         $subtotal = CartManagement::calculateGrandTotal($this->cart_items);
 
-        // Si es Bogotá, pasamos la localidad seleccionada. 
-        // Si no es Bogotá, el helper usará la tarifa nacional automáticamente.
+        // Determinar destino para el helper
+        // Si is_bogota es true (manejado por el updatedCity), usamos 'Bogotá'
+        // Si no, asumimos Nacional.
         $destino = $this->is_bogota ? 'Bogotá' : 'Nacional';
 
         return CartManagement::getShippingCost($subtotal, $destino, $this->location);
+    }
+
+    #[Computed]
+    public function discountAmount()
+    {
+        $discount = 0;
+        foreach ($this->cart_items as $item) {
+            if (!empty($item['is_preorder'])) {
+                // Determine original price. 
+                // Current price is 90% of original.
+                // Original = Current / 0.9
+                // Discount = Original - Current
+                $original_unit = $item['unit_amount'] / 0.9;
+                $item_discount = ($original_unit - $item['unit_amount']) * $item['quantity'];
+                $discount += $item_discount;
+            }
+        }
+        return $discount;
+    }
+
+    #[Computed]
+    public function recentBatches()
+    {
+        // Return recent batches for empty state
+        // Assuming Batch model exists and has images. 
+        // If not using Batch model directly in view for images, we'll need to check the model structure.
+        return \App\Models\Batch::with('strain')->latest()->take(3)->get();
+    }
+
+    #[Computed]
+    public function cartItemsWithMetadata()
+    {
+        $items = $this->cart_items;
+        foreach ($items as &$item) {
+            $item['delivery_date_label'] = null;
+            if (!empty($item['is_preorder'])) {
+                $product = Product::find($item['product_id']);
+                if ($product) {
+                    $batch = app(\App\Services\InventoryService::class)->getPreorderBatch($product);
+                    if ($batch && $batch->estimated_harvest_date) {
+                        $date = Carbon::parse($batch->estimated_harvest_date);
+                        $item['delivery_date_label'] = $date->translatedFormat('d \d\e F');
+                    }
+                }
+            }
+        }
+        return $items;
     }
 
     /**
@@ -126,6 +176,32 @@ class CartPage extends Component
     public function mount()
     {
         $this->refreshCart(CartManagement::getCartItemsFromCookie());
+        $this->cities = CartManagement::getColombiaCities();
+        sort($this->cities);
+
+        // Recueprar estado de la sesión si existe (Persistencia)
+        if (session()->has('checkout_shipping')) {
+            $shipping = session('checkout_shipping');
+            // Asegurar que exista la key 'city', si no, inferir de is_bogota
+            if (isset($shipping['city'])) {
+                $this->city = $shipping['city'];
+            } else {
+                // Fallback para sesiones viejas
+                $this->city = ($shipping['is_bogota'] ?? true) ? 'Bogotá' : 'Medellín'; // Default fallback
+            }
+
+            $this->is_bogota = ($this->city === 'Bogotá');
+            $this->location = $shipping['location'] ?? null;
+        }
+    }
+
+    // Update is_bogota when city changes
+    public function updatedCity($value)
+    {
+        $this->is_bogota = ($value === 'Bogotá');
+        if (!$this->is_bogota) {
+            $this->location = null;
+        }
     }
 
     public function decrementQuantity($product_id)
@@ -163,6 +239,7 @@ class CartPage extends Component
         session([
             'checkout_shipping' => [
                 'is_bogota' => (bool) $this->is_bogota,
+                'city' => $this->city, // Added city
                 'location' => $this->location,
                 'cost' => $this->shippingCost,
                 'delivery_date' => $selectedDate

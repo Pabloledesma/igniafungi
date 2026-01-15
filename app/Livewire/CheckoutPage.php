@@ -207,43 +207,42 @@ class CheckoutPage extends Component
                 }
             }
 
-            // Now find next even day from baseDate.
-            // If baseDate is even? Allow same day? Usually "Next" implies subsequent.
-            // Logic: delivery date >= baseDate. And is even.
-            // If today is even and we order early? Let's keep it simple:
-            // If baseDate day is odd -> +1 day.
-            // If baseDate day is even -> +0 day (if valid) or +2 days?
-            // Prompt said "primer día par posterior a la cosecha".
-            // "Posterior" strictly usually means >. But "a partir de" means >=.
-            // Let's assume >=.
-
-            $nextDate = $baseDate->copy();
-            if ($nextDate->day % 2 != 0) {
-                $nextDate->addDay(); // Make it even
+            // Validate existing delivery_date if set
+            $shouldRecalculate = true;
+            if ($this->delivery_date) {
+                $currentDate = \Carbon\Carbon::parse($this->delivery_date);
+                // Check if current date is >= baseDate AND is Even
+                if ($currentDate->gte($baseDate->startOfDay()) && $currentDate->day % 2 === 0) {
+                    $shouldRecalculate = false;
+                }
             }
 
-            // If we want slightly more realistic logic (cutoff time), we could add logic.
-            // For now, strict Even Day requirement:
+            if ($shouldRecalculate) {
+                // Find next even day from baseDate.
+                $nextDate = $baseDate->copy();
 
-            $this->delivery_date = $nextDate->format('Y-m-d');
+                if ($nextDate->day % 2 != 0) {
+                    $nextDate->addDay(); // Make it even
+                } else {
+                    // If it is today and late? (Optional refinement)
+                    if ($nextDate->isToday() && $nextDate->hour >= 10) {
+                        $nextDate->addDays(2); // Next even day
+                    }
+                }
+                $this->delivery_date = $nextDate->format('Y-m-d');
+            }
 
         } else {
-            // Default fallback logic or 0
-            // Maintain existing logic if no method selected yet?
-            // But UI will force selection.
-            // If manual city selection was used previously:
+            // Default fallback
             if ($this->city === 'Bogotá') {
-                $this->shipping_method = 'bogota'; // Auto select?
+                $this->shipping_method = 'bogota';
                 $this->calculateShipping();
                 return;
             } else {
-                // If department set, maybe default to interrapidisimo?
-                if ($this->departmet || $this->city) { // Correct typo 'departmet' if exists or 'department'
+                if ($this->departmet || $this->city) {
                     $this->shipping_method = 'interrapidisimo';
-                    $this->calculateShipping(); // Recurse once? No, just calc.
-                    // Copy calc from above? Or refactor.
-                    // Let's just set cost here to avoid recursion loop risk.
-                    $this->shipping_cost = 15000; // Base generic?
+                    // Avoid recursion logic here, just set cost
+                    $this->shipping_cost = 15000;
                 } else {
                     $this->shipping_cost = 0;
                 }
@@ -260,17 +259,70 @@ class CheckoutPage extends Component
         $this->email = auth()->user()->email;
 
         $this->cart_items = CartManagement::getCartItemsFromCookie();
-        // Inicializamos el envío según lo que venga de la sesión del carrito
+
+        // Sync from Cart Session
         $shipping_data = session('checkout_shipping');
 
         if ($shipping_data) {
-            $this->city = ($shipping_data['is_bogota'] ?? false) ? 'Bogotá' : null;
-            $this->delivery_date = $shipping_data['delivery_date'] ?? null;
+            $this->is_bogota = $shipping_data['is_bogota'] ?? false;
+            $this->city = $this->is_bogota ? 'Bogotá' : null;
             $this->location = $shipping_data['location'] ?? null;
-            $this->shipping_cost = $shipping_data['cost'] ?? 0;
+            $this->delivery_date = $shipping_data['delivery_date'] ?? null;
+
+            // Set Shipping Method based on session context
+            if ($this->is_bogota) {
+                $this->shipping_method = 'bogota';
+            } else {
+                $this->shipping_method = 'interrapidisimo'; // Default for National
+            }
+
+            // We usually don't need to force cost from session if we recalculate, 
+            // but to be safe we can, though calculateShipping will override.
         }
 
         $this->calculateShipping();
+    }
+
+    /**
+     * Propiedad Computada: Genera las opciones de entrega (Jueves/Viernes pares)
+     * Replicated from CartPage to ensure consistency in Checkout.
+     */
+    #[\Livewire\Attributes\Computed]
+    public function deliveryOptions()
+    {
+        $options = [];
+        $date = \Carbon\Carbon::now();
+
+        // 1. Calculate max harvest date from preorders
+        foreach ($this->cart_items as $item) {
+            if (!empty($item['is_preorder'])) {
+                $product = \App\Models\Product::find($item['product_id']);
+                if ($product) {
+                    $batch = app(\App\Services\InventoryService::class)->getPreorderBatch($product);
+                    if ($batch && $batch->estimated_harvest_date) {
+                        $harvestDate = \Carbon\Carbon::parse($batch->estimated_harvest_date);
+                        if ($harvestDate->gt($date)) {
+                            $date = $harvestDate;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Find next valid delivery slots
+        while (count($options) < 4) { // Show more options in checkout (e.g. 4) for better UX
+            // Logic: Thursday or Friday AND Even Day
+            if (($date->isThursday() || $date->isFriday()) && ($date->day % 2 === 0)) {
+                if (!$date->isToday() || $date->hour < 10) {
+                    $options[] = [
+                        'date' => $date->format('Y-m-d'),
+                        'label' => $date->translatedFormat('l d \d\e F')
+                    ];
+                }
+            }
+            $date->addDay();
+        }
+        return $options;
     }
 
     public function placeOrder()
