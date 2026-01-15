@@ -19,6 +19,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        if ($limit = env('INI_MEMORY_LIMIT')) {
+            ini_set('memory_limit', $limit);
+        }
+
         \App\Models\Batch::observe(\App\Observers\BatchObserver::class);
         \App\Models\BatchLoss::observe(\App\Observers\LossObserver::class);
         \App\Models\Harvest::observe(\App\Observers\HarvestObserver::class);
