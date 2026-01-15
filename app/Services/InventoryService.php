@@ -119,4 +119,67 @@ class InventoryService
             ];
         });
     }
+
+    /**
+     * returns a Batch that is in incubation phase for the product's strain.
+     */
+    public function getPreorderBatch(Product $product): ?Batch
+    {
+        if (!$product->strain_id) {
+            return null;
+        }
+
+        // Find batch in incubation phase (using phases pivot)
+        return Batch::where('strain_id', $product->strain_id)
+            ->whereHas('phases', function ($query) {
+                // Check if current active phase is 'Incubation'
+                // Depending on seeding 'incubation' slug usually exists.
+                // Or we can check name 'Incubación' or slug 'incubation'.
+                $query->where('slug', 'incubation')
+                    ->whereNull('batch_phases.finished_at');
+            })
+            ->where('expected_yield', '>', 0)
+            ->orderBy('estimated_harvest_date', 'asc')
+            ->first();
+    }
+
+    /**
+     * Checks if there is enough expected yield to cover current reservations + new quantity
+     */
+    public function validatePreorderStock(Product $product, int $quantity): bool
+    {
+        $batch = $this->getPreorderBatch($product);
+        if (!$batch) {
+            return false;
+        }
+
+        // Calculate total weight requested (Quantity * Product Weight)
+        // Ensure product weight is set (default to 500g if 0 or null to avoid division by zero or free pass, but actually 0 would mean 0 consumption)
+        $weightPerUnit = $product->weight > 0 ? $product->weight : 500;
+        $requestedWeight = $quantity * $weightPerUnit;
+
+        // Calculate already reserved weight
+        // Sum of OrderItems (is_preorder=true) linked to this batch ?? Or linked to this strain?
+        // Since order_item might not be linked to batch ID directly at creation (unless we do it),
+        // we should probably query OrderItems for this Product that are preorders.
+        // PROMPT: "validar kilos ... que el lote tiene proyectados"
+
+        // Simplification: Count all Active Preorders for this Product and compare against the Batch's remaining capacity.
+        // Ideally we associate the Preorder to the Batch.
+        // For now, let's sum all active preorder items for this product.
+
+        $reservedUnits = \App\Models\OrderItem::where('product_id', $product->id)
+            ->where('is_preorder', true)
+            ->whereHas('order', function ($query) {
+                // User requirement: Only "Paid" orders count against capacity.
+                // We include subsequent statuses that imply payment (processing, shipping, delivered, completed).
+                // "new", "pending", "cancelled" are excluded.
+                $query->whereIn('status', ['paid', 'processing', 'shipping', 'delivered', 'completed']);
+            })
+            ->sum('quantity');
+
+        $totalReservedWeight = $reservedUnits * $weightPerUnit;
+
+        return ($requestedWeight + $totalReservedWeight) <= $batch->expected_yield;
+    }
 }

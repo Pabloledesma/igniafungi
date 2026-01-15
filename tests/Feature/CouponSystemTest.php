@@ -64,8 +64,9 @@ class CouponSystemTest extends TestCase
             'active' => true,
         ]);
 
-        // Shipping for Medellín is standard 45000 in CartManagement::getShippingCost if city != Bogotá
-        $shipping = 45000;
+        // Shipping for Medellín is now Interrapidísimo (Variable). 
+        // Product default weight < 1kg -> 15000.
+        $shipping = 15000;
         $subtotal = 100000;
         $discount = 20000;
         $expectedGrandTotal = ($subtotal - $discount) + $shipping;

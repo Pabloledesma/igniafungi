@@ -57,6 +57,12 @@ class BatchObserver
         if ($batch->recipe_id) {
             $this->deductInventory($batch);
         }
+
+        // Calculate Estimated Harvest Date if created with inoculation_date (e.g. Seeder)
+        if ($batch->strain_id && $batch->inoculation_date) {
+            $this->setEstimatedHarvestDate($batch);
+            $batch->saveQuietly(); // Persist the calculated date without triggering loop
+        }
     }
 
     /**
@@ -70,6 +76,11 @@ class BatchObserver
             Log::info("Prefijo de lote actualizado: {$batch->code}");
         }
 
+        // Logic: Calculate Estimated Harvest Date on Inoculation Change
+        if ($batch->isDirty('inoculation_date') && $batch->inoculation_date) {
+            $this->setEstimatedHarvestDate($batch);
+        }
+
         if ($batch->isDirty('quantity') && (int) $batch->quantity === 0) {
             $batch->status = 'finalized';
 
@@ -79,6 +90,30 @@ class BatchObserver
             if (!str_contains($batch->observations, 'LOTE FINALIZADO')) {
                 $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
             }
+        }
+    }
+
+    /**
+     * Calculates and sets the estimated harvest date based on inoculation date and strain.
+     */
+    private function setEstimatedHarvestDate(Batch $batch): void
+    {
+        if (!$batch->inoculation_date) {
+            return;
+        }
+
+        $strain = $batch->strain;
+        if (!$strain && $batch->strain_id) {
+            $strain = \App\Models\Strain::find($batch->strain_id);
+        }
+
+        if ($strain && $strain->incubation_days) {
+            $batch->estimated_harvest_date = \Carbon\Carbon::parse($batch->inoculation_date)
+                ->addDays($strain->incubation_days);
+
+            // Only log if we are actually calculating it (prevent spam if called multiple times)
+            $code = $batch->code ?? 'N/A';
+            Log::info("Fecha estimada de cosecha calculada: {$batch->estimated_harvest_date->format('Y-m-d')} para Lote {$code}");
         }
     }
 

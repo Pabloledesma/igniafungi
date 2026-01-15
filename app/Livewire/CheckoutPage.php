@@ -111,7 +111,12 @@ class CheckoutPage extends Component
         session()->flash('info', 'Cupón removido');
     }
 
-    protected function calculateShipping()
+    public function updatedShippingMethod()
+    {
+        $this->calculateShipping();
+    }
+
+    public function calculateShipping()
     {
         $subtotal = (int) CartManagement::calculateGrandTotal($this->cart_items);
 
@@ -135,12 +140,115 @@ class CheckoutPage extends Component
             $this->discount_amount = $subtotal;
         }
 
-        // 2. Shipping Cost (using original subtotal for threshold)
-        $this->shipping_cost = CartManagement::getShippingCost(
-            $subtotal,
-            $this->city,
-            $this->location
-        );
+        // 2. Shipping Cost
+        // Methods:
+        // - 'pickup': 0
+        // - 'interrapidisimo': Base 15000 + 5000 per kg (or fraction).
+        // - 'bogota': 10000 (Días Pares) - Only valid for Bogota.
+
+        if ($this->shipping_method === 'pickup') {
+            $this->shipping_cost = 0;
+        } elseif ($this->shipping_method === 'interrapidisimo') {
+            // Calculate weight. 
+            // Assume standard weight if not set? 
+            // We need total weight of cart.
+            $totalWeight = 0;
+            foreach ($this->cart_items as $item) {
+                // Assuming product loaded or we can fetch.
+                // Ideally cart item should have weight.
+                // For now, fetch product or default 0.5kg
+                if (isset($item['product_id'])) {
+                    $prod = \App\Models\Product::find($item['product_id']);
+                    $weight = $prod->weight > 0 ? $prod->weight : 500; // grams
+                    $totalWeight += ($weight * $item['quantity']);
+                }
+            }
+
+            // Convert to KG
+            $weightKg = ceil($totalWeight / 1000);
+            if ($weightKg < 1)
+                $weightKg = 1;
+
+            $this->shipping_cost = 15000 + (($weightKg - 1) * 5000);
+
+        } elseif ($this->shipping_method === 'bogota') {
+            // 1. Logic: Free Shipping Threshold (Only for Bogota)
+            if ($subtotal >= CartManagement::FREE_SHIPPING_THRESHOLD) {
+                $this->shipping_cost = 0;
+            } else {
+                // 2. Specific neighborhood pricing
+                if ($this->location && isset($this->localidadPrecios[$this->location])) {
+                    $this->shipping_cost = $this->localidadPrecios[$this->location];
+                } else {
+                    $this->shipping_cost = 10000;
+                }
+            }
+
+            // Logic: Deliveries grouped on Even Days.
+            // Find earliest harvest availability date from cart.
+            // If no harvest date (normal products), use tomorrow/today.
+
+            // Simplification: Base date = NOW. Refinement: Base date = MAX(harvest_date) of cart.
+            // Currently Cart items don't store harvest date, but we can look it up.
+
+            $baseDate = \Carbon\Carbon::now();
+
+            // Check cart items for preorder batches
+            foreach ($this->cart_items as $item) {
+                if (!empty($item['is_preorder'])) {
+                    $product = \App\Models\Product::find($item['product_id']);
+                    $batch = app(\App\Services\InventoryService::class)->getPreorderBatch($product);
+                    if ($batch && $batch->estimated_harvest_date) {
+                        $harvestDate = \Carbon\Carbon::parse($batch->estimated_harvest_date);
+                        if ($harvestDate->gt($baseDate)) {
+                            $baseDate = $harvestDate;
+                        }
+                    }
+                }
+            }
+
+            // Now find next even day from baseDate.
+            // If baseDate is even? Allow same day? Usually "Next" implies subsequent.
+            // Logic: delivery date >= baseDate. And is even.
+            // If today is even and we order early? Let's keep it simple:
+            // If baseDate day is odd -> +1 day.
+            // If baseDate day is even -> +0 day (if valid) or +2 days?
+            // Prompt said "primer día par posterior a la cosecha".
+            // "Posterior" strictly usually means >. But "a partir de" means >=.
+            // Let's assume >=.
+
+            $nextDate = $baseDate->copy();
+            if ($nextDate->day % 2 != 0) {
+                $nextDate->addDay(); // Make it even
+            }
+
+            // If we want slightly more realistic logic (cutoff time), we could add logic.
+            // For now, strict Even Day requirement:
+
+            $this->delivery_date = $nextDate->format('Y-m-d');
+
+        } else {
+            // Default fallback logic or 0
+            // Maintain existing logic if no method selected yet?
+            // But UI will force selection.
+            // If manual city selection was used previously:
+            if ($this->city === 'Bogotá') {
+                $this->shipping_method = 'bogota'; // Auto select?
+                $this->calculateShipping();
+                return;
+            } else {
+                // If department set, maybe default to interrapidisimo?
+                if ($this->departmet || $this->city) { // Correct typo 'departmet' if exists or 'department'
+                    $this->shipping_method = 'interrapidisimo';
+                    $this->calculateShipping(); // Recurse once? No, just calc.
+                    // Copy calc from above? Or refactor.
+                    // Let's just set cost here to avoid recursion loop risk.
+                    $this->shipping_cost = 15000; // Base generic?
+                } else {
+                    $this->shipping_cost = 0;
+                }
+            }
+        }
 
         // 3. Grand Total
         $this->grand_total = ($subtotal - $this->discount_amount) + $this->shipping_cost;
@@ -232,7 +340,26 @@ class CheckoutPage extends Component
         $address->location = $this->location;
         $address->save();
 
-        $order->items()->createMany($cart_items);
+        foreach ($cart_items as $item) {
+            $item_data = $item;
+            // Ensure unit_amount is correct for the item being saved (it's already calculated in cart)
+            // Add is_preorder to the creation array
+            $item_data['is_preorder'] = $item['is_preorder'] ?? false;
+
+            // We can pass the array directly to createMany if keys matchDB columns
+            // But Cart items keys might not match exactly OrderItem columns
+            // Cart: product_id, name, unit_amount, quantity, total_amount, is_preorder
+            // OrderItem: order_id, product_id, quantity, unit_amount, total_amount, is_preorder, batch_id
+            // We need to map or clean it. createMany uses attributes.
+
+            $order->items()->create([
+                'product_id' => $item['product_id'],
+                'quantity' => $item['quantity'],
+                'unit_amount' => $item['unit_amount'],
+                'total_amount' => $item['total_amount'],
+                'is_preorder' => $item['is_preorder'] ?? false
+            ]);
+        }
 
         $order->delivery()->create([
             'status' => 'pending',

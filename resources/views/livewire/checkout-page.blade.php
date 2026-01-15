@@ -202,13 +202,70 @@
 								<div class="text-red-500 text-sm">{{ $message }}</div>
 							@enderror
 						</div>
+						<div class="mb-4">
+							<label class="block text-gray-700 dark:text-white mb-2 font-bold">
+								Método de Envío
+							</label>
+							<div class="grid gap-4 md:grid-cols-1">
+								{{-- Recoger en Tienda --}}
+								<div class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 {{ $shipping_method === 'pickup' ? 'border-blue-500 bg-blue-50' : 'border-gray-200' }}"
+									wire:click="$set('shipping_method', 'pickup'); $call('calculateShipping')">
+									<div class="flex items-center h-5">
+										<input type="radio" wire:model="shipping_method" value="pickup"
+											class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+									</div>
+									<div class="ml-3 text-sm">
+										<label class="font-medium text-gray-700 dark:text-gray-300">Recoger en
+											Tienda</label>
+										<p class="text-xs text-gray-500">Gratis. Calle 123 #45-67.</p>
+									</div>
+									<span class="ml-auto font-bold text-gray-700 dark:text-white">Gratis</span>
+								</div>
+
+								{{-- Interrapidísimo --}}
+								<div class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 {{ $shipping_method === 'interrapidisimo' ? 'border-blue-500 bg-blue-50' : 'border-gray-200' }}"
+									wire:click="$set('shipping_method', 'interrapidisimo'); $call('calculateShipping')">
+									<div class="flex items-center h-5">
+										<input type="radio" wire:model="shipping_method" value="interrapidisimo"
+											class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+									</div>
+									<div class="ml-3 text-sm">
+										<label
+											class="font-medium text-gray-700 dark:text-gray-300">Interrapidísimo</label>
+										<p class="text-xs text-gray-500">Envíos nacionales. Calculado por peso.</p>
+									</div>
+								</div>
+
+								{{-- Domicilio Bogotá --}}
+								@if($city === 'Bogotá')
+									<div class="relative flex items-start p-4 border rounded-lg cursor-pointer hover:bg-gray-50 {{ $shipping_method === 'bogota' ? 'border-blue-500 bg-blue-50' : 'border-gray-200' }}"
+										wire:click="$set('shipping_method', 'bogota'); $call('calculateShipping')">
+										<div class="flex items-center h-5">
+											<input type="radio" wire:model="shipping_method" value="bogota"
+												class="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500" />
+										</div>
+										<div class="ml-3 text-sm">
+											<label class="font-medium text-gray-700 dark:text-gray-300">Domicilio Bogotá
+												(Días Pares)</label>
+											<p class="text-xs text-gray-500">Entrega sostenible. Solo días pares.</p>
+										</div>
+										<span
+											class="ml-auto font-bold text-gray-700 dark:text-white">{{ Number::currency(10000, 'COP') }}</span>
+									</div>
+								@endif
+							</div>
+							@error('shipping_method')
+								<div class="text-red-500 text-sm mt-1">{{ $message }}</div>
+							@enderror
+						</div>
+
 						<div>
 							<label class="block text-gray-700 dark:text-white mb-1" for="delivery_date">
 								Fecha de envío
 							</label>
 							<input wire:model="delivery_date"
-								class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('street_address') border-red-500 @enderror"
-								id="street_address" type="text">
+								class="w-full rounded-lg border border-gray-300 bg-white py-2 px-3 text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:bg-gray-800 dark:text-white dark:border-gray-600 @error('delivery_date') border-red-500 @enderror"
+								id="delivery_date" type="date" min="{{ date('Y-m-d') }}">
 							</input>
 							@error('delivery_date')
 								<div class="text-red-500 text-sm">{{ $message }}</div>

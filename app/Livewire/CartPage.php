@@ -17,7 +17,8 @@ class CartPage extends Component
     public $selected_delivery_index = 0;
     public $location;
 
-    public function getProgressData() {
+    public function getProgressData()
+    {
         $subtotal = CartManagement::calculateGrandTotal($this->cart_items);
         $limit = CartManagement::FREE_SHIPPING_THRESHOLD;
         $missing = $limit - $subtotal;
@@ -29,7 +30,7 @@ class CartPage extends Component
             'is_free' => $subtotal >= $limit
         ];
     }
-        
+
     /**
      * Centralizamos la actualización del carrito
      */
@@ -46,7 +47,7 @@ class CartPage extends Component
             // Asumiendo que en el array del carrito guardas el slug o ID de la categoría
             // o puedes consultar el modelo Product si es necesario.
             $product = Product::find($item['product_id']);
-            
+
             if ($product && $product->category && $product->category->slug === 'hongos-gourmet') {
                 return true;
             }
@@ -62,13 +63,33 @@ class CartPage extends Component
     {
         $options = [];
         $date = Carbon::now();
-        
+
+        // 1. Calculate max harvest date from preorders
+        foreach ($this->cart_items as $item) {
+            if (!empty($item['is_preorder'])) {
+                $product = Product::find($item['product_id']);
+                if ($product) {
+                    $batch = app(\App\Services\InventoryService::class)->getPreorderBatch($product);
+                    if ($batch && $batch->estimated_harvest_date) {
+                        $harvestDate = Carbon::parse($batch->estimated_harvest_date);
+                        if ($harvestDate->gt($date)) {
+                            $date = $harvestDate;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Find next valid delivery slots
         while (count($options) < 2) {
+            // Logic: Thursday or Friday AND Even Day
             if (($date->isThursday() || $date->isFriday()) && ($date->day % 2 === 0)) {
-                // Si es hoy, validar hora de corte (10 AM)
+                // If it is today, check cutoff (10 AM)
+                // If date was bumped to harvest date (future), isToday is false, so condition passes.
+                // If harvest date is TODAY, we still check cutoff.
                 if (!$date->isToday() || $date->hour < 10) {
                     $options[] = [
-                        'date'  => $date->format('Y-m-d'),
+                        'date' => $date->format('Y-m-d'),
                         'label' => $date->translatedFormat('l d \d\e F')
                     ];
                 }
@@ -85,11 +106,11 @@ class CartPage extends Component
     public function shippingCost()
     {
         $subtotal = CartManagement::calculateGrandTotal($this->cart_items);
-        
+
         // Si es Bogotá, pasamos la localidad seleccionada. 
         // Si no es Bogotá, el helper usará la tarifa nacional automáticamente.
         $destino = $this->is_bogota ? 'Bogotá' : 'Nacional';
-        
+
         return CartManagement::getShippingCost($subtotal, $destino, $this->location);
     }
 
@@ -121,7 +142,7 @@ class CartPage extends Component
     {
         CartManagement::removeCartItem($product_id);
         $this->refreshCart(CartManagement::getCartItemsFromCookie());
-        
+
         $this->dispatch('update-cart-count', total_count: count($this->cart_items))->to(Navbar::class);
     }
 
@@ -135,22 +156,22 @@ class CartPage extends Component
             ]);
             return;
         }
-        
+
         // Usamos la opción seleccionada por el usuario de la lista de deliveryOptions
         $selectedDate = $this->deliveryOptions[$this->selected_delivery_index]['date'] ?? null;
 
         session([
             'checkout_shipping' => [
-                'is_bogota'     => (bool)$this->is_bogota,
-                'location'      => $this->location,
-                'cost'          => $this->shippingCost,
+                'is_bogota' => (bool) $this->is_bogota,
+                'location' => $this->location,
+                'cost' => $this->shippingCost,
                 'delivery_date' => $selectedDate
             ]
         ]);
 
         return redirect()->to('/checkout');
     }
-    
+
     public function render()
     {
         return view('livewire.cart-page');

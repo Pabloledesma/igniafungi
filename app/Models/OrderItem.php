@@ -16,7 +16,8 @@ class OrderItem extends Model
         'quantity',
         'unit_amount',
         'total_amount',
-        'batch_id'
+        'batch_id',
+        'is_preorder'
     ];
 
     public function order(): BelongsTo

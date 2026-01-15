@@ -3,6 +3,22 @@
     <div class="max-w-6xl px-4 py-4 mx-auto lg:py-8 md:px-6">
       <div class="flex flex-wrap -mx-4">
         <div class="w-full mb-8 md:w-1/2 md:mb-0">
+
+          <div class="px-4">
+            @if (session()->has('success'))
+              <div class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-gray-800 dark:text-green-400"
+                role="alert">
+                <span class="font-medium">Success!</span> {{ session('success') }}
+              </div>
+            @endif
+            @if (session()->has('error'))
+              <div class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400"
+                role="alert">
+                <span class="font-medium">Error!</span> {{ session('error') }}
+              </div>
+            @endif
+          </div>
+
           <div class="sticky top-0 z-50 overflow-hidden ">
             <div class="relative mb-6 lg:mb-10 lg:h-2/4 ">
               @if(!empty($product->images) && count($product->images) > 0)
@@ -12,9 +28,10 @@
             <div class="flex-wrap hidden md:flex ">
               @if($product && $product->images)
                 @foreach($product->images as $image)
-                <div class="w-1/2 p-2 sm:w-1/4" x-on:click="mainImage='{{ asset('storage/' . $image) }}'">
-                  <img src="{{ asset('storage/' . $image) }}" alt="" class="object-cover w-full lg:h-20 cursor-pointer hover:border hover:border-blue-500">
-                </div>
+                  <div class="w-1/2 p-2 sm:w-1/4" x-on:click="mainImage='{{ asset('storage/' . $image) }}'">
+                    <img src="{{ asset('storage/' . $image) }}" alt=""
+                      class="object-cover w-full lg:h-20 cursor-pointer hover:border hover:border-blue-500">
+                  </div>
                 @endforeach
               @endif
 
@@ -37,34 +54,63 @@
           <div class="lg:pl-20">
             <div class="mb-8 ">
               <h2 class="max-w-xl mb-6 text-2xl font-bold dark:text-gray-400 md:text-4xl">
-                {{ $product->name }}</h2>
-              <p class="inline-block mb-6 text-4xl font-bold text-gray-700 dark:text-gray-400 ">
-                <span>{{ Number::currency($product->price, 'COP') }}</span>
-              </p>
+                {{ $product->name }}
+              </h2>
+
+              @if(!$product->in_stock && isset($preorderBatch) && $preorderBatch)
+                {{-- Preorder UI --}}
+                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <span class="text-sm font-bold text-blue-800 uppercase tracking-wider">
+                    🌱 Cosecha Proyectada
+                  </span>
+                  <p class="text-xs text-blue-600 mt-1">
+                    Reserva hoy con <strong>10% OFF</strong>.
+                    Fecha estimada:
+                    {{ $preorderBatch && $preorderBatch->estimated_harvest_date ? $preorderBatch->estimated_harvest_date->format('d/m/Y') : 'Pronto' }}
+                  </p>
+                </div>
+
+                <p class="inline-block mb-6 text-4xl font-bold text-gray-700 dark:text-gray-400 ">
+                  <span
+                    class="line-through text-gray-400 text-2xl mr-2">{{ Number::currency($product->price, 'COP') }}</span>
+                  <span class="text-blue-600">{{ Number::currency($product->price * 0.9, 'COP') }}</span>
+                </p>
+              @else
+                <p class="inline-block mb-6 text-4xl font-bold text-gray-700 dark:text-gray-400 ">
+                  <span>{{ Number::currency($product->price, 'COP') }}</span>
+                </p>
+              @endif
+
               <p class="max-w-md text-gray-700 dark:text-gray-400">{{ $product->description }}</p>
             </div>
+
             <div class="w-32 mb-8 ">
-              <label for="" class="w-full pb-1 text-xl font-semibold text-gray-700 border-b border-blue-300 dark:border-gray-600 dark:text-gray-400">Cantidad</label>
+              <label for=""
+                class="w-full pb-1 text-xl font-semibold text-gray-700 border-b border-blue-300 dark:border-gray-600 dark:text-gray-400">Cantidad</label>
               <div class="relative flex flex-row w-full h-10 mt-6 bg-transparent rounded-lg">
-                <button wire:click='decrementQuantity()' class="w-20 h-full text-gray-600 bg-gray-300 rounded-l outline-none cursor-pointer dark:hover:bg-gray-700 dark:text-gray-400 hover:text-gray-700 dark:bg-gray-900 hover:bg-gray-400">
+                <button wire:click='decrementQuantity()'
+                  class="w-20 h-full text-gray-600 bg-gray-300 rounded-l outline-none cursor-pointer dark:hover:bg-gray-700 dark:text-gray-400 hover:text-gray-700 dark:bg-gray-900 hover:bg-gray-400">
                   <span class="m-auto text-2xl font-thin">-</span>
                 </button>
-                <input 
-              wire:model='quantity'
-              type="number" 
-              readonly 
-              class="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none flex items-center w-full font-semibold text-center text-gray-700 placeholder-gray-700 bg-gray-300 outline-none dark:text-gray-400 dark:placeholder-gray-400 dark:bg-gray-900 focus:outline-none text-md hover:text-black"
-            >
-                <button wire:click='incrementQuantity()' class="w-20 h-full text-gray-600 bg-gray-300 rounded-r outline-none cursor-pointer dark:hover:bg-gray-700 dark:text-gray-400 dark:bg-gray-900 hover:text-gray-700 hover:bg-gray-400">
+                <input wire:model='quantity' type="number" readonly
+                  class="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none flex items-center w-full font-semibold text-center text-gray-700 placeholder-gray-700 bg-gray-300 outline-none dark:text-gray-400 dark:placeholder-gray-400 dark:bg-gray-900 focus:outline-none text-md hover:text-black">
+                <button wire:click='incrementQuantity()'
+                  class="w-20 h-full text-gray-600 bg-gray-300 rounded-r outline-none cursor-pointer dark:hover:bg-gray-700 dark:text-gray-400 dark:bg-gray-900 hover:text-gray-700 hover:bg-gray-400">
                   <span class="m-auto text-2xl font-thin">+</span>
                 </button>
               </div>
             </div>
             <div class="flex flex-wrap items-center gap-4">
-              <button 
-                wire:click.prevent='addToCart({{ $product->id }}, {{ $quantity }})' 
-                class="w-full p-4 bg-gold-ignia text-whiterounded-md lg:w-2/5 dark:text-gray-200 text-gray-50 hover:bg-wood">
-                Agregar al carro</button>
+              <button wire:click.prevent='addToCart({{ $product->id }})'
+                class="w-full p-4  text-whiterounded-md lg:w-2/5 dark:text-gray-200 text-gray-50 hover:bg-wood {{ (!$product->in_stock && isset($preorderBatch) && $preorderBatch) ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gold-ignia' }} ">
+                @if(!$product->in_stock && isset($preorderBatch) && $preorderBatch)
+                  Apartar Cosecha 🍄
+                @elseif($product->in_stock)
+                  Agregar al carro
+                @else
+                  Agotado
+                @endif
+              </button>
             </div>
           </div>
         </div>

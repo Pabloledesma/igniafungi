@@ -32,13 +32,16 @@ class Batch extends Model
         'container_type',
         'status',
         'observations',
-        'production_cost'
+        'production_cost',
+        'expected_yield',
+        'estimated_harvest_date'
     ];
 
     public $phase_id;
 
     protected $casts = [
-        'inoculation_date' => 'date', // Esto convierte el texto en Objeto Fecha
+        'inoculation_date' => 'date',
+        'estimated_harvest_date' => 'date',
     ];
 
     public function recipe(): BelongsTo
