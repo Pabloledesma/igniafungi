@@ -11,6 +11,7 @@ class BatchObserver
     protected static $processing = null;
     // Propiedad para evitar duplicidad
     protected static array $processedBatches = [];
+    public static $isSyncingLoss = false;
 
     public static function clearProcessed(): void
     {
@@ -91,6 +92,43 @@ class BatchObserver
                 $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
             }
         }
+
+        // --- CONTAMINATION SYNC (Batch -> BatchLoss) ---
+        if (!self::$isSyncingLoss && $batch->isDirty('contaminated_quantity')) {
+            $diff = $batch->contaminated_quantity - $batch->getOriginal('contaminated_quantity');
+
+            if ($diff > 0) {
+                // Prevenir bucle: LossObserver no debe actualizar el batch de nuevo
+                \App\Observers\LossObserver::$shouldUpdateBatch = false;
+
+                $batch->recordLoss(
+                    $diff,
+                    'Contaminación',
+                    auth()->id() ?? $batch->user_id,
+                    'Registro automático desde edición de lote'
+                );
+
+                \App\Observers\LossObserver::$shouldUpdateBatch = true;
+            }
+        }
+
+        // --- PHASE TRANSITION (Edit Form) ---
+        // Si phase_id viene seteado (desde el form) y es diferente a la fase actual logicamente esperada
+        if ($batch->phase_id) {
+            $currentPhaseId = $batch->current_phase?->id; // Nota: current_phase es un accessor que hace query
+            // Si no lo tenemos cargado, usamos la relación relationLoaded check o query simple?
+            // El accessor `getCurrentPhaseAttribute` hace query `phases()->wherePivot...`
+
+            if ($currentPhaseId != $batch->phase_id) {
+                $newPhase = \App\Models\Phase::find($batch->phase_id);
+                if ($newPhase) {
+                    // Hacemos la transición. Nota: transitionTo guarda cambios en pivote.
+                    // Esto es seguro hacerlo aquí? Sí, no afecta la tabla batches directamente (excepto status si transition lo cambia?)
+                    // transitionTo usa DB::transaction.
+                    $batch->transitionTo($newPhase, 'Cambio manual de fase desde edición');
+                }
+            }
+        }
     }
 
     /**
@@ -164,21 +202,33 @@ class BatchObserver
         $datePart = now()->format('dmy');
 
         // 2. Determinar el número correlativo
-        if ($keepNumber && $batch->code) {
-            // Extraemos el número del código actual (ej: de SUB-08Jan26-5 extrae 5)
-            $parts = explode('-', $batch->code);
-            $nextNumber = end($parts);
-        } else {
-            // Buscamos el siguiente número en la BD para este prefijo y fecha
-            $lastBatch = Batch::where('code', 'like', "{$prefix}-{$datePart}-%")
-                ->orderBy('id', 'desc')
-                ->first();
+        $nextNumber = 1;
 
-            $nextNumber = 1;
-            if ($lastBatch) {
-                $parts = explode('-', $lastBatch->code);
-                $nextNumber = (int) end($parts) + 1;
+        if ($keepNumber && $batch->code) {
+            // Extraemos el número del código actual para intentar mantenerlo
+            $parts = explode('-', $batch->code);
+            $candidateNumber = (int) end($parts);
+
+            // Verificamos si este número ya existe con el nuevo prefijo
+            $candidateCode = "{$prefix}-{$datePart}-{$candidateNumber}";
+            $exists = Batch::where('code', $candidateCode)
+                ->where('id', '!=', $batch->id) // Ignorar el mismo lote
+                ->exists();
+
+            if (!$exists) {
+                return $candidateCode;
             }
+            // Si existe, fallamos al método estándar (buscar el último + 1)
+        }
+
+        // Método estándar: Buscamos el último consecutivo
+        $lastBatch = Batch::where('code', 'like', "{$prefix}-{$datePart}-%")
+            ->orderBy('id', 'desc')
+            ->first();
+
+        if ($lastBatch) {
+            $parts = explode('-', $lastBatch->code);
+            $nextNumber = (int) end($parts) + 1;
         }
 
         return "{$prefix}-{$datePart}-{$nextNumber}";

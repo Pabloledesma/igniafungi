@@ -162,13 +162,25 @@ class BatchKanban extends Component
 
         // Validación: Si pasa a inoculacion, debe tener genética
         if ($nextPhase && $nextPhase->slug === 'inoculation') {
-            if (!$batch->strain_id && !$this->strainId) {
+            // Actualizamos la cepa primero si viene en el input
+            if ($this->strainId) {
+                $batch->strain_id = $this->strainId; // Seteamos en memoria para validar
+            }
+
+            if (!$batch->canTransitionToInoculation()) {
                 $this->addError('strainId', 'Debes asignar una genética antes de inocular.');
                 return;
             }
-            // Asignamos la genética si se seleccionó una
-            if ($this->strainId) {
-                $batch->update(['strain_id' => $this->strainId]);
+
+            // Si pasó, guardamos la cepa si es nueva
+            if ($batch->isDirty('strain_id')) {
+                $batch->save();
+            }
+
+            // Actualizamos fecha de inoculación si no existe
+            if (!$batch->inoculation_date) {
+                $batch->inoculation_date = now();
+                $batch->save();
             }
         }
 

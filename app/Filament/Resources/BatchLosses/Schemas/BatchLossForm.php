@@ -21,7 +21,16 @@ class BatchLossForm
                     ->relationship('batch', 'code')
                     ->label('Lote afectado')
                     ->searchable()
-                    ->required(),
+                    ->required()
+                    ->reactive()
+                    ->afterStateUpdated(function ($state, $set) {
+                        if (!$state)
+                            return;
+                        $batch = \App\Models\Batch::find($state);
+                        if ($batch && $batch->current_phase) {
+                            $set('phase_id', $batch->current_phase->id);
+                        }
+                    }),
                 Select::make('phase_id')
                     ->relationship('phase', 'name')
                     ->label('Fase donde ocurrió')
@@ -33,11 +42,11 @@ class BatchLossForm
                 Select::make('reason')
                     ->label('Motivo principal')
                     ->options([
-                        'contamination' => 'Contaminación',
-                        'temperature' => 'Exceso de Temperatura',
-                        'humidity' => 'Falta de Humedad',
-                        'pest' => 'Plagas (Mosquitos/Ácaros)',
-                        'management' => 'Error de Manejo',
+                        'Contaminación' => 'Contaminación',
+                        'Exceso de Temperatura' => 'Exceso de Temperatura',
+                        'Falta de Humedad' => 'Falta de Humedad',
+                        'Plagas' => 'Plagas (Mosquitos/Ácaros)',
+                        'Error de Manejo' => 'Error de Manejo',
                     ])
                     ->required(),
                 Textarea::make('details')

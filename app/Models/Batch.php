@@ -218,4 +218,9 @@ class Batch extends Model
             })
             ->sum('quantity');
     }
+
+    public function canTransitionToInoculation(): bool
+    {
+        return !is_null($this->strain_id);
+    }
 }
