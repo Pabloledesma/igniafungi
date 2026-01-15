@@ -79,6 +79,19 @@ Route::middleware(['auth'])->group(function () {
         ->name('batches.transition');
     Route::post('/batches/{batch}/losses', [BatchLossController::class, 'store'])
         ->name('batches.losses.store');
+
+    // Blog de Manuales Interno (Wiki)
+    Route::group([
+        'prefix' => 'wiki',
+        'as' => 'wiki.',
+        'middleware' => function ($request, $next) {
+            abort_unless(auth()->check() && str_ends_with(auth()->user()->email, '@igniafungi.com'), 403);
+            return $next($request);
+        }
+    ], function () {
+        Route::get('/', [\App\Http\Controllers\ManualController::class, 'index'])->name('index');
+        Route::get('/{slug}', [\App\Http\Controllers\ManualController::class, 'show'])->name('show');
+    });
 });
 
 Route::post('/api/webhooks/bold', [BoldWebhookController::class, 'handle']);

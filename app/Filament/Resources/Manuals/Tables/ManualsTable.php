@@ -51,6 +51,11 @@ class ManualsTable
                     ]),
             ])
             ->recordActions([
+                \Filament\Tables\Actions\Action::make('view_public')
+                    ->label('Ver Manual')
+                    ->icon('heroicon-o-book-open')
+                    ->url(fn(\App\Models\Manual $record): string => route('wiki.show', $record->slug))
+                    ->openUrlInNewTab(),
                 EditAction::make(),
                 \Filament\Actions\ViewAction::make(),
             ])
