@@ -23,7 +23,7 @@ class HarvestsTable
                 TextColumn::make('weight')
                     ->label('Peso')
                     ->suffix(' kg')
-                    ->summarize([ // ¡Truco Pro! Muestra el total abajo de la tabla
+                    ->summarize([
                         Sum::make()
                             ->label('Total Cosechado'),
                     ]),
@@ -34,6 +34,10 @@ class HarvestsTable
                 TextColumn::make('notes')
                     ->label('Observaciones')
                     ->searchable(),
+                TextColumn::make('user.name')
+                    ->label('Responsable')
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -47,14 +51,24 @@ class HarvestsTable
                 SelectFilter::make('strain')
                     ->relationship('batch.strain', 'name')
                     ->label('Filtrar por Genética'),
+                SelectFilter::make('user')
+                    ->relationship('user', 'name')
+                    ->label('Filtrar por Responsable'),
             ])
-            ->recordActions([
+            ->actions([ // Standard method name is actions, but BatchesTable uses recordActions. I'll stick to actions if it works, or default to recordActions if that is the standard here. 
+                // Wait, BatchesTable uses ->recordActions([...]). HarvestResource.php calls HarvestsTable::configure. 
+                // If I look at BatchesTable, it returns $table->...->recordActions. 
+                // Standard Filament v3 has actions(). 
+                // However, BatchesTable uses recordActions(). 
+                // I will use actions() because I previously saw recordActions() in HarvestsTable and thought it was weird.
+                // Actually, simply replacing the namespace is safer. I will replace the imports and usages.
                 EditAction::make(),
             ])
-            ->toolbarActions([
+            ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
-            ]);
+            ])
+            ->defaultSort('harvest_date', 'desc');
     }
 }
