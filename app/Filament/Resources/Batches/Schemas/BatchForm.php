@@ -159,8 +159,25 @@ class BatchForm
 
                         TextInput::make('weigth_dry')
                             ->label('Peso en SECO (kg)')
-                            ->helperText('Vital para calcular la eficiencia. Solo materia seca.')
+                            ->helperText(fn($state) => $state ? 'Procesando ' . number_format($state * 1000) . ' gramos de sustrato.' : 'Vital para calcular la eficiencia. Solo materia seca.')
                             ->numeric()
+                            ->live(onBlur: true)
+                            ->afterStateUpdated(function ($state) {
+                                if ($state > 35 && $state <= 50) {
+                                    \Filament\Notifications\Notification::make()
+                                        ->warning()
+                                        ->title('Atención: Límite operativo')
+                                        ->body('Este lote está cerca del límite de capacidad operativa de la planta (35kg).')
+                                        ->send();
+                                }
+                            })
+                            ->rules([
+                                fn(): \Closure => function (string $attribute, $value, \Closure $fail) {
+                                    if ($value > 50) {
+                                        $fail('Error de capacidad: El sistema no permite lotes mayores a 50kg. Por favor, verifica si estás ingresando gramos en lugar de kilos.');
+                                    }
+                                },
+                            ])
                             ->required(),
 
 
@@ -195,7 +212,8 @@ class BatchForm
                                     ->numeric()
                                     ->step(0.01)
                                     ->required()
-                                    ->live(),
+                                    ->live(onBlur: true)
+                                    ->helperText(fn($state) => $state ? 'Equivale a: ' . ($state * 1000) . ' gramos' : null),
 
                                 // 4. PESO TOTAL ESTIMADO (Vivas + Contaminadas o Solo Vivas?)
                                 // Usualmente quieres saber el peso de lo que tienes VIVO.

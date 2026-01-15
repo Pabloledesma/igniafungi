@@ -223,4 +223,33 @@ class Batch extends Model
     {
         return !is_null($this->strain_id);
     }
+    /**
+     * Límite físico de capacidad de producción de la planta.
+     * Ayuda a prevenir errores de entrada (gramos vs kilos), ej: ingresar 5000 en lugar de 5.
+     */
+    public static float $MAX_PRODUCTION_CAPACITY_KG = 50.0;
+
+    /**
+     * Peso máximo lógico para una unidad individual (bolsa/frasco).
+     */
+    public static float $MAX_BAG_WEIGHT_KG = 25.0;
+
+    protected static function booted()
+    {
+        static::saving(function ($batch) {
+            // Handbrake for Bag Weight
+            if ($batch->bag_weight > self::$MAX_BAG_WEIGHT_KG) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'bag_weight' => ["Error de pesaje detectado ({$batch->bag_weight} kg). ¿Estás intentando registrar gramos? El sistema usa Kilos (ej: " . (self::$MAX_BAG_WEIGHT_KG / 10) . " para " . (self::$MAX_BAG_WEIGHT_KG * 100) . "g)."]
+                ]);
+            }
+
+            // Handbrake for Total Dry Weight (Capacity Limit)
+            if ($batch->weigth_dry > self::$MAX_PRODUCTION_CAPACITY_KG) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'weigth_dry' => ["Error de capacidad: El sistema no permite lotes mayores a " . self::$MAX_PRODUCTION_CAPACITY_KG . "kg. Por favor, verifica si estás ingresando gramos en lugar de kilos."]
+                ]);
+            }
+        });
+    }
 }

@@ -36,7 +36,7 @@ class TransactionIntegrationTest extends TestCase
         // Act
         $harvest = Harvest::create([
             'batch_id' => $batch->id,
-            'weight' => 50,
+            'weight' => 2,
             'harvest_date' => now(),
             'user_id' => $user->id,
             'phase_id' => $phase->id,

@@ -18,12 +18,12 @@ class BatchFactory extends Factory
      */
     public function definition(): array
     {
-       return [
+        return [
             // Crea una Cepa nueva automáticamente para este lote
             'strain_id' => null,
             'user_id' => User::factory(),
             'code' => null,
-            'weigth_dry' => $this->faker->randomFloat(2, 10, 100),
+            'weigth_dry' => $this->faker->randomFloat(2, 5, 45),
             'inoculation_date' => null,
             'quantity' => $this->faker->numberBetween(20, 50),
             'status' => 'preparation'
@@ -35,7 +35,7 @@ class BatchFactory extends Factory
      */
     public function inoculated(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
             'strain_id' => Strain::factory(),
             'status' => 'incubation',
             'inoculation_date' => now(),
@@ -47,7 +47,7 @@ class BatchFactory extends Factory
      */
     public function fruiting(): static
     {
-        return $this->state(fn (array $attributes) => [
+        return $this->state(fn(array $attributes) => [
             'strain_id' => Strain::factory(),
             'status' => 'fruiting',
             'inoculation_date' => now()->subDays(20),

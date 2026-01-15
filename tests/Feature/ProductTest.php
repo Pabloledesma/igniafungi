@@ -13,13 +13,13 @@ use App\Filament\Resources\Products\Pages\ListProducts;
 class ProductTest extends TestCase
 {
     use RefreshDatabase;
-     /** @test */
+    /** @test */
     public function it_finds_and_updates_the_corresponding_dehydrated_product_automatically()
     {
         // 1. Preparar Categorías
         $freshCat = Category::factory()->create(['name' => 'Frescos']);
         $dryCat = Category::factory()->create(['name' => 'Deshidratados']);
-        
+
         $strain = Strain::factory()->create(['name' => 'Eryngii']);
 
         // 2. Crear los dos productos vinculados por la misma Strain
@@ -39,8 +39,8 @@ class ProductTest extends TestCase
 
         // 3. Actuar: Transformamos 5kg de fresco y obtenemos 0.5kg de seco
         \App\Services\InventoryService::processDehydration(
-            sourceProduct: $freshProduct, 
-            quantityRemoved: 5.0, 
+            sourceProduct: $freshProduct,
+            quantityRemoved: 5.0,
             quantityAdded: 0.5
         );
 
@@ -79,7 +79,7 @@ class ProductTest extends TestCase
                 'cantidad_seco' => 0.5,
             ])
             // IMPORTANTE: En v3 usamos callMountedTableAction para ejecutar lo que está en el modal
-            ->callMountedTableAction() 
+            ->callMountedTableAction()
             ->assertHasNoTableActionErrors();
 
         // 3. Verificación
@@ -91,8 +91,8 @@ class ProductTest extends TestCase
     public function it_can_dehydrate_products_across_different_primary_categories()
     {
         // 1. Preparar Categorías
-        $medicinaCat = Category::factory()->create(['name' => 'Medicina Ancestral']);
-        $dryCat = Category::factory()->create(['name' => 'Deshidratados']);
+        $medicinaCat = Category::factory()->create(['name' => 'Medicina Ancestral', 'slug' => 'medicina-ancestral']);
+        $dryCat = Category::factory()->create(['name' => 'Deshidratados', 'slug' => 'deshidratados-3']);
         $strain = Strain::factory()->create(['name' => 'Melena de León']);
 
         // 2. Crear los productos (Vinculados por la Strain)

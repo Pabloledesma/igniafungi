@@ -28,7 +28,7 @@ class BatchSyncTest extends TestCase
             'type' => 'bulk',
             'status' => 'active',
             'quantity' => 10,
-            'weigth_dry' => 100,
+            'weigth_dry' => 40,
             'bag_weight' => 2,
             'recipe_id' => $recipe->id,
         ]);
@@ -59,7 +59,7 @@ class BatchSyncTest extends TestCase
             'type' => 'bulk',
             'status' => 'active',
             'quantity' => 10,
-            'weigth_dry' => 100,
+            'weigth_dry' => 40,
             'bag_weight' => 2,
             'recipe_id' => $recipe->id,
         ]);

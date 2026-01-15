@@ -30,7 +30,7 @@ class BatchTransitionRuleTest extends TestCase
             'type' => 'bulk',
             'status' => 'active',
             'quantity' => 10,
-            'weigth_dry' => 100,
+            'weigth_dry' => 40,
             'bag_weight' => 2,
             'recipe_id' => $recipe->id,
             'strain_id' => null, // Explicitly null
@@ -65,7 +65,7 @@ class BatchTransitionRuleTest extends TestCase
             'type' => 'bulk',
             'status' => 'active',
             'quantity' => 10,
-            'weigth_dry' => 100,
+            'weigth_dry' => 40,
             'bag_weight' => 2,
             'recipe_id' => $recipe->id,
             'strain_id' => $strain->id, // Has strain
