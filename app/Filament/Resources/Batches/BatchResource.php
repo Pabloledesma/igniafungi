@@ -35,7 +35,7 @@ class BatchResource extends Resource
     public static function getRelations(): array
     {
         return [
-            //
+            \App\Filament\Resources\Batches\RelationManagers\PhasesRelationManager::class,
         ];
     }
 
