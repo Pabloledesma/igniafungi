@@ -25,7 +25,9 @@ class Order extends Model
         'shipping_method',
         'notes',
         'reference',
-        'bold_transaction_id'
+        'bold_transaction_id',
+        'coupon_code',
+        'discount_amount',
     ];
 
     protected static function booted()
