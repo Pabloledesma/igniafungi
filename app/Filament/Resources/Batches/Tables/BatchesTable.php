@@ -15,6 +15,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Tables\Filters\SelectFilter;
 use App\Filament\Resources\Batches\BatchResource;
+use Illuminate\Support\Facades\DB;
 
 class BatchesTable
 {
@@ -188,6 +189,103 @@ class BatchesTable
                             ->body("Se creó un sub-lote con $quantityToMove unidades en Fructificación.")
                             ->success()
                             ->send();
+                    }),
+
+                Action::make('spawn_substrate')
+                    ->label('Sembrar en Sustrato')
+                    ->icon('heroicon-o-flask')
+                    ->color('warning')
+                    ->visible(fn(Batch $record) => $record->type === 'grain' && $record->status === 'active' && $record->quantity > 0)
+                    ->form([
+                        TextInput::make('bags_quantity')
+                            ->label('Cantidad de Bolsas')
+                            ->numeric()
+                            ->required()
+                            ->minValue(1),
+                        TextInput::make('bag_weight')
+                            ->label('Peso por Bolsa (kg)')
+                            ->numeric()
+                            ->step(0.01)
+                            ->required(),
+                        \Filament\Forms\Components\Select::make('recipe_id')
+                            ->label('Receta de Sustrato')
+                            ->options(\App\Models\Recipe::where('type', 'bulk')->pluck('name', 'id'))
+                            ->required()
+                            ->searchable(),
+                    ])
+                    ->action(function (Batch $record, array $data) {
+                        $qty = (int) $data['bags_quantity'];
+                        $weight = (float) $data['bag_weight'];
+                        $recipeId = $data['recipe_id'];
+
+                        $totalSubstrateWeight = $qty * $weight;
+
+                        // Encontrar la tasa de inoculación de la receta
+                        $recipe = \App\Models\Recipe::with('supplies')->find($recipeId);
+
+                        // Heurística: Buscar insumo que sea semilla/inóculo
+                        $inoculumSupply = $recipe->supplies->first(function ($supply) {
+                            $name = strtolower($supply->name);
+                            return str_contains($name, 'semilla') || str_contains($name, 'inoculo') || str_contains($name, 'grano') || str_contains($name, 'spawn');
+                        });
+
+                        if (!$inoculumSupply) {
+                            Notification::make()
+                                ->title('Error de Configuración')
+                                ->body('La receta seleccionada no tiene un insumo de "Semilla" o "Inóculo" identificable.')
+                                ->danger()
+                                ->send();
+                            return;
+                        }
+
+                        // Calcular grano requerido
+                        $requiredGrain = 0;
+                        if ($inoculumSupply->pivot->calculation_mode === 'percentage') {
+                            $requiredGrain = ($totalSubstrateWeight * $inoculumSupply->pivot->value) / 100;
+                        } else {
+                            $requiredGrain = $inoculumSupply->pivot->value * $qty;
+                        }
+
+                        // Validar Stock
+                        $availableMass = $record->quantity * $record->bag_weight;
+
+                        if ($availableMass < $requiredGrain) {
+                            Notification::make()
+                                ->title('No hay suficiente grano')
+                                ->body("Se requieren {$requiredGrain}kg de inóculo, pero el lote tiene {$availableMass}kg.")
+                                ->danger()
+                                ->send();
+                            return;
+                        }
+
+                        DB::transaction(function () use ($record, $qty, $weight, $recipeId, $data) {
+                            // 1. Crear Lote Hijo (Sustrato)
+                            $childBatch = new Batch();
+                            $childBatch->parent_batch_id = $record->id;
+                            $childBatch->strain_id = $record->strain_id;
+                            $childBatch->recipe_id = $recipeId;
+                            $childBatch->user_id = auth()->id();
+                            $childBatch->type = 'bulk';
+                            $childBatch->status = 'incubation'; // Empieza en incubación
+                            $childBatch->quantity = $qty;
+                            $childBatch->bag_weight = $weight;
+                            $childBatch->code = $record->code . '-S-' . rand(100, 999);
+                            $childBatch->inoculation_date = now();
+                            $childBatch->save();
+
+                            // 2. Marcar Grano como Sembrado (Consumido) y cerrar fase
+                            $record->update([
+                                'status' => 'seeded',
+                            ]);
+
+                            // Cerrar fase actual para sacarlo del Kanban
+                            $activePhase = $record->phases()->wherePivot('finished_at', null)->first();
+                            if ($activePhase) {
+                                $record->phases()->updateExistingPivot($activePhase->id, ['finished_at' => now()]);
+                            }
+                        });
+
+                        Notification::make()->title('Siembra registrada y lote de grano cerrado.')->success()->send();
                     }),
                 // Botón Borrar (Opcional, pero útil en desarrollo)
                 DeleteAction::make(),

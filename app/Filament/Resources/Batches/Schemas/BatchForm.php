@@ -110,6 +110,7 @@ class BatchForm
                             ->options([
                                 'active' => 'Activo',
                                 'contaminated' => 'Contaminado',
+                                'seeded' => 'Sembrado',
                                 'finalized' => 'Finalizado',
                             ])
                             ->default('active')

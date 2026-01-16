@@ -25,6 +25,7 @@ Reglas para mover un lote a través de su ciclo de vida.
 | **Fecha Inoculación Obligatoria** | Si existe `strain_id`, `inoculation_date` es required | Error de validación al guardar | `BatchInoculationDateTest.php` |
 | **Generación de Código** | Formato: `[CEPA/SUB]-AAMMDD-XX` | Se autogenera al crear. Prefijo cambia si se asigna cepa. | `BatchTest.php` |
 | **Sincronización Total** | `BatchForm` y `BatchKanban` | Cambiar fase en uno actualiza el otro y cierra la fase previa en historial | `BatchSyncTest.php` |
+| **Consumo de Semilla** | Al `Sembrar en Sustrato`, lote grano pasa a `seeded` y se crea hijo | Baja de inventario de grano, creación de lote sustrato | `BatchesTable` (Action) |
 
 ### Costos e Insumos
 

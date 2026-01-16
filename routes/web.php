@@ -84,10 +84,7 @@ Route::middleware(['auth'])->group(function () {
     Route::group([
         'prefix' => 'wiki',
         'as' => 'wiki.',
-        'middleware' => function ($request, $next) {
-            abort_unless(auth()->check() && str_ends_with(auth()->user()->email, '@igniafungi.com'), 403);
-            return $next($request);
-        }
+        'middleware' => [\App\Http\Middleware\EnsureIgniaEmail::class]
     ], function () {
         Route::get('/', [\App\Http\Controllers\ManualController::class, 'index'])->name('index');
         Route::get('/{slug}', [\App\Http\Controllers\ManualController::class, 'show'])->name('show');
