@@ -16,6 +16,10 @@ use Filament\Notifications\Notification;
 use Filament\Tables\Filters\SelectFilter;
 use App\Filament\Resources\Batches\BatchResource;
 use Illuminate\Support\Facades\DB;
+use Filament\Forms\Components\Group;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Select; // Ensure this is imported if used as Select::make
+use Filament\Forms\Get;
 
 class BatchesTable
 {
@@ -104,151 +108,148 @@ class BatchesTable
                         }, "{$record->code}.pdf");
                     }),
 
-                Action::make('sow_grain')
-                    ->label('Sembrar')
-                    ->icon('heroicon-m-beaker')
+                Action::make('expand_g2g')
+                    ->label('Expandir (G2G)')
+                    ->icon('heroicon-o-arrows-pointing-out')
                     ->color('info')
-                    // Solo visible para lotes de grano con existencias
-                    ->visible(fn(Batch $record) => $record->type === 'grain' && $record->quantity > 0)
+                    ->visible(fn(Batch $record) => $record->type === 'grain' && $record->quantity > 0 && $record->strain_id)
                     ->form([
-                        TextInput::make('quantity_to_sow')
-                            ->label('¿Cuántas unidades (frascos/bolsas) vas a sembrar?')
+                        TextInput::make('parent_quantity')
+                            ->label('¿Cuántos frascos MADRE vas a usar?')
                             ->numeric()
                             ->required()
                             ->minValue(1)
+                            ->default(1)
                             ->maxValue(fn(Batch $record) => $record->quantity),
+
+                        TextInput::make('child_quantity')
+                            ->label('¿Cuántos NUEVOS frascos/bolsas creaste?')
+                            ->numeric()
+                            ->required()
+                            ->minValue(1)
+                            ->helperText('Cantidad total de nuevas unidades inoculadas'),
                     ])
+                    ->before(function (Batch $record, \Filament\Actions\Action $action) {
+                        if ($record->inoculation_date && now()->diffInDays($record->inoculation_date) < 15) {
+                            Notification::make()
+                                ->title('Tiempo de incubación insuficiente')
+                                ->body('El grano debe tener al menos 15 días de incubación para ser expandido.')
+                                ->danger()
+                                ->send();
+
+                            $action->halt();
+                        }
+                    })
                     ->action(function (Batch $record, array $data) {
-                        $quantity = (int) $data['quantity_to_sow'];
-                        $now = now()->format('Y-m-d H:i');
-                        $user_name = auth()->user()->name;
+                        $parentQty = (int) $data['parent_quantity'];
+                        $childQty = (int) $data['child_quantity'];
 
-                        // Creamos el mensaje para la bitácora
-                        $logMessage = "\n- [{$now}] {$user_name}: Se sembraron {$quantity} unidades. Quedan " . ($record->quantity - $quantity) . " disponibles.";
+                        DB::transaction(function () use ($record, $parentQty, $childQty) {
+                            // 1. Decrementar Inventario Padre
+                            $record->decrement('quantity', $parentQty);
 
-                        // Actualizamos el registro
-                        $record->update([
-                            'quantity' => $record->quantity - $quantity,
-                            // Concatenamos el mensaje nuevo a lo que ya existía en la bitácora
-                            'observations' => $record->observations . $logMessage
-                        ]);
+                            // 2. Crear Lote Hijo
+                            $newBatch = $record->replicate();
+                            $newBatch->parent_batch_id = $record->id;
+                            $newBatch->type = 'grain'; // Mismo tipo (G2G)
+                            $newBatch->status = 'incubation'; // Vuelve a empezar
+                            $newBatch->quantity = $childQty;
+                            $newBatch->inoculation_date = now();
+                            $newBatch->user_id = auth()->id();
+                            $newBatch->code = $record->code . '-G-' . rand(10, 99);
+
+                            // Limpieza de datos heredados que no aplican
+                            $newBatch->contaminated_quantity = 0;
+                            $newBatch->observations = "Expansión G2G desde {$record->code}";
+
+                            $newBatch->save();
+
+                            // Transición explícita a fase de Incubación
+                            $incubationPhase = \App\Models\Phase::where('slug', 'incubation')->first();
+                            if ($incubationPhase) {
+                                $newBatch->transitionTo($incubationPhase, "Expansión G2G iniciada desde {$record->code}");
+                            }
+                        });
+
                         Notification::make()
-                            ->title('Semilla descontada')
-                            ->body($logMessage)
+                            ->title('Expansión G2G exitosa')
+                            ->body("Se crearon {$childQty} nuevas unidades a partir de {$parentQty} madres.")
                             ->success()
                             ->send();
                     })
-                    ->requiresConfirmation(),
-
-                Action::make('move_to_fruiting')
-                    ->label('Pasar a Fructificación')
-                    ->icon('heroicon-m-arrow-right-circle') // Icono de flecha
-                    ->color('success') // Verde
-                    ->visible(fn(Batch $record) => $record->type === 'bulk' && $record->status === 'incubation' && $record->quantity > 0)
-                    ->form([
-                        TextInput::make('quantity_to_move')
-                            ->label('¿Cuántas unidades pasan a Fructificación?')
-                            ->numeric()
-                            ->required()
-                            ->minValue(1)
-                            ->default(fn(Batch $record) => $record->quantity) // Por defecto sugiere mover todas
-                            ->maxValue(fn(Batch $record) => $record->quantity), // No puedes mover más de las que hay
-                    ])
-                    ->action(function (Batch $record, array $data) {
-                        $quantityToMove = (int) $data['quantity_to_move'];
-
-                        // ESCENARIO 1: Se mueven TODAS las unidades
-                        if ($quantityToMove === $record->quantity) {
-                            $record->update([
-                                'status' => 'fruiting',
-                                // Opcional: Registrar fecha de fructificación si tienes el campo
-                                // 'fruiting_date' => now(), 
-                            ]);
-
-                            Notification::make()->title('Lote completo pasado a Fructificación')->success()->send();
-                            return;
-                        }
-                        // 2. Usamos replicate() para copiar TODOS los datos (Cepa, Tipo, Fechas, Responsable, etc.)
-                        $newBatch = $record->replicate();
-
-                        // 3. Sobreescribimos lo que cambia en el hijo
-                        $newBatch->quantity = $quantityToMove;
-                        $newBatch->status = 'fruiting';
-                        $newBatch->parent_batch_id = $record->id; // Mantenemos la trazabilidad
-                        $newBatch->contaminated_quantity = 0; // El nuevo lote nace sano (las contaminadas se quedaron atrás o ya se reportaron)
-            
-                        // 4. Generamos un nuevo Código para diferenciarlo
-                        // Si el padre es "PINK-001", el hijo será "PINK-001-F1" (Fructificación 1)
-                        // Usamos un uniqid corto o un contador para evitar duplicados
-                        $newBatch->code = $record->code . '-F-' . rand(10, 99);
-
-                        $newBatch->save();
-
-                        Notification::make()
-                            ->title('Lote dividido exitosamente')
-                            ->body("Se creó un sub-lote con $quantityToMove unidades en Fructificación.")
-                            ->success()
-                            ->send();
-                    }),
+                    ->requiresConfirmation()
+                    ->modalHeading('Expansión Grano a Grano')
+                    ->modalDescription('Usa unidades de este lote para inocular nuevo grano estéril.'),
 
                 Action::make('spawn_substrate')
                     ->label('Sembrar en Sustrato')
-                    ->icon('heroicon-o-flask')
+                    ->icon('heroicon-o-beaker')
                     ->color('warning')
-                    ->visible(fn(Batch $record) => $record->type === 'grain' && $record->status === 'active' && $record->quantity > 0)
+                    ->visible(fn(Batch $record) => $record->type === 'grain' && $record->status === 'active' && $record->quantity > 0 && $record->strain_id)
                     ->form([
-                        TextInput::make('bags_quantity')
-                            ->label('Cantidad de Bolsas')
-                            ->numeric()
+                        Select::make('target_batch_id')
+                            ->label('Seleccionar Lote a Inocular')
+                            ->options(function () {
+                                return Batch::query()
+                                    ->where('type', 'bulk')
+                                    ->whereNull('strain_id')
+                                    ->get()
+                                    ->mapWithKeys(function ($batch) {
+                                        return [$batch->id => "{$batch->code} ({$batch->quantity} un. / {$batch->bag_weight}kg)"];
+                                    });
+                            })
                             ->required()
-                            ->minValue(1),
-                        TextInput::make('bag_weight')
-                            ->label('Peso por Bolsa (kg)')
-                            ->numeric()
-                            ->step(0.01)
-                            ->required(),
-                        \Filament\Forms\Components\Select::make('recipe_id')
-                            ->label('Receta de Sustrato')
-                            ->options(\App\Models\Recipe::where('type', 'bulk')->pluck('name', 'id'))
-                            ->required()
-                            ->searchable(),
+                            ->searchable()
+                            ->preload(),
+
                     ])
+                    ->before(function (Batch $record, \Filament\Actions\Action $action) {
+                        // Aseguramos que la fecha sea un objeto Carbon para poder comparar
+                        $fechaInoculacion = \Carbon\Carbon::parse($record->inoculation_date);
+
+                        // Calculamos la diferencia en días absolutos hasta el inicio de hoy
+                        $diasTranscurridos = $fechaInoculacion->diffInDays(now()->startOfDay());
+
+                        if ($diasTranscurridos < 15) {
+                            Notification::make()
+                                ->title('Tiempo de incubación insuficiente')
+                                ->body("El lote solo lleva {$diasTranscurridos} días. Faltan " . (15 - $diasTranscurridos) . " días para poder sembrar.")
+                                ->danger()
+                                ->send();
+
+                            $action->halt(); // Detiene la ejecución
+                        }
+                    })
                     ->action(function (Batch $record, array $data) {
-                        $qty = (int) $data['bags_quantity'];
-                        $weight = (float) $data['bag_weight'];
-                        $recipeId = $data['recipe_id'];
+                        // Variables comunes
+                        $requiredGrain = 0;
+                        $targetBatch = null;
+                        $targetBatch = Batch::find($data['target_batch_id']);
 
-                        $totalSubstrateWeight = $qty * $weight;
+                        $recipe = $targetBatch->recipe;
+                        if (!$recipe) {
+                            $recipe = \App\Models\Recipe::with('supplies')->find($targetBatch->recipe_id);
+                        }
 
-                        // Encontrar la tasa de inoculación de la receta
-                        $recipe = \App\Models\Recipe::with('supplies')->find($recipeId);
-
-                        // Heurística: Buscar insumo que sea semilla/inóculo
                         $inoculumSupply = $recipe->supplies->first(function ($supply) {
                             $name = strtolower($supply->name);
                             return str_contains($name, 'semilla') || str_contains($name, 'inoculo') || str_contains($name, 'grano') || str_contains($name, 'spawn');
                         });
 
-                        if (!$inoculumSupply) {
-                            Notification::make()
-                                ->title('Error de Configuración')
-                                ->body('La receta seleccionada no tiene un insumo de "Semilla" o "Inóculo" identificable.')
-                                ->danger()
-                                ->send();
-                            return;
-                        }
-
-                        // Calcular grano requerido
-                        $requiredGrain = 0;
-                        if ($inoculumSupply->pivot->calculation_mode === 'percentage') {
-                            $requiredGrain = ($totalSubstrateWeight * $inoculumSupply->pivot->value) / 100;
+                        if ($inoculumSupply) {
+                            $totalWeight = $targetBatch->quantity * $targetBatch->bag_weight;
+                            if ($inoculumSupply->pivot->calculation_mode === 'percentage') {
+                                $requiredGrain = ($totalWeight * $inoculumSupply->pivot->value) / 100;
+                            } else {
+                                $requiredGrain = $inoculumSupply->pivot->value * $targetBatch->quantity;
+                            }
                         } else {
-                            $requiredGrain = $inoculumSupply->pivot->value * $qty;
+                            Notification::make()->title('Precaución')->body('No se calculó consumo de grano por falta de insumo semilla en receta. Se asumirá 0.')->warning()->send();
                         }
 
-                        // Validar Stock
-                        $availableMass = $record->quantity * $record->bag_weight;
 
+                        // VALIDAR STOCK DE GRANO
+                        $availableMass = $record->quantity * $record->bag_weight;
                         if ($availableMass < $requiredGrain) {
                             Notification::make()
                                 ->title('No hay suficiente grano')
@@ -258,34 +259,36 @@ class BatchesTable
                             return;
                         }
 
-                        DB::transaction(function () use ($record, $qty, $weight, $recipeId, $data) {
-                            // 1. Crear Lote Hijo (Sustrato)
-                            $childBatch = new Batch();
-                            $childBatch->parent_batch_id = $record->id;
-                            $childBatch->strain_id = $record->strain_id;
-                            $childBatch->recipe_id = $recipeId;
-                            $childBatch->user_id = auth()->id();
-                            $childBatch->type = 'bulk';
-                            $childBatch->status = 'incubation'; // Empieza en incubación
-                            $childBatch->quantity = $qty;
-                            $childBatch->bag_weight = $weight;
-                            $childBatch->code = $record->code . '-S-' . rand(100, 999);
-                            $childBatch->inoculation_date = now();
-                            $childBatch->save();
+                        // Calcular unidades de grano a descontar
+                        // Asumimos que si requiredGrain = 0 (caso raro), no descontamos.
+                        $unitsToConsume = ($record->bag_weight > 0) ? ceil($requiredGrain / $record->bag_weight) : 0;
 
-                            // 2. Marcar Grano como Sembrado (Consumido) y cerrar fase
-                            $record->update([
-                                'status' => 'seeded',
-                            ]);
+                        if ($record->quantity < $unitsToConsume) {
+                            Notification::make()->title('Error de Unidades')->body("Se requieren $unitsToConsume unidades de grano, pero solo hay {$record->quantity}.")->danger()->send();
+                            return;
+                        }
 
-                            // Cerrar fase actual para sacarlo del Kanban
-                            $activePhase = $record->phases()->wherePivot('finished_at', null)->first();
-                            if ($activePhase) {
-                                $record->phases()->updateExistingPivot($activePhase->id, ['finished_at' => now()]);
+                        DB::transaction(function () use ($record, $targetBatch, $unitsToConsume, $data) {
+                            // 1. Descontar grano
+                            if ($unitsToConsume > 0) {
+                                $record->decrement('quantity', $unitsToConsume);
+                            }
+
+                            // 2. Configurar Lote Destino (común para Create y Existing)
+                            $targetBatch->parent_batch_id = $record->id;
+                            $targetBatch->strain_id = $record->strain_id;
+                            $targetBatch->inoculation_date = now();
+                            $targetBatch->user_id = auth()->id();
+
+                            $targetBatch->save();
+                            // Transición de fase manual para Existing
+                            $incubationPhase = \App\Models\Phase::where('slug', 'incubation')->first();
+                            if ($incubationPhase) {
+                                $targetBatch->transitionTo($incubationPhase, "Inoculado con lote {$record->code}");
                             }
                         });
 
-                        Notification::make()->title('Siembra registrada y lote de grano cerrado.')->success()->send();
+                        Notification::make()->title('Siembra registrada exitosamente.')->success()->send();
                     }),
                 // Botón Borrar (Opcional, pero útil en desarrollo)
                 DeleteAction::make(),
