@@ -250,6 +250,14 @@ class Batch extends Model
                     'weigth_dry' => ["Error de capacidad: El sistema no permite lotes mayores a " . self::$MAX_PRODUCTION_CAPACITY_KG . "kg. Por favor, verifica si estás ingresando gramos en lugar de kilos."]
                 ]);
             }
+
+
+            // Validate Type
+            if (!in_array($batch->type, ['grain', 'bulk'])) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'type' => ["El tipo de lote debe ser 'grain' o 'bulk'."]
+                ]);
+            }
         });
     }
 }

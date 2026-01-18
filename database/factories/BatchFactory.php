@@ -26,7 +26,8 @@ class BatchFactory extends Factory
             'weigth_dry' => $this->faker->randomFloat(2, 5, 45),
             'inoculation_date' => null,
             'quantity' => $this->faker->numberBetween(20, 50),
-            'status' => 'preparation'
+            'status' => 'preparation',
+            'type' => $this->faker->randomElement(['grain', 'bulk']),
         ];
     }
 

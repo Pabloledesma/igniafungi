@@ -7,6 +7,16 @@
                 class="pl-3 pr-4 py-2 border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500">
         </div>
 
+        {{-- Filtro Tipo de Lote --}}
+        <div>
+            <select wire:model.live="batchType"
+                class="border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500 py-2 pl-3 pr-8">
+                <option value="">Todos los Tipos</option>
+                <option value="grain">Grano</option>
+                <option value="bulk">Sustrato</option>
+            </select>
+        </div>
+
         {{-- Filtro Cepa --}}
         <div>
             <select wire:model.live="selectedStrain"

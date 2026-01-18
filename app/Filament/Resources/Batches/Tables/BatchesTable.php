@@ -36,8 +36,11 @@ class BatchesTable
                     ->label('Código')
                     ->sortable()
                     ->searchable(),
-                TextColumn::make('weigth_dry')
-                    ->numeric()
+                TextColumn::make('type')
+                    ->searchable()
+                    ->sortable(),
+                TextColumn::make('grain_type')
+                    ->searchable()
                     ->sortable(),
                 TextColumn::make('inoculation_date')
                     ->label('Fecha Inoculación')
@@ -53,10 +56,6 @@ class BatchesTable
                 TextColumn::make('bag_weight')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('type')
-                    ->searchable(),
-                TextColumn::make('grain_type')
-                    ->searchable(),
                 TextColumn::make('container_type')
                     ->searchable(),
                 TextColumn::make('status')
@@ -82,6 +81,12 @@ class BatchesTable
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
+                SelectFilter::make('type')
+                    ->label('Tipo de Lote')
+                    ->options([
+                        'grain' => 'Grano',
+                        'bulk' => 'Sustrato',
+                    ]),
                 SelectFilter::make('strain')
                     ->relationship('strain', 'name')
                     ->label('Filtrar por Genética'),
