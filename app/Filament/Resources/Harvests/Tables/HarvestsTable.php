@@ -69,6 +69,6 @@ class HarvestsTable
                     DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('harvest_date', 'desc');
+            ->defaultSort('created_at', 'desc');
     }
 }
