@@ -61,7 +61,7 @@ class BatchSeeder extends Seeder
             'weigth_dry' => 1000,
             'bag_weight' => 2.0, // 2kg per block as requested
             'expected_yield' => 10 * 500, // 500g per block (25% BE of 2kg)
-            'type' => 'substrate',
+            'type' => 'bulk',
             'status' => 'active',
             'observations' => 'Seeded automatically via BatchSeeder',
             // We don't set inoculation_date here to ensure 'updating' event catches it next
