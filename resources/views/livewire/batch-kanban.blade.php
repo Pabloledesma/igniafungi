@@ -108,6 +108,17 @@
                                 @endif
                             </div>
 
+                            <div class="mt-2 text-xs text-gray-500 border-t border-gray-100 pt-2 grid grid-cols-2 gap-2">
+                                <div class="flex items-center" title="Cantidad de unidades">
+                                    <span class="font-semibold text-gray-700 mr-1">{{ $batch->quantity }}</span>
+                                    <span>unidades</span>
+                                </div>
+                                <div class="flex items-center text-right justify-end" title="Peso por unidad">
+                                    <span class="font-semibold text-gray-700 mr-1">{{ $batch->bag_weight }}</span>
+                                    <span>kg</span>
+                                </div>
+                            </div>
+
                             @if($phase->slug === 'fruiting')
                                 <button wire:click="openTransitionModal({{ $batch->id }})"
                                     class="mt-2 text-green-600 hover:underline text-xs font-bold uppercase w-full text-left">
