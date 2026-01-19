@@ -44,6 +44,19 @@ class Batch extends Model
         'estimated_harvest_date' => 'date',
     ];
 
+    // Status Constants
+    const STATUS_ACTIVE = 'active';
+    const STATUS_COMPLETED = 'completed';
+    const STATUS_SEEDED = 'seeded';
+    const STATUS_DISCARDED = 'discarded';
+    const STATUS_CONTAMINATED = 'contaminated';
+    const STATUS_FINALIZED = 'finalized';
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ACTIVE);
+    }
+
     public function recipe(): BelongsTo
     {
         return $this->belongsTo(Recipe::class);

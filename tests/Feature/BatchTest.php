@@ -77,6 +77,7 @@ class BatchTest extends TestCase
             'strain_id' => $strain->id,
             'weigth_dry' => 10,
             'quantity' => 50,
+            'type' => 'bulk',
             'inoculation_date' => now(),
         ]);
 
@@ -97,6 +98,7 @@ class BatchTest extends TestCase
             'strain_id' => $strain->id,
             'weigth_dry' => 10,
             'quantity' => 50,
+            'type' => 'bulk',
             'inoculation_date' => now(),
         ]);
         // Verificamos que el código siga el patrón PLE-AAMMDD-XX
@@ -183,7 +185,8 @@ class BatchTest extends TestCase
             'recipe_id' => $recipe->id,
             'weigth_dry' => 40,
             'quantity' => 20,
-            'status' => 'preparation',
+            'status' => 'active',
+            'type' => 'bulk', // Explicitly set type
             'code' => 'TEST-001'
         ]);
 

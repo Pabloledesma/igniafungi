@@ -25,11 +25,11 @@ class KanbanFilterTest extends TestCase
         $user = User::factory()->create();
 
         // Batch 1: Matches Search "ABC", Strain A
-        $b1 = Batch::factory()->create(['code' => 'BATCH-ABC-001', 'strain_id' => $strainA->id, 'user_id' => $user->id]);
+        $b1 = Batch::factory()->create(['code' => 'BATCH-ABC-001', 'strain_id' => $strainA->id, 'user_id' => $user->id, 'status' => 'active']);
         $b1->phases()->attach($phase->id, ['started_at' => now(), 'finished_at' => null, 'user_id' => $user->id]);
 
         // Batch 2: Matches Strain B
-        $b2 = Batch::factory()->create(['code' => 'BATCH-XYZ-002', 'strain_id' => $strainB->id, 'user_id' => $user->id]);
+        $b2 = Batch::factory()->create(['code' => 'BATCH-XYZ-002', 'strain_id' => $strainB->id, 'user_id' => $user->id, 'status' => 'active']);
         $b2->phases()->attach($phase->id, ['started_at' => now(), 'finished_at' => null, 'user_id' => $user->id]);
 
         Livewire::test(BatchKanban::class)

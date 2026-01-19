@@ -58,7 +58,8 @@ class BatchCostTest extends TestCase
             'strain_id' => $strain->id,
             'quantity' => 10, // 10 unidades (bolsas)
             'weigth_dry' => 4, // 4kg seco
-            'status' => 'incubating',
+            'status' => 'active',
+            'type' => 'bulk', // Explicitly set type
             'inoculation_date' => now(),
         ]);
 

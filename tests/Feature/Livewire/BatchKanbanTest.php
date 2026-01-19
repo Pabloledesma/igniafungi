@@ -45,6 +45,7 @@ class BatchKanbanTest extends TestCase
             'weigth_dry' => 50,
             'inoculation_date' => now(),
             'status' => 'active',
+            'type' => 'bulk',
             // El código lo genera el Observer gracias a que quitamos WithoutModelEvents
         ]);
 

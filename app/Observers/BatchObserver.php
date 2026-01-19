@@ -237,6 +237,13 @@ class BatchObserver
     private function deductInventory(Batch $batch): void
     {
 
+        // 0. GUARD CLAUSE: Only deduct inventory for NEW ACTIVE batches.
+        // Historical batches (completed/finalized) should NOT affect current stock.
+        if ($batch->status !== 'active') {
+            Log::info("Lote {$batch->code}: Omitiendo descuento de inventario por ser histórico/no-activo (Status: {$batch->status}).");
+            return;
+        }
+
         // Forzamos la carga de la receta si no está presente
         $recipe = $batch->recipe()->with('supplies')->first();
 

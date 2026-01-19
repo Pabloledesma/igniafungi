@@ -53,7 +53,8 @@ class SupplyDiscountTest extends TestCase
             'strain_id' => $strain->id,
             'quantity' => 10,
             'weigth_dry' => 3.44, // Input clave
-            'status' => 'incubating',
+            'status' => 'active',
+            'type' => 'bulk', // Explicitly set type
             'inoculation_date' => now(),
         ]);
 

@@ -27,6 +27,25 @@ class BatchForm
                     ->extraAttributes(['x-data' => 'batchAutomation'])
                     ->columnSpanFull()
                     ->schema([
+                        \Filament\Forms\Components\Toggle::make('is_historical')
+                            ->label('¿Es un Registro Histórico?')
+                            ->helperText('Activa esto para registrar lotes antiguos sin afectar el inventario actual ni el tablero Kanban.')
+                            ->default(false)
+                            ->live()
+                            ->afterStateUpdated(function (Get $get, Set $set, $state) {
+                                if ($state) {
+                                    // Si se activa histórico, reseteamos el estado si era 'active'
+                                    // O simplemente lo seteamos a null para obligar a seleccionar
+                                    if ($get('status') === 'active') {
+                                        $set('status', null);
+                                    }
+                                } else {
+                                    // Si se desactiva, volvemos a 'active' por defecto
+                                    $set('status', 'active');
+                                }
+                            })
+                            ->columnSpanFull(),
+
                         Select::make('type')
                             ->label('Tipo de Lote')
                             ->options([
@@ -63,14 +82,12 @@ class BatchForm
                                     ->createOptionForm([
                                         TextInput::make('name')->required(),
                                     ])
-                                    ->createOptionUsing(fn($data) => $data['name']), // Solo si quieres guardar en una tabla aparte, si no, usa TextInput simple.
-                                // Para simplificar ahora, usemos TextInput o Select simple:
-                                // ->options(['Mijo' => 'Mijo', ...]) 
-
+                                    ->createOptionUsing(fn($data) => $data['name']),
                             ])
                             ->visible(fn(Get $get) => $get('type') === 'grain'),
+
                         Select::make('phase_id')
-                            ->label('Fase')
+                            ->label('Fase Inicial')
                             ->options(function (get $get) {
                                 $type = $get('type');
 
@@ -81,8 +98,9 @@ class BatchForm
 
                                 return Phase::orderBy('order')->pluck('name', 'id');
                             })
-                            ->required()
-                            ->dehydrated()
+                            ->required(fn(Get $get) => !$get('is_historical'))
+                            ->visible(fn(Get $get) => !$get('is_historical'))
+                            ->dehydrated() // Permitimos que viaje aunque esté oculto? No, solo si es visible o si lo forzamos. Mejor standard behavior.
                             ->live()
                             ->loadStateFromRelationshipsUsing(fn($record, $state) => $record?->current_phase?->id ?? $state)
                             ->rules([
@@ -94,12 +112,6 @@ class BatchForm
                                         // Validamos si hay cepa seleccionada en el formulario (estado actual)
                                         $strainId = $get('strain_id');
 
-                                        // Logica centralizada:
-                                        // Problema: canTransitionToInoculation usa $this->strain_id (DB).
-                                        // Aquí necesitamos validar lo que está en el FORMULARIO antes de guardar.
-                                        // Entonces replicamos la logica simple: !is_null($strainId)
-                                        // O instanciamos un modelo dummy? No, validación directa es más segura.
-                        
                                         if (!$strainId) {
                                             $fail('No es posible pasar a Inoculación sin asignar una Cepa.');
                                         }
@@ -107,14 +119,33 @@ class BatchForm
                                 },
                             ]),
                         Select::make('status')
-                            ->options([
-                                'active' => 'Activo',
-                                'contaminated' => 'Contaminado',
-                                'seeded' => 'Sembrado',
-                                'finalized' => 'Finalizado',
-                            ])
+                            ->label(fn(Get $get) => $get('is_historical') ? 'Estado Final' : 'Estado')
+                            ->options(function (Get $get) {
+                                $options = [
+                                    'active' => 'Activo',
+                                    'seeded' => 'Sembrado',
+                                    'contaminated' => 'Contaminado',
+                                    'finalized' => 'Finalizado / Agotado',
+                                    'discarded' => 'Descartado',
+                                ];
+
+                                // Si es histórico, no permitimos "Activo" para evitar descuento de inventario
+                                if ($get('is_historical')) {
+                                    unset($options['active']);
+                                }
+
+                                return $options;
+                            })
                             ->default('active')
-                            ->required(),
+                            ->visible(fn(Get $get) => $get('is_historical'))
+                            ->required(fn(Get $get) => $get('is_historical'))
+                            ->rules([
+                                fn(Get $get): \Closure => function (string $attribute, $value, \Closure $fail) use ($get) {
+                                    if ($get('is_historical') && $value === 'active') {
+                                        $fail('Un registro histórico no puede estar Activo (descontaría inventario). Seleccione otro estado.');
+                                    }
+                                },
+                            ]),
 
                         Select::make('strain_id') // Cepa / Genética
                             ->label('Cepa / Genética')

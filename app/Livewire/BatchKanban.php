@@ -305,8 +305,8 @@ class BatchKanban extends Component
                 ->with([
                     'batches' => function ($query) {
                         // Incluimos todos los lotes que tengan una fase activa (finished_at = null)
-                        // Eliminamos el filtro estricto de status ('active', etc) ya que la BD usa nombres de fases
                         $query->wherePivot('finished_at', null)
+                            ->active() // Filter by valid status
                             ->withCount('harvests');
                         if ($this->batchType) {
                             $query->where('type', $this->batchType);
