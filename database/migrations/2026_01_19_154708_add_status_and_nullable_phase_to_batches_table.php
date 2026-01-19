@@ -11,21 +11,13 @@ return new class extends Migration {
     public function up(): void
     {
         Schema::table('batches', function (Blueprint $table) {
-            // $table->string('status')->default('active')->after('phase_id'); // Column already exists in create_batches_table
-            // We just ensure phase_id is nullable. Modifying status default to 'active' might need dbal, 
-            // but we are handling it in Model Observer.
+            // $table->string('status')->default('active')->after('type'); // "phase_id" column does not exist!
 
-            // Check if we can change it to default active? 
-            // For now, let's just create the column if it doesn't exist (safety) or ignore.
             if (!Schema::hasColumn('batches', 'status')) {
-                $table->string('status')->default('active')->after('phase_id');
-            } else {
-                // If it exists, we might want to ensure it has default 'active'
-                // $table->string('status')->default('active')->change(); 
-                // Leaving commented to avoid SQLite issues if dbal is missing.
+                // If status doesn't exist, we add it. 
+                // Note: We cannot use 'after' phase_id because it doesn't exist. Using 'after' type or letting it append.
+                $table->string('status')->default('active');
             }
-            // Change phase_id to nullable
-            $table->unsignedBigInteger('phase_id')->nullable()->change();
         });
     }
 
@@ -35,8 +27,10 @@ return new class extends Migration {
     public function down(): void
     {
         Schema::table('batches', function (Blueprint $table) {
-            // $table->dropColumn('status'); // Do not drop, it belongs to original schema
-            // $table->unsignedBigInteger('phase_id')->nullable(false)->change(); // phase_id doesn't exist
+            // We do typically not drop columns in down() if they might have data, 
+            // but if we added it, we could drop it. 
+            // However, since we check Schema::hasColumn, we assume it might exist from previous migrations.
+            // Leaving empty for safety.
         });
     }
 };
