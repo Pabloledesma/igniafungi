@@ -34,7 +34,8 @@ class BatchLossForm
                 Select::make('phase_id')
                     ->relationship('phase', 'name')
                     ->label('Fase donde ocurrió')
-                    ->required(),
+                    ->required()
+                    ->disabled(fn($get) => $get('reason') === 'Legado / Histórico'), // Lock if historical
                 TextInput::make('quantity')
                     ->label('Cantidad de unidades perdidas')
                     ->required()
@@ -47,8 +48,10 @@ class BatchLossForm
                         'Falta de Humedad' => 'Falta de Humedad',
                         'Plagas' => 'Plagas (Mosquitos/Ácaros)',
                         'Error de Manejo' => 'Error de Manejo',
+                        'Legado / Histórico' => 'Legado / Histórico',
                     ])
-                    ->required(),
+                    ->required()
+                    ->reactive(), // Make reactive to trigger phase lock
                 Textarea::make('details')
                     ->label('Comentarios detallados')
                     ->placeholder('Describe qué se observó (ej: Trichoderma verde en la base)...')

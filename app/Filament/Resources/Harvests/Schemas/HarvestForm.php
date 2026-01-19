@@ -15,19 +15,34 @@ class HarvestForm
     {
         return $schema
             ->components([
+                \Filament\Forms\Components\Toggle::make('is_historical')
+                    ->label('Registro Histórico (Cosecha Antigua)')
+                    ->live()
+                    ->columnSpanFull()
+                    ->default(false),
                 Select::make('batch_id')
                     ->relationship(
                         name: 'batch',
                         titleAttribute: 'code',
-                        // FILTRO: Solo lotes de sustrato que NO estén finalizados
-                        modifyQueryUsing: fn(Builder $query) => $query
+                        // FILTRO: Dinámico según si es histórico
+                        modifyQueryUsing: fn(Builder $query, $get) => $query
                             ->where('type', 'bulk')
-                            ->where('status', '!=', 'finalized')
+                            ->when(
+                                $get('is_historical'),
+                                // Histórico: Cualquier estado EXCEPTO borrados (y quizás filtra por status != active, como pidió el usuario)
+                                // Usuario dijo: "Si is_historical es ON: Mostrar lotes donde status !== 'active'"
+                                fn($q) => $q->where('status', '!=', 'active'),
+                                // Normal: Solo activos (y no finalizados, para evitar errores en flujo normal)
+                                // El filtro original era status != finalized.
+                                // Usuario dijo: "Si is_historical es OFF: Mostrar lotes donde status === 'active'".
+                                fn($q) => $q->where('status', 'active')
+                            )
                     )
                     ->label('Lote a Cosechar')
                     ->searchable() // ¡Vital! Permite escribir para buscar
                     ->preload()    // Carga los primeros resultados rápido
-                    ->required(),
+                    ->required()
+                    ->live(),
                 \Filament\Forms\Components\Hidden::make('user_id')
                     ->default(auth()->id()),
                 TextInput::make('weight')

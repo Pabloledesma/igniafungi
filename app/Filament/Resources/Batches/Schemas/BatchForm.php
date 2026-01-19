@@ -147,9 +147,25 @@ class BatchForm
                                 },
                             ]),
 
+                        \Filament\Forms\Components\Placeholder::make('loss_creation_notice')
+                            ->hiddenLabel()
+                            ->content(function (Get $get) {
+                                return new \Illuminate\Support\HtmlString(
+                                    '<div class="text-xs text-warning-600 bg-warning-50 p-2 rounded dark:bg-warning-950 dark:text-warning-400">
+                                        ⚠️ Se creará automáticamente un registro de pérdida para las estadísticas de rendimiento.
+                                     </div>'
+                                );
+                            })
+                            ->visible(
+                                fn(Get $get) =>
+                                $get('is_historical') && in_array($get('status'), ['contaminated', 'discarded'])
+                            )
+                            ->columnSpanFull(),
+
                         Select::make('strain_id') // Cepa / Genética
                             ->label('Cepa / Genética')
                             ->relationship('strain', 'name')
+                            ->live() // For Code Preview
                             ->extraAttributes([
                                 'x-on:change' => 'updatePrefix($event.target.options[$event.target.selectedIndex].text)',
                             ])->visible(function (Get $get) {
@@ -169,6 +185,7 @@ class BatchForm
                             ->validationMessages([
                                 'required' => 'La fecha de inoculación es obligatoria para calcular las proyecciones de la cepa seleccionada.',
                             ])
+                            ->live() // Smart Code Generation
                             ->extraAttributes([
                                 'x-on:change' => 'updateDate($event.target.value)',
                             ])->visible(function (Get $get) {
@@ -184,7 +201,24 @@ class BatchForm
                             ->label('Código del Lote')
                             ->disabled() // No editable
                             ->dehydrated(false) // No lo enviamos en el request, el modelo se encarga
-                            ->visible(fn($record) => $record !== null), // Se muestra solo al editar
+                            ->visible(true) // Siempre visible para verificar
+                            ->placeholder(function (Get $get) {
+                                $strainId = $get('strain_id');
+                                $type = $get('type');
+                                $date = $get('inoculation_date');
+
+                                $prefix = 'SUB';
+                                if ($strainId) {
+                                    $strain = Strain::find($strainId);
+                                    $prefix = $strain ? strtoupper(substr($strain->name, 0, 3)) : '...';
+                                } elseif ($type === 'grain') {
+                                    $prefix = 'GRA';
+                                }
+
+                                $datePart = $date ? \Carbon\Carbon::parse($date)->format('dmy') : now()->format('dmy');
+
+                                return "{$prefix}-{$datePart}-?";
+                            }),
 
                         Hidden::make('user_id')
                             ->default(auth()->id()),

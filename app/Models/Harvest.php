@@ -16,11 +16,13 @@ class Harvest extends Model
         'harvest_date',
         'notes',
         'phase_id',
+        'is_historical',
         'user_id'
     ];
 
     protected $casts = [
-        'harvest_date' => 'date'
+        'harvest_date' => 'date',
+        'is_historical' => 'boolean',
     ];
 
 

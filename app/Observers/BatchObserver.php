@@ -64,6 +64,12 @@ class BatchObserver
             $this->setEstimatedHarvestDate($batch);
             $batch->saveQuietly(); // Persist the calculated date without triggering loop
         }
+
+        // --- AUTOMATIC HISTORICAL LOSS REGISTRATION ---
+        // Si el lote nace "muerto" (descartado/contaminado), registramos la pérdida inicial
+        if (in_array($batch->status, ['discarded', 'contaminated'])) {
+            $this->createHistoricalLossRecord($batch);
+        }
     }
 
     /**
@@ -90,6 +96,18 @@ class BatchObserver
 
             if (!str_contains($batch->observations, 'LOTE FINALIZADO')) {
                 $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
+            }
+        }
+
+        // --- SYNC HISTORICAL QUANTITY ---
+        if ($batch->isDirty('quantity')) {
+            // If we change the quantity of a historical contaminated batch, we likely want to update the loss record
+            // Logic: Find a single loss record categorized as 'Legado / Histórico'
+            $historicalLoss = $batch->losses()->where('reason', 'Legado / Histórico')->first();
+
+            if ($historicalLoss) {
+                $historicalLoss->update(['quantity' => $batch->quantity]);
+                Log::info("Sincronizada cantidad de pérdida histórica para Lote {$batch->code}: {$batch->quantity}");
             }
         }
 
@@ -129,6 +147,48 @@ class BatchObserver
                 }
             }
         }
+    }
+
+    /**
+     * Creates a BatchLoss record for historical batches initialized as failed.
+     */
+    private function createHistoricalLossRecord(Batch $batch): void
+    {
+        // 1. Determine Phase
+        // User requested 'Incubación Semilla' for grain, else general logic.
+        // We try to find a matching Phase.
+        $phaseName = ($batch->type === 'grain') ? 'Incubación' : 'Incubación'; // Ajustado a fases reales del sistema
+
+        $phase = \App\Models\Phase::where('name', 'like', "%{$phaseName}%")->first()
+            ?? \App\Models\Phase::orderBy('order')->first();
+
+        if (!$phase) {
+            Log::warning("No se pudo registrar pérdida histórica para Lote {$batch->code}: No hay fases en el sistema.");
+            return;
+        }
+
+        // 2. Reason
+        // "Motivo Principal" should be the categorization
+        $reason = 'Legado / Histórico';
+
+        // "Motivo Detallado" (details) comes from observations
+        $details = !empty($batch->observations)
+            ? $batch->observations
+            : 'Registro Histórico / Contaminación Inicial';
+
+        // 3. Create Loss
+        \App\Models\BatchLoss::create([
+            'batch_id' => $batch->id,
+            'phase_id' => $phase->id,
+            'quantity' => $batch->quantity,
+            'reason' => $reason,
+            'details' => $details . ". Original Date: " . ($batch->inoculation_date?->format('Y-m-d') ?? 'N/A'),
+            'user_id' => auth()->id() ?? $batch->user_id,
+            'created_at' => $batch->inoculation_date ?? now(),
+            'updated_at' => now(),
+        ]);
+
+        Log::info("Pérdida histórica registrada automáticamente para Lote {$batch->code}");
     }
 
     /**
@@ -199,9 +259,18 @@ class BatchObserver
             $prefix = $batch->type === 'grain' ? 'GRA' : 'SUB';
         }
 
-        $datePart = now()->format('dmy');
+        // Histórico: Si el estado NO es activo (es decir, completado, descartado, etc.) al crear
+        if ($batch->status !== 'active') {
+            // Opcional: Prefijo H- para históricos
+            // $prefix = "H-" . $prefix; 
+        }
 
-        // 2. Determinar el número correlativo
+        // 2. Determinar la fecha (Inoculation Date o Now)
+        // User requested: inoc_date if available. Format DMY (e.g. 100625) as legacy format
+        $dateSource = $batch->inoculation_date ?? now();
+        $datePart = $dateSource->format('dmy');
+
+        // 3. Determinar el número correlativo
         $nextNumber = 1;
 
         if ($keepNumber && $batch->code) {
@@ -222,13 +291,21 @@ class BatchObserver
         }
 
         // Método estándar: Buscamos el último consecutivo
-        $lastBatch = Batch::where('code', 'like', "{$prefix}-{$datePart}-%")
-            ->orderBy('id', 'desc')
-            ->first();
+        // SQLite no soporta SUBSTRING_INDEX, así que mejor obtenemos la lista y calculamos en PHP
+        // Dado que rara vez habrá mas de 10-20 lotes por día/cepa, esto es eficiente.
+        $codes = Batch::where('code', 'like', "{$prefix}-{$datePart}-%")
+            ->pluck('code');
 
-        if ($lastBatch) {
-            $parts = explode('-', $lastBatch->code);
-            $nextNumber = (int) end($parts) + 1;
+        if ($codes->isNotEmpty()) {
+            $maxNum = 0;
+            foreach ($codes as $code) {
+                $parts = explode('-', $code);
+                $num = (int) end($parts);
+                if ($num > $maxNum) {
+                    $maxNum = $num;
+                }
+            }
+            $nextNumber = $maxNum + 1;
         }
 
         return "{$prefix}-{$datePart}-{$nextNumber}";

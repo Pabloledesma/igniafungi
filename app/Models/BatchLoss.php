@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class BatchLoss extends Model
 {
-    protected $fillable = ['batch_id', 'phase_id', 'quantity', 'reason', 'user_id'];
+    protected $fillable = ['batch_id', 'phase_id', 'quantity', 'reason', 'details', 'user_id'];
 
     /**
      * Relación con el Lote
