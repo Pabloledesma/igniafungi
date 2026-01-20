@@ -44,6 +44,12 @@ class Harvest extends Model
     protected static function booted()
     {
         static::saving(function ($harvest) {
+            // Bypass for historical records or legitimate large harvests?
+            // For now, bypass only if explicitly historical to avoid disrupting current business rule.
+            if ($harvest->is_historical) {
+                return;
+            }
+
             if ($harvest->weight > 5) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
                     'weight' => ["Error de pesaje detectado ({$harvest->weight} kg). ¿Estás intentando registrar gramos? El sistema usa Kilos (ej: 0.5 para 500g)."]

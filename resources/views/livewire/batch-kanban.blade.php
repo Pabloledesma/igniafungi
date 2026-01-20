@@ -98,6 +98,14 @@
                                 </span>
                             @endif
 
+                            @if($batch->origin_code)
+                                <span
+                                    class="bg-gray-100 text-gray-600 text-[10px] px-1.5 py-0.5 rounded border border-gray-200 ml-1"
+                                    title="Origen genético">
+                                    <i class="fas fa-dna mr-0.5 text-xs"></i> {{ $batch->origin_code }}
+                                </span>
+                            @endif
+
                             <div class="mt-3 text-xs text-gray-600 flex items-center justify-between">
                                 <span>
                                     <i class="far fa-calendar-alt mr-1"></i>

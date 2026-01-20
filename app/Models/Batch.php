@@ -34,7 +34,9 @@ class Batch extends Model
         'observations',
         'production_cost',
         'expected_yield',
-        'estimated_harvest_date'
+        'estimated_harvest_date',
+        'is_historical',
+        'origin_code'
     ];
 
     public $phase_id;
@@ -42,6 +44,7 @@ class Batch extends Model
     protected $casts = [
         'inoculation_date' => 'date',
         'estimated_harvest_date' => 'date',
+        'is_historical' => 'boolean',
     ];
 
     // Status Constants
@@ -250,6 +253,18 @@ class Batch extends Model
     protected static function booted()
     {
         static::saving(function ($batch) {
+            // Bypass safety limits for historical data
+            if ($batch->is_historical) {
+                // Ensure type validation though?
+                // Probably yes, type must be valid.
+                if (!in_array($batch->type, ['grain', 'bulk'])) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'type' => ["El tipo de lote debe ser 'grain' o 'bulk'."]
+                    ]);
+                }
+                return;
+            }
+
             // Handbrake for Bag Weight
             if ($batch->bag_weight > self::$MAX_BAG_WEIGHT_KG) {
                 throw \Illuminate\Validation\ValidationException::withMessages([

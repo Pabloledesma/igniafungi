@@ -220,6 +220,12 @@ class BatchForm
                                 return "{$prefix}-{$datePart}-?";
                             }),
 
+                        TextInput::make('origin_code')
+                            ->label('Origen (CL / Petri)')
+                            ->placeholder('Ej: CL-001, PP-05')
+                            ->datalist(fn() => \App\Models\Batch::distinct()->whereNotNull('origin_code')->pluck('origin_code'))
+                            ->maxLength(255),
+
                         Hidden::make('user_id')
                             ->default(auth()->id()),
 
