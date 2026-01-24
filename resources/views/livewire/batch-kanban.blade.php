@@ -132,7 +132,7 @@
                                     class="mt-2 text-green-600 hover:underline text-xs font-bold uppercase w-full text-left">
                                     Cosechar / Finalizar
                                 </button>
-                            @else
+                            @elseif(!($batch->type === 'grain' && $phase->slug === 'incubation'))
                                 <button wire:click="openTransitionModal({{ $batch->id }})"
                                     class="mt-2 text-blue-600 hover:underline text-xs font-bold uppercase w-full text-left">
                                     Avanzar →
