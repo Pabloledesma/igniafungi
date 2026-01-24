@@ -18,6 +18,16 @@ class RecipeForm
                     ->label('Nombre de la Receta')
                     ->required(),
 
+                Select::make('type')
+                    ->label('Tipo de Receta')
+                    ->options([
+                        'substrate' => 'Sustrato',
+                        'grain' => 'Grano',
+                        'agar' => 'Agar',
+                        'liquid' => 'Cultura Líquida',
+                    ])
+                    ->required(),
+
                 TextInput::make('dry_weight_ratio')
                     ->label('Ratio de Peso Seco')
                     ->helperText('Representa el porcentaje de sólidos. Ej: 0.40 para 40%.')
@@ -54,6 +64,7 @@ class RecipeForm
                     ->columns(3)
                     ->addActionLabel('Agregar Insumo a la Receta')
                     ->defaultItems(1)
+                    ->columnSpanFull()
             ]);
     }
 }
