@@ -44,7 +44,7 @@
                 @if(count($strains) > 0)
                     <div>
                         <label class="block text-sm font-medium text-gray-700">Seleccionar Genética (Cepa)</label>
-                        <select wire:model="strainId"
+                        <select wire:model.live="strainId"
                             class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <option value="">-- Elige una Cepa --</option>
                             @foreach($strains as $strain)
@@ -53,6 +53,49 @@
                         </select>
                         @error('strainId') <span class="text-xs text-red-500">{{ $message }}</span> @enderror
                     </div>
+
+                    {{-- Selector de Inoculo (Seed Batch) --}}
+                    @if($strainId)
+                        @if($availableInoculumBatches && count($availableInoculumBatches) > 0)
+                            <div class="mt-4 border-t pt-4 border-gray-100">
+                                <label for="inoculumBatchId" class="block text-sm font-medium text-gray-700">Lote de Semilla
+                                    (Origen)</label>
+                                <select wire:model.live="inoculumBatchId" id="inoculumBatchId"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">-- Seleccionar Semilla --</option>
+                                    @foreach($availableInoculumBatches as $seedBatch)
+                                        <option value="{{ $seedBatch['id'] }}">
+                                            {{-- Formatted Label with Date & Qty --}}
+                                            {{ $seedBatch['formatted_label'] ?? ($seedBatch['code'] . ' - ' . \Carbon\Carbon::parse($seedBatch['inoculation_date'])->format('d/m') . ' - ' . $seedBatch['quantity'] . ' u') }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <p class="text-[10px] text-gray-500 mt-1">FIFO: Se muestran primero los lotes más antiguos.</p>
+                                @error('inoculumBatchId') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+
+                            <div class="mt-4">
+                                <label for="inoculumRatio" class="block text-sm font-medium text-gray-700">% de Inoculación</label>
+                                <div class="mt-1 relative rounded-md shadow-sm">
+                                    <input type="number" wire:model.live="inoculumRatio" id="inoculumRatio"
+                                        class="focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-12 rounded-md border-gray-300 shadow-sm"
+                                        placeholder="10">
+                                    <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                                        <span class="text-gray-500 sm:text-sm">%</span>
+                                    </div>
+                                </div>
+                                @error('inoculumRatio') <span class="text-red-500 text-xs">{{ $message }}</span> @enderror
+                            </div>
+                        @else
+                            {{-- Warning for Empty List --}}
+                            <div class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md flex items-start">
+                                <i class="fas fa-exclamation-circle text-red-600 mt-0.5 mr-2"></i>
+                                <span class="text-sm text-red-700 font-semibold">
+                                    No hay semilla disponible para esa cepa (mínimo 20 días de incubación).
+                                </span>
+                            </div>
+                        @endif
+                    @endif
                 @endif
 
                 <div>
@@ -72,10 +115,24 @@
                         Registrar Cosecha
                     </button>
                 @else
-                    <button wire:click="confirmTransition"
-                        class="px-4 py-2 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700">
-                        Confirmar Avance
-                    </button>
+                    {{-- Disable logic: If Next Phase is Inoculation, Strain is Selected, BUT no Seed available -> Disable --}}
+                    @php
+                        $disableAdvance = false;
+                        if ($nextPhaseId && \App\Models\Phase::find($nextPhaseId)?->slug === 'inoculation') {
+                            if ($strainId && count($availableInoculumBatches) === 0) {
+                                $disableAdvance = true;
+                            }
+                        }
+                    @endphp
+                    <div class="flex flex-col items-end">
+                        <button wire:click="confirmTransition" @if($disableAdvance) disabled @endif
+                            class="px-4 py-2 text-white rounded-lg font-bold transition-colors {{ $disableAdvance ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700' }}">
+                            Confirmar Avance
+                        </button>
+                        @if($disableAdvance)
+                            <p class="text-xs text-red-500 mt-1">Acción bloqueada: falta semilla.</p>
+                        @endif
+                    </div>
                 @endif
             </div>
         </div>
@@ -189,7 +246,7 @@
                 <button wire:click="closeDiscard" class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg">Cancelar</button>
                 <button wire:click="processDiscard"
                     class="px-4 py-2 text-white rounded-lg font-bold transition-all
-                        {{ $isTotalDiscard ? 'bg-black hover:bg-red-700 animate-bounce' : 'bg-red-600 hover:bg-red-700' }}">
+                                        {{ $isTotalDiscard ? 'bg-black hover:bg-red-700 animate-bounce' : 'bg-red-600 hover:bg-red-700' }}">
                     {{ $isTotalDiscard ? '¡SÍ, DESCARTAR TODO!' : 'Confirmar Descarte' }}
                 </button>
             </div>

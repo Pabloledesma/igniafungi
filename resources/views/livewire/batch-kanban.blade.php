@@ -106,13 +106,20 @@
                                 </span>
                             @endif
 
-                            <div class="mt-3 text-xs text-gray-600 flex items-center justify-between">
-                                <span>
-                                    <i class="far fa-calendar-alt mr-1"></i>
-                                    {{ round($batch->days_in_current_phase) }} días
-                                </span>
-                                @if($batch->type === 'grain')
-                                    <span class="text-amber-600 font-bold text-[10px] uppercase tracking-wide">GRANO</span>
+                            <div class="mt-3 text-xs text-gray-600">
+                                <div class="flex items-center justify-between">
+                                    <span title="Días en fase actual">
+                                        <i class="far fa-calendar-alt mr-1"></i>
+                                        {{ round($batch->days_in_current_phase) }} días
+                                    </span>
+                                    @if($batch->type === 'grain')
+                                        <span class="text-amber-600 font-bold text-[10px] uppercase tracking-wide">GRANO</span>
+                                    @endif
+                                </div>
+                                @if($batch->inoculation_date)
+                                    <div class="mt-1 text-[10px] text-gray-500" title="Fecha de Inoculación">
+                                        <span class="font-semibold">Inoc:</span> {{ $batch->inoculation_date->format('d/m/Y') }}
+                                    </div>
                                 @endif
                             </div>
 

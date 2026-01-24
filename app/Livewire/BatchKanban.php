@@ -47,6 +47,11 @@ class BatchKanban extends Component
     public $search = '';
     public $selectedStrain = '';
 
+    // Propiedades de Inoculación
+    public $inoculumBatchId;
+    public $inoculumRatio = 10; // Default 10%
+    public $availableInoculumBatches = [];
+
     public function mount()
     {
         $this->harvestDate = now()->format('Y-m-d');
@@ -172,6 +177,14 @@ class BatchKanban extends Component
                 return;
             }
 
+            // Validar Seed Batch si se seleccionó
+            if ($this->inoculumBatchId) {
+                $this->validate([
+                    'inoculumBatchId' => 'exists:batches,id',
+                    'inoculumRatio' => 'required|numeric|min:5|max:20',
+                ]);
+            }
+
             // Si pasó, guardamos la cepa si es nueva
             if ($batch->isDirty('strain_id')) {
                 $batch->save();
@@ -182,6 +195,43 @@ class BatchKanban extends Component
                 $batch->inoculation_date = now();
                 $batch->save();
             }
+
+            // --- INVENTORY DEDUCTION (Specifc Seed Batch) ---
+            if ($this->inoculumBatchId) {
+                $inoculumBatch = Batch::find($this->inoculumBatchId);
+                if ($inoculumBatch) {
+                    $targetWetWeight = $batch->initial_wet_weight;
+                    $ratio = $this->inoculumRatio;
+
+                    // Calculation: Weight needed = TargetWet * (Ratio/100)
+                    $neededWeight = $targetWetWeight * ($ratio / 100);
+
+                    // Convert to Units of Inoculum (Bags/Jars)
+                    $seedBagWeight = $inoculumBatch->bag_weight > 0 ? $inoculumBatch->bag_weight : $inoculumBatch->initial_wet_weight / max($inoculumBatch->quantity, 1);
+
+                    if ($seedBagWeight > 0) {
+                        $unitsToDeduct = $neededWeight / $seedBagWeight;
+
+                        // VALIDATION: Check Stock
+                        if ($inoculumBatch->quantity < $unitsToDeduct) {
+                            $this->addError('inoculumBatchId', "Stock de semilla insuficiente para el % de siembra requerido. (Requerido: " . round($unitsToDeduct, 2) . " u. Disponible: {$inoculumBatch->quantity} u)");
+                            return;
+                        }
+
+                        // Deduct
+                        $inoculumBatch->decrement('quantity', $unitsToDeduct);
+
+                        // Observations
+                        $inoculumBatch->observations .= "\n- [Uso Semilla] Usado para inocular lote {$batch->code}. {$unitsToDeduct} u ({$neededWeight}kg) descontados.";
+                        $inoculumBatch->saveQuietly();
+
+                        // Specific Log Format
+                        $batch->observations .= "\n- Sembrado con {$ratio}% de semilla del lote {$inoculumBatch->code}.";
+                        $batch->saveQuietly();
+                    }
+                }
+            }
+
         }
 
         $batch->transitionTo($nextPhase, $this->notes);
@@ -269,7 +319,47 @@ class BatchKanban extends Component
 
     public function close()
     {
-        $this->reset(['selectedBatchId', 'showModal', 'notes', 'nextPhaseId', 'harvestWeight', 'shouldFinishBatch', 'strainId', 'strains']);
+        $this->reset(['selectedBatchId', 'showModal', 'notes', 'nextPhaseId', 'harvestWeight', 'shouldFinishBatch', 'strainId', 'strains', 'inoculumBatchId', 'inoculumRatio', 'availableInoculumBatches']);
+    }
+
+    public function updatedStrainId($value)
+    {
+        if (!$value) {
+            $this->availableInoculumBatches = [];
+            return;
+        }
+
+        $batches = Batch::query()
+            ->where('strain_id', $value)
+            ->where('type', 'grain') // Semilla
+            ->where('status', 'active') // Filter 2: Active
+            ->whereNotNull('inoculation_date')
+            // Filter 3: Inoculation Date <= 20 days ago (Mature)
+            ->where('inoculation_date', '<=', now()->subDays(20))
+            ->whereHas('phases', function ($q) {
+                // Filter 4: Phase 'Incubación' (Active)
+                $q->where('slug', 'incubation')
+                    ->whereNull('finished_at');
+            })
+            ->orderBy('inoculation_date', 'asc') // FIFO
+            ->get()
+            ->map(function ($batch) {
+                // Display: Date + Days Elapsed + Quantity
+                $days = $batch->inoculation_date->diffInDays(now());
+                $batch->formatted_label = "{$batch->code} - {$batch->inoculation_date->format('d/m/Y')} ({$days}d) - {$batch->quantity} u";
+                return $batch;
+            });
+
+        $this->availableInoculumBatches = $batches;
+
+        if ($batches->isEmpty()) {
+            \Filament\Notifications\Notification::make()
+                ->warning()
+                ->title('Semilla no disponible')
+                ->body('No hay lotes de semilla de esta cepa con más de 20 días de incubación.')
+                ->persistent()
+                ->send();
+        }
     }
 
     public function closeDiscard()

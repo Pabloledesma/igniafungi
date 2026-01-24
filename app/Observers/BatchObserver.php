@@ -147,6 +147,12 @@ class BatchObserver
                 }
             }
         }
+
+
+        // --- NEW LOGIC: Delayed Spawn Deduction ---
+        if ($batch->isDirty('strain_id') && $batch->strain_id && !$batch->getOriginal('strain_id')) {
+            $this->deductSpawnFromUpdate($batch);
+        }
     }
 
     /**
@@ -360,6 +366,14 @@ class BatchObserver
             }
 
             if ($amountToDeduct > 0) {
+                // --- LAZY DEDUCTION LOGIC ---
+                // If the supply seems to be "Spawn/Semilla" and we don't have a strain yet, SKIP IT.
+                // We will deduct it later when the strain is assigned (in updating event).
+                if (!$batch->strain_id && (stripos($supply->name, 'Semilla') !== false || stripos($supply->name, 'Inoculo') !== false)) {
+                    $batch->observations .= "\n- [Info] Deducción de {$supply->name} pospuesta hasta asignación de cepa.";
+                    continue;
+                }
+
                 // USAR decrement() directamente en la base de datos
                 $supply->decrement('quantity', $amountToDeduct);
 
@@ -405,5 +419,65 @@ class BatchObserver
         $batch->observations .= "\n- [Financiero] Costo Estimado: $" . number_format($estimatedCost, 0);
 
         $batch->saveQuietly();
+    }
+
+    /**
+     * Handles the specific spawn deduction when a strain is assigned to an existing batch.
+     */
+    private function deductSpawnFromUpdate(Batch $batch): void
+    {
+        $recipe = $batch->recipe()->with('supplies')->first();
+
+        if (!$recipe)
+            return;
+
+        // Calculate Dry Weight again 
+        $wetWeight = $batch->initial_wet_weight;
+        $dryRatio = $recipe->dry_weight_ratio ?? 0.40;
+        $dryWeight = $wetWeight * $dryRatio;
+
+        foreach ($recipe->supplies as $supply) {
+            // Find the "Placeholder" spawn supply
+            if (stripos($supply->name, 'Semilla') !== false || stripos($supply->name, 'Inoculo') !== false) {
+
+                // Calculate Amount based on the Placeholder's rule
+                $amountToDeduct = 0;
+                if ($supply->pivot->calculation_mode === 'percentage') {
+                    $amountToDeduct = $dryWeight * ($supply->pivot->value / 100);
+                } elseif ($supply->pivot->calculation_mode === 'fixed_per_unit') {
+                    $amountToDeduct = $supply->pivot->value * $batch->quantity;
+                }
+
+                if ($amountToDeduct <= 0)
+                    continue;
+
+                // Ensure we have the strain model
+                $strain = $batch->strain;
+                if (!$strain && $batch->strain_id) {
+                    $strain = \App\Models\Strain::find($batch->strain_id);
+                }
+
+                if (!$strain) {
+                    Log::warning("Batch {$batch->code}: Strain ID {$batch->strain_id} set but Strain model not found.");
+                    continue;
+                }
+
+                // Naming convention: "Semilla {StrainName}"
+                $strainName = trim($strain->name);
+                $specificName = "Semilla {$strainName}";
+
+                Log::info("Intento de deducción diferida: Buscando '{$specificName}' para reemplazar '{$supply->name}'");
+
+                $specificSupply = \App\Models\Supply::where('name', 'LIKE', "%{$specificName}%")->first();
+
+                if ($specificSupply) {
+                    $specificSupply->decrement('quantity', $amountToDeduct);
+                    $batch->observations .= "\n- [Insumo Diferido] {$specificSupply->name}: " . round($amountToDeduct, 4) . " {$specificSupply->unit} descontados (vía {$supply->name}).";
+                } else {
+                    $batch->observations .= "\n- [Alerta] No se encontró el insumo específico '{$specificName}'. No se descontó inventario para la semilla.";
+                    Log::warning("Batch {$batch->code}: No specific spawn found for '{$specificName}'.");
+                }
+            }
+        }
     }
 }
