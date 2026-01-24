@@ -52,6 +52,7 @@ class RecipeForm
                                 'percentage' => 'Porcentaje (%) sobre peso seco',
                                 'fixed_per_unit' => 'Unidades fijas por cada bolsa/frasco',
                             ])
+                            ->default('percentage')
                             ->required()
                             ->live(),
 

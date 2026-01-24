@@ -18,7 +18,7 @@ class BatchFinancialReport extends BaseWidget
         // Asumiendo un precio de venta promedio de $40.000 COP por kilo seco (o ajusta según tu lógica)
         // O si tienes el precio en el producto vinculado
         // Aquí haremos un cálculo simple: Peso Seco Total * Precio Promedio
-        $totalDryWeight = Batch::sum('weigth_dry');
+        $totalDryWeight = Batch::sum('initial_wet_weight');
         $averageSalePrice = 40000; // Ejemplo: $40.000 por Kg
         $estimatedRevenue = $totalDryWeight * $averageSalePrice;
 
