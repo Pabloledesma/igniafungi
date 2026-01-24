@@ -14,9 +14,17 @@ class RecipeForm
     {
         return $schema
             ->components([
-               TextInput::make('name')
-                ->label('Nombre de la Receta')
-                ->required(),
+                TextInput::make('name')
+                    ->label('Nombre de la Receta')
+                    ->required(),
+
+                TextInput::make('dry_weight_ratio')
+                    ->label('Ratio de Peso Seco')
+                    ->helperText('Representa el porcentaje de sólidos. Ej: 0.40 para 40%.')
+                    ->numeric()
+                    ->default(0.40)
+                    ->step(0.01)
+                    ->required(),
 
                 Repeater::make('recipeSupplies') // Debe coincidir con la relación en el modelo Recipe
                     ->relationship('recipeSupplies') // Filament detecta automáticamente la tabla pivote
@@ -38,10 +46,10 @@ class RecipeForm
                             ->live(),
 
                         TextInput::make('value')
-                            ->label(fn (Get $get) => $get('calculation_mode') === 'percentage' ? 'Porcentaje' : 'Cantidad por Unidad')
+                            ->label(fn(Get $get) => $get('calculation_mode') === 'percentage' ? 'Porcentaje' : 'Cantidad por Unidad')
                             ->numeric()
                             ->required()
-                            ->suffix(fn (Get $get) => $get('calculation_mode') === 'percentage' ? '%' : 'u.'),
+                            ->suffix(fn(Get $get) => $get('calculation_mode') === 'percentage' ? '%' : 'u.'),
                     ])
                     ->columns(3)
                     ->addActionLabel('Agregar Insumo a la Receta')

@@ -23,7 +23,7 @@ class BatchFactory extends Factory
             'strain_id' => null,
             'user_id' => User::factory(),
             'code' => null,
-            'weigth_dry' => $this->faker->randomFloat(2, 5, 45),
+            'initial_wet_weight' => $this->faker->randomFloat(2, 5, 45),
             'inoculation_date' => null,
             'quantity' => $this->faker->numberBetween(20, 50),
             'status' => 'preparation',

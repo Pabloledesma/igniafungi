@@ -85,9 +85,9 @@ class ListBatches extends ListRecords
                             $reason = $row[6] ?? null;
                             $harvestYield = (float) str_replace(',', '.', $row[7] ?? 0);
                             $harvestDateInput = $row[8] ?? null;
-                            $observations = $row[9] ?? null;
-                            $originCode = $row[10] ?? null;
-                            $containerType = $row[11] ?? null;
+                            $observations = !empty($row[9]) ? $row[9] : null;
+                            $originCode = !empty($row[10]) ? $row[10] : null;
+                            $containerType = !empty($row[11]) ? $row[11] : null;
 
                             // fwrite(STDERR, "Processing Row $rowNumber: $strainInput\n");
         
@@ -126,7 +126,7 @@ class ListBatches extends ListRecords
                                     'status' => $status,
                                     'inoculation_date' => $inocDate,
                                     'is_historical' => true,
-                                    'weigth_dry' => $quantity * $bagWeight * 0.4, // Estimate? Or make nullable. dry weight is required.
+                                    'initial_wet_weight' => $quantity * $bagWeight * 0.4, // Estimate? Or make nullable. dry weight is required.
                                     'observations' => $observations,
                                     'origin_code' => $originCode,
                                     'container_type' => $containerType,

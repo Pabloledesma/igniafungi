@@ -229,9 +229,9 @@ class BatchForm
                         Hidden::make('user_id')
                             ->default(auth()->id()),
 
-                        TextInput::make('weigth_dry')
-                            ->label('Peso en SECO (kg)')
-                            ->helperText(fn($state) => $state ? 'Procesando ' . number_format($state * 1000) . ' gramos de sustrato.' : 'Vital para calcular la eficiencia. Solo materia seca.')
+                        TextInput::make('initial_wet_weight')
+                            ->label('Peso Inicial (Húmedo)')
+                            ->helperText(fn($state) => $state ? 'Input: ' . $state . 'kg. El sistema calculará la materia seca según la receta.' : 'Ingrese el peso total húmedo del lote (ej: peso del saco).')
                             ->numeric()
                             ->live(onBlur: true)
                             ->afterStateUpdated(function ($state) {

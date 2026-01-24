@@ -42,7 +42,7 @@ class BatchKanbanTest extends TestCase
             'strain_id' => $strain->id,
             'recipe_id' => $recipe->id,
             'quantity' => 100,
-            'weigth_dry' => 50,
+            'initial_wet_weight' => 50,
             'inoculation_date' => now(),
             'status' => 'active',
             'type' => 'bulk',

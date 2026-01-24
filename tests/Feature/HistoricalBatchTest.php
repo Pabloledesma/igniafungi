@@ -49,7 +49,7 @@ class HistoricalBatchTest extends TestCase
             'user_id' => $user->id,
             'type' => 'bulk',
             'quantity' => 10,
-            'weigth_dry' => 5,
+            'initial_wet_weight' => 5,
             'status' => 'completed',
             'bag_weight' => 2.5
             // 'phase_id' => null // Not in fillable, ignored by create anyway
@@ -96,7 +96,7 @@ class HistoricalBatchTest extends TestCase
             'recipe_id' => $recipe->id,
             'type' => 'bulk',
             'quantity' => 10, // Should deduct 10kg if it was active
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'status' => 'seeded', // HISTORICAL
             'phase_id' => null,
             'bag_weight' => 1
@@ -138,7 +138,7 @@ class HistoricalBatchTest extends TestCase
             'recipe_id' => $recipe->id,
             'type' => 'bulk',
             'quantity' => 10, // Should deduct 10kg
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'status' => 'active',
             'phase_id' => $incubation->id,
             'bag_weight' => 1
@@ -164,7 +164,7 @@ class HistoricalBatchTest extends TestCase
             'user_id' => $user->id,
             'type' => 'bulk',
             'quantity' => 15,
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'status' => 'contaminated', // Trigger status
             'observations' => 'Moho Verde',
             'inoculation_date' => now()->subDays(10), // Past date
@@ -208,7 +208,7 @@ class HistoricalBatchTest extends TestCase
             'user_id' => $user->id,
             'type' => 'bulk',
             'quantity' => 10,
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'status' => 'active',
             'inoculation_date' => $date, // Smart Code Trigger
             'bag_weight' => 1
@@ -224,7 +224,7 @@ class HistoricalBatchTest extends TestCase
             'user_id' => $user->id,
             'type' => 'bulk',
             'quantity' => 10,
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'status' => 'active',
             'inoculation_date' => $date, // Same date
             'bag_weight' => 1

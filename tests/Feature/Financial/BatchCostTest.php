@@ -57,22 +57,24 @@ class BatchCostTest extends TestCase
             'recipe_id' => $recipe->id,
             'strain_id' => $strain->id,
             'quantity' => 10, // 10 unidades (bolsas)
-            'weigth_dry' => 4, // 4kg seco
+            'initial_wet_weight' => 10, // 10kg húmedo * 0.4 ratio = 4kg seco
             'status' => 'active',
             'type' => 'bulk', // Explicitly set type
             'inoculation_date' => now(),
         ]);
 
         // 3. Assert
-        // Cálculo Esperado:
-        // Peso Total Hidratado = 10 kg
+        // Cálculo Esperado (Nueva Lógica con Ratio):
+        // Peso Húmedo = 10 kg
+        // Ratio = 0.4 (Default)
+        // Peso Seco Base = 4 kg
 
-        // Consumo Aserrín: 10kg * 40% = 4kg. Costo: 4 * 1000 = $4000
-        // Consumo Agua: 10kg * 60% = 6kg. Costo: 6 * 50 = $300
+        // Consumo Aserrín: 4kg (Seco) * 40% = 1.6kg. Costo: 1.6 * 1000 = $1600
+        // Consumo Agua: 4kg (Seco) * 60% = 2.4kg. Costo: 2.4 * 50 = $120
         // Consumo Bolsas: 1 bolsa/unidad * 10 unidades = 10 bolsas. Costo: 10 * 200 = $2000
 
-        // Costo Total = 4000 + 300 + 2000 = 6300
+        // Costo Total = 1600 + 120 + 2000 = 3720
 
-        $this->assertEquals(6300, $batch->production_cost, "El costo de producción calculado ({$batch->production_cost}) no coincide con el esperado (6300).");
+        $this->assertEquals(3720, $batch->production_cost, "El costo de producción calculado ({$batch->production_cost}) no coincide con el esperado (3720).");
     }
 }

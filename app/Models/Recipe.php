@@ -10,7 +10,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 class Recipe extends Model
 {
     use HasFactory;
-    protected $fillable = ['name', 'type'];
+    protected $fillable = ['name', 'type', 'dry_weight_ratio'];
+
+    protected $casts = [
+        'dry_weight_ratio' => 'float',
+    ];
 
     public function supplies(): BelongsToMany
     {
@@ -36,8 +40,10 @@ class Recipe extends Model
             $consumedQuantity = 0;
 
             if ($mode === 'percentage') {
-                // El value es porcentaje del peso total
-                $consumedQuantity = ($totalHydratedWeight * $value) / 100;
+                // El value es porcentaje del peso SECO
+                $ratio = $this->dry_weight_ratio ?? 0.40;
+                $dryWeight = $totalHydratedWeight * $ratio;
+                $consumedQuantity = ($dryWeight * $value) / 100;
             } elseif ($mode === 'fixed_per_unit') {
                 // El value es cantidad fija por unidad de lote
                 $consumedQuantity = $value * $units;

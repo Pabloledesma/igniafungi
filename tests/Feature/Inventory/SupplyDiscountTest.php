@@ -34,7 +34,11 @@ class SupplyDiscountTest extends TestCase
         // Receta Nanakati (Simulada)
         // Secos: 43% (Aserrín 24% + Salvado 19%)
         // Agua: 57%
-        $recipe = Recipe::factory()->create(['name' => 'Receta Nanakati']);
+        // Receta Nanakati params
+        $recipe = Recipe::factory()->create([
+            'name' => 'Receta Nanakati',
+            'dry_weight_ratio' => 0.43
+        ]);
 
         $recipe->supplies()->attach([
             $sawdust->id => ['value' => 24, 'calculation_mode' => 'percentage'],
@@ -45,28 +49,31 @@ class SupplyDiscountTest extends TestCase
         $strain = Strain::factory()->create();
 
         // 2. Act
-        // Batch con 3.44 kg de peso seco
-        // Total esperado = 3.44 / 0.43 = 8 kg de sustrato húmedo total
+        // Batch con 8.6 kg de peso húmedo
+        // Ratio: 0.43 -> Peso Seco: 3.698 kg
         $batch = Batch::create([
             'user_id' => $user->id,
             'recipe_id' => $recipe->id,
             'strain_id' => $strain->id,
             'quantity' => 10,
-            'weigth_dry' => 3.44, // Input clave
+            'initial_wet_weight' => 8.6,
             'status' => 'active',
             'type' => 'bulk', // Explicitly set type
             'inoculation_date' => now(),
         ]);
 
         // 3. Assert
-        // Descuento Aserrín esperado: 8 kg * 24% = 1.92 kg
-        // Stock final Aserrín: 100 - 1.92 = 98.08
+        // Nueva Fórmula: (Wet * Ratio) * (Perc / 100)
+        // Dry Mass: 3.698
+        // Descuento Aserrín: 3.698 * 24% = 0.88752
+        // Stock final Aserrín: 100 - 0.88752 = 99.11248
 
         $sawdust->refresh();
-        $this->assertEquals(98.08, $sawdust->quantity, "El descuento de Aserrín fue incorrecto. Se esperaba 98.08, se encontró {$sawdust->quantity}");
+        $this->assertEquals(99.11248, $sawdust->quantity, "El descuento de Aserrín fue incorrecto.");
 
-        // Verificación opcional de Salvado (8 * 19% = 1.52) -> 50 - 1.52 = 48.48
+        // Descuento Salvado: 3.698 * 19% = 0.70262
+        // Stock final Salvado: 50 - 0.70262 = 49.29738
         $bran->refresh();
-        $this->assertEquals(48.48, $bran->quantity, "El descuento de Salvado fue incorrecto.");
+        $this->assertEquals(49.29738, $bran->quantity, "El descuento de Salvado fue incorrecto.");
     }
 }

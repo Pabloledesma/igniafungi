@@ -329,25 +329,18 @@ class BatchObserver
             return;
         }
 
-        // 1. CALCULAR PESO TOTAL HIDRATADO
-        // El weight_dry es solo la parte seca (ej: 43%). Necesitamos el 100% para deducir correctamente el Agua y los demás.
-        $dryPercentageSum = 0;
+        // 1. CALCULAR PESO SECO (Nuevo Modelo)
+        // El batch->initial_wet_weight ahora representa el PESO HÚMEDO TOTAL (Input usuario)
+        $wetWeight = $batch->initial_wet_weight;
+        $dryRatio = $recipe->dry_weight_ratio ?? 0.40; // Default 40%
 
-        foreach ($recipe->supplies as $supply) {
-            if ($supply->pivot->calculation_mode === 'percentage' && stripos($supply->name, 'Agua') === false) {
-                $dryPercentageSum += $supply->pivot->value;
-            }
-        }
+        // Peso Sólido (Materia Seca)
+        $dryWeight = $wetWeight * $dryRatio;
 
-        // Evitar división por cero
-        $totalHydratedWeight = ($dryPercentageSum > 0)
-            ? $batch->weigth_dry / ($dryPercentageSum / 100)
-            : $batch->weigth_dry;
-
-        Log::info("Cálculo de inventario:", [
-            'peso_seco' => $batch->weigth_dry,
-            'suma_porcentajes_secos' => $dryPercentageSum,
-            'peso_total_calculado' => $totalHydratedWeight
+        Log::info("Cálculo de inventario (Nuevo Modelo):", [
+            'peso_humedo_input' => $wetWeight,
+            'ratio_solidos' => $dryRatio,
+            'masa_seca_calculada' => $dryWeight
         ]);
 
         foreach ($recipe->supplies as $supply) {
@@ -355,24 +348,27 @@ class BatchObserver
             $mode = $supply->pivot->calculation_mode;
             $value = $supply->pivot->value;
 
-            // Log de depuración interna para ver si los valores del pivote existen
-            /*   Log::info("Procesando insumo: {$supply->name}", [
-                   'modo' => $mode,
-                   'valor_receta' => $value
-               ]); */
+            // Fórmula solicitada: (Peso Total Húmedo * dry_weight_ratio) * (Porcentaje del Insumo / 100)
+            // Que equivale a: $dryWeight * ($value / 100)
 
-            $amountToDeduct = ($mode === 'percentage')
-                ? ($totalHydratedWeight * $value) / 100
-                : $value * $batch->quantity;
+            $amountToDeduct = 0;
+
+            if ($mode === 'percentage') {
+                $amountToDeduct = $dryWeight * ($value / 100);
+            } elseif ($mode === 'fixed_per_unit') {
+                $amountToDeduct = $value * $batch->quantity;
+            }
 
             if ($amountToDeduct > 0) {
                 // USAR decrement() directamente en la base de datos
-                // Esto es más seguro y evita problemas de concurrencia
                 $supply->decrement('quantity', $amountToDeduct);
 
                 $batch->observations .= "\n- [Insumo] {$supply->name}: " . round($amountToDeduct, 4) . " {$supply->unit} descontados.";
             }
         }
+
+        // Variable para usar en el costo
+        $totalHydratedWeight = $wetWeight;
 
         // 2. LÓGICA DINÁMICA DE BOLSAS (Basado en Peso por Unidad)
         $bagName = null;

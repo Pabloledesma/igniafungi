@@ -39,16 +39,8 @@ class RecalculateBatchCosts extends Command
             }
 
             // 1. RE-CALCULAR PESO TOTAL HIDRATADO (Lógica espejo del Observer)
-            $dryPercentageSum = 0;
-            foreach ($recipe->supplies as $supply) {
-                if ($supply->pivot->calculation_mode === 'percentage' && stripos($supply->name, 'Agua') === false) {
-                    $dryPercentageSum += $supply->pivot->value;
-                }
-            }
-
-            $totalHydratedWeight = ($dryPercentageSum > 0)
-                ? $batch->weigth_dry / ($dryPercentageSum / 100)
-                : $batch->weigth_dry;
+            // Nuevo modelo: initial_wet_weight es Peso Húmedo.
+            $totalHydratedWeight = $batch->initial_wet_weight;
 
             // 2. Calcular Costo
             $cost = $recipe->getEstimatedCost($totalHydratedWeight, $batch->quantity);

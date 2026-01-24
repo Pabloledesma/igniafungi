@@ -22,7 +22,7 @@ class Batch extends Model
         'recipe_id',
         'user_id',
         'code',
-        'weigth_dry',
+        'initial_wet_weight',
         'inoculation_date',
         'quantity',
         'contaminated_quantity',
@@ -124,17 +124,23 @@ class Batch extends Model
         return $this->phases()->wherePivot('finished_at', null)->first();
     }
 
+    // Accessor virtual: Calcula el peso seco estimado basándose en el ratio de la receta
+    public function getEstimatedDryWeightAttribute(): float
+    {
+        $wetWeight = floatval($this->initial_wet_weight);
+        $ratio = $this->recipe?->dry_weight_ratio ?? 0.40;
+
+        return $wetWeight * $ratio;
+    }
+
     protected function biologicalEfficiency(): Attribute
     {
         return Attribute::make(
             get: function () {
-                // 1. Validar que weigth_dry sea numérico y mayor a cero
-                // Usamos floatval por si en la base de datos viene como string
-                $dryWeight = floatval($this->weigth_dry);
+                $dryWeight = $this->estimated_dry_weight;
 
-                if ($dryWeight <= 0) {
+                if ($dryWeight <= 0)
                     return 0;
-                }
 
                 // 2. Sumamos los kilos. 
                 // Si el lote es nuevo y no tiene relación cargada, sum() devolverá 0
@@ -272,10 +278,10 @@ class Batch extends Model
                 ]);
             }
 
-            // Handbrake for Total Dry Weight (Capacity Limit)
-            if ($batch->weigth_dry > self::$MAX_PRODUCTION_CAPACITY_KG) {
+            // Handbrake for Total Wet Weight (Capacity Limit)
+            if ($batch->initial_wet_weight > self::$MAX_PRODUCTION_CAPACITY_KG) {
                 throw \Illuminate\Validation\ValidationException::withMessages([
-                    'weigth_dry' => ["Error de capacidad: El sistema no permite lotes mayores a " . self::$MAX_PRODUCTION_CAPACITY_KG . "kg. Por favor, verifica si estás ingresando gramos en lugar de kilos."]
+                    'initial_wet_weight' => ["Error de capacidad: El sistema no permite lotes mayores a " . self::$MAX_PRODUCTION_CAPACITY_KG . "kg. Por favor, verifica si estás ingresando gramos en lugar de kilos."]
                 ]);
             }
 

@@ -41,9 +41,9 @@ class BatchTest extends TestCase
     public function it_calculates_biological_efficiency_correctly()
     {
         // 1. Arrange: 
-        // Lote con 2kg de sustrato seco (ignoramos la humedad para el cálculo final)
+        // Lote con 5kg de sustrato húmedo -> Ratio 0.4 -> 2kg Seco
         $batch = Batch::factory()->create([
-            'weigth_dry' => 2.00
+            'initial_wet_weight' => 5.00
         ]);
 
         // Simulamos 2 cosechas: 
@@ -75,7 +75,7 @@ class BatchTest extends TestCase
         // Creamos el lote sin pasarle código
         $batch = Batch::create([
             'strain_id' => $strain->id,
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'quantity' => 50,
             'type' => 'bulk',
             'inoculation_date' => now(),
@@ -96,7 +96,7 @@ class BatchTest extends TestCase
         // Creamos el lote sin pasarle código
         $batch = Batch::create([
             'strain_id' => $strain->id,
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'quantity' => 50,
             'type' => 'bulk',
             'inoculation_date' => now(),
@@ -159,17 +159,6 @@ class BatchTest extends TestCase
             'value' => 10,
         ]);
 
-        // [FIX] Agregar un insumo de relleno para que la suma seca sea 100%
-        // Con la nueva lógica, si solo hay 10%, el sistema asume que el resto es agua y multiplica el peso x10.
-        // Al poner 90% de Relleno, suma 100%, entonces Peso Húmedo = Peso Seco (40kg).
-        $relleno = Supply::create(['name' => 'Relleno', 'quantity' => 1000, 'category' => 'substrate', 'unit' => 'kg']);
-        RecipeSupply::create([
-            'recipe_id' => $recipe->id,
-            'supply_id' => $relleno->id,
-            'calculation_mode' => 'percentage',
-            'value' => 90,
-        ]);
-
         // 1 Bolsa por unidad de lote
         RecipeSupply::create([
             'recipe_id' => $recipe->id,
@@ -179,11 +168,12 @@ class BatchTest extends TestCase
         ]);
 
         // 2. Act: Crear un Batch (esto dispara el BatchObserver)
-        // Crear el lote
+        // Crear el lote con 40kg de Peso Húmedo (weigth_dry)
+        // Ratio default 0.40 => 16kg Peso Seco
         $batch = Batch::create([
             'user_id' => $user->id,
             'recipe_id' => $recipe->id,
-            'weigth_dry' => 40,
+            'initial_wet_weight' => 40,
             'quantity' => 20,
             'status' => 'active',
             'type' => 'bulk', // Explicitly set type
@@ -194,8 +184,13 @@ class BatchTest extends TestCase
         $aserrin->refresh();
         $bolsas->refresh();
 
-        // Cálculo Aserrín: 100 - (40 * 0.10) = 96
-        $this->assertEquals(96, $aserrin->quantity);
+        // Cálculo Aserrín: 
+        // Peso Húmedo: 40
+        // Ratio: 0.4
+        // Peso Seco: 16
+        // Aserrín: 16 * 10% = 1.6 kg
+        // StockFinal: 100 - 1.6 = 98.4
+        $this->assertEquals(98.4, $aserrin->quantity);
 
         // Cálculo Bolsas: 100 - (20 * 1) = 80
         $this->assertEquals(80, $bolsas->quantity);
@@ -251,7 +246,7 @@ class BatchTest extends TestCase
             'type' => 'bulk',
             'strain_id' => null,
             'quantity' => 10,
-            'weigth_dry' => 10
+            'initial_wet_weight' => 10
         ]);
         $this->assertStringStartsWith('SUB-', $batchSub->code);
 
@@ -262,7 +257,7 @@ class BatchTest extends TestCase
             'recipe_id' => $recipe->id,
             'type' => 'bulk',
             'quantity' => 10,
-            'weigth_dry' => 10
+            'initial_wet_weight' => 10
         ]);
         $this->assertStringStartsWith('ORE-', $batchOre->code);
     }
@@ -277,7 +272,7 @@ class BatchTest extends TestCase
             'type' => 'bulk',
             'strain_id' => null,
             'quantity' => 10,
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'code' => 'SUB-08Jan26-55', // Forzamos un código inicial
         ]);
 
@@ -301,7 +296,7 @@ class BatchTest extends TestCase
             'type' => 'bulk',
             'strain_id' => null,
             'quantity' => 10,
-            'weigth_dry' => 10,
+            'initial_wet_weight' => 10,
             'code' => 'SUB-08Jan26-55', // Forzamos un código inicial
         ]);
 
