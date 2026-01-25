@@ -16,9 +16,10 @@ class BatchPhaseResource extends Resource
 {
     protected static ?string $model = BatchPhase::class;
 
-    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clipboard-document-list';
+    protected static \BackedEnum|string|null $navigationIcon = 'heroicon-o-clock';
 
     protected static \UnitEnum|string|null $navigationGroup = 'Producción';
+    protected static ?int $navigationSort = 7;
 
     // Deshabilitar creación manual
     public static function canCreate(): bool

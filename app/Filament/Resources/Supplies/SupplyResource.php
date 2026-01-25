@@ -21,7 +21,8 @@ class SupplyResource extends Resource
     protected static ?string $model = Supply::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-archive-box';
-    protected static string | UnitEnum | null $navigationGroup = 'Producción';
+    protected static string|UnitEnum|null $navigationGroup = 'Producción';
+    protected static ?int $navigationSort = 4;
 
     public static function form(Schema $schema): Schema
     {

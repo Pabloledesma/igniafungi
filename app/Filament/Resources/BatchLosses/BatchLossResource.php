@@ -20,8 +20,8 @@ class BatchLossResource extends Resource
     protected static ?string $model = BatchLoss::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-trash';
-    protected static string | UnitEnum | null $navigationGroup = 'Producción';
-    protected static ?int $navigationSort = 5;
+    protected static string|UnitEnum|null $navigationGroup = 'Producción';
+    protected static ?int $navigationSort = 6;
 
     public static function form(Schema $schema): Schema
     {
