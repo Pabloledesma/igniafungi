@@ -15,7 +15,8 @@ class BatchLossesTable
         return $table
             ->defaultSort('created_at', 'desc')
             ->columns([
-                TextColumn::make('batch.id')
+                TextColumn::make('batch.code')
+                    ->label('Batch')
                     ->searchable(),
                 TextColumn::make('phase.name')
                     ->searchable(),
@@ -24,8 +25,8 @@ class BatchLossesTable
                     ->sortable(),
                 TextColumn::make('reason')
                     ->searchable(),
-                TextColumn::make('user_id')
-                    ->numeric()
+                TextColumn::make('user.name')
+                    ->label('Usuario')
                     ->sortable(),
                 TextColumn::make('created_at')
                     ->dateTime()

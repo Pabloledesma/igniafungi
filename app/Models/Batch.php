@@ -188,22 +188,39 @@ class Batch extends Model
         ]);
     }
 
-    public function discard($reason, $qty)
+    public function discard($reason, $qty, $details = null)
     {
-        return DB::transaction(function () use ($reason, $qty) {
-            // Registrar la merma
-            $this->recordLoss($qty, $reason, auth()->id());
+        return DB::transaction(function () use ($reason, $qty, $details) {
+            // 1. Validate quantity
+            if ($qty > $this->quantity) {
+                throw new \Exception("No puedes descartar más de lo que existe ({$this->quantity}).");
+            }
 
-            // Si es descarte total, cerramos la fase actual en la tabla PIVOTE
-            $currentPhase = $this->phases()->wherePivot('finished_at', null)->first();
+            // 2. Registrar la merma
+            $this->recordLoss($qty, $reason, auth()->id(), $details);
 
-            if ($currentPhase) {
-                $this->phases()->updateExistingPivot($currentPhase->id, [
-                    'finished_at' => now()
+            // 3. Handle Partial vs Total Discard
+            if ($qty < $this->quantity) {
+                // Partial: Just decrement
+                $this->decrement('quantity', $qty);
+                $this->increment('contaminated_quantity', $qty); // Optional tracking
+            } else {
+                // Total: Close Batch
+                $currentPhase = $this->phases()->wherePivot('finished_at', null)->first();
+
+                if ($currentPhase) {
+                    $this->phases()->updateExistingPivot($currentPhase->id, [
+                        'finished_at' => now()
+                    ]);
+                }
+
+                $this->update([
+                    'status' => 'contaminated',
+                    'quantity' => 0 // Explicitly set to 0
                 ]);
             }
 
-            return $this->update(['status' => 'contaminated']);
+            return true;
         });
     }
 

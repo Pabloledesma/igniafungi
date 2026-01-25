@@ -39,9 +39,6 @@ class BatchesTable
                 TextColumn::make('type')
                     ->searchable()
                     ->sortable(),
-                TextColumn::make('grain_type')
-                    ->searchable()
-                    ->sortable(),
                 TextColumn::make('inoculation_date')
                     ->label('Fecha Inoculación')
                     ->date()
@@ -49,28 +46,11 @@ class BatchesTable
                 TextColumn::make('quantity')
                     ->numeric()
                     ->sortable(),
-                TextColumn::make('production_cost')
-                    ->money('COP')
-                    ->label('Costo Prod.')
-                    ->sortable(),
-                TextColumn::make('bag_weight')
-                    ->numeric()
-                    ->sortable(),
-                TextColumn::make('container_type')
-                    ->searchable(),
-                TextColumn::make('status')
-                    ->searchable(),
-                TextColumn::make('biological_efficiency')
-                    ->label('Eficiencia %')
-                    ->suffix('%')
-                    ->numeric(2)
-                    ->sortable()
+                TextColumn::make('current_phase.name')
+                    ->label('Fase Actual')
                     ->badge()
-                    ->color(fn(string $state): string => match (true) {
-                        $state >= 100 => 'success', // Verde si rinde más del 100%
-                        $state >= 70 => 'warning',  // Amarillo si es decente
-                        default => 'danger',        // Rojo si estás perdiendo dinero
-                    }),
+                    ->color('info')
+                    ->searchable(),
                 TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -294,6 +274,123 @@ class BatchesTable
                         });
 
                         Notification::make()->title('Siembra registrada exitosamente.')->success()->send();
+                    }),
+                Action::make('advance_phase')
+                    ->label('Avanzar Fase')
+                    ->icon('heroicon-m-forward')
+                    ->color('success')
+                    ->form([
+                        Select::make('phase_id')
+                            ->label('Siguiente Fase')
+                            ->options(function (Batch $record) {
+                                $currentOrder = $record->current_phase?->order ?? 0;
+                                return \App\Models\Phase::where('order', '>', $currentOrder)
+                                    ->orderBy('order')
+                                    ->limit(1)
+                                    ->pluck('name', 'id');
+                            })
+                            ->required()
+                            ->default(function (Batch $record) {
+                                $currentOrder = $record->current_phase?->order ?? 0;
+                                return \App\Models\Phase::where('order', '>', $currentOrder)
+                                    ->orderBy('order')
+                                    ->limit(1)
+                                    ->value('id');
+                            }),
+                        \Filament\Forms\Components\Textarea::make('notes')
+                            ->label('Notas de transición'),
+                    ])
+                    ->visible(fn(Batch $record) => $record->current_phase?->slug !== 'fruiting')
+                    ->action(function (Batch $record, array $data) {
+                        $phase = \App\Models\Phase::findOrFail($data['phase_id']);
+                        $record->transitionTo($phase, $data['notes'] ?? null);
+
+                        Notification::make()
+                            ->title('Fase actualizada correctamente')
+                            ->success()
+                            ->send();
+                    }),
+
+                Action::make('harvest')
+                    ->label('Cosechar')
+                    ->icon('heroicon-o-shopping-bag')
+                    ->color('warning')
+                    ->visible(fn(Batch $record) => $record->current_phase?->slug === 'fruiting')
+                    ->form([
+                        TextInput::make('weight')
+                            ->label('Peso Fresco (Kg)')
+                            ->numeric()
+                            ->required()
+                            ->minValue(0.01)
+                            ->maxValue(5)
+                            ->validationMessages([
+                                'max' => 'El valor es muy alto. ¿Estás ingresando gramos? Usa Kilos (ej: 0.5 para 500g).',
+                            ])
+                            ->step(0.01),
+                        \Filament\Forms\Components\DatePicker::make('harvest_date')
+                            ->label('Fecha de Cosecha')
+                            ->default(now())
+                            ->required(),
+                        \Filament\Forms\Components\Textarea::make('notes')
+                            ->label('Notas (Opcional)'),
+                    ])
+                    ->action(function (Batch $record, array $data) {
+                        $record->harvests()->create([
+                            'weight' => $data['weight'],
+                            'harvest_date' => $data['harvest_date'],
+                            'notes' => $data['notes'],
+                            'phase_id' => $record->current_phase?->id,
+                            'user_id' => auth()->id(),
+                        ]);
+
+                        Notification::make()
+                            ->title('Cosecha registrada')
+                            ->body("Se registraron {$data['weight']} kg exitosamente.")
+                            ->success()
+                            ->send();
+                    }),
+
+                Action::make('discard')
+                    ->label('Descartar')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger')
+                    ->requiresConfirmation()
+                    ->modalHeading('Descartar Unidades')
+                    ->modalDescription('Registra unidades dañadas o contaminadas. Si descartas todo, el lote cambiará a estado contaminado.')
+                    ->form([
+                        Select::make('reason')
+                            ->label('Razón del descarte')
+                            ->options([
+                                'Contaminación' => 'Contaminación',
+                                'Exceso de Temperatura' => 'Exceso de Temperatura',
+                                'Falta de Humedad' => 'Falta de Humedad',
+                                'Plagas' => 'Plagas (Mosquitos/Ácaros)',
+                                'Error de Manejo' => 'Error de Manejo',
+                                'Legado / Histórico' => 'Legado / Histórico',
+                            ])
+                            ->required()
+                            ->searchable(),
+                        \Filament\Forms\Components\Textarea::make('details')
+                            ->label('Detalles adicionales'),
+                        TextInput::make('quantity')
+                            ->label('Cantidad a descartar')
+                            ->numeric()
+                            ->required()
+                            ->default(0)
+                            ->minValue(1)
+                            ->validationMessages([
+                                'min' => 'Debes descartar al menos 1 unidad.',
+                            ])
+                            ->maxValue(fn(Batch $record) => $record->quantity),
+                    ])
+                    ->action(function (Batch $record, array $data) {
+                        $record->discard($data['reason'], $data['quantity'], $data['details'] ?? null);
+
+                        Notification::make()
+                            ->title('Lote descartado')
+                            ->body('El lote ha sido marcado como contaminado.')
+                            ->danger()
+                            ->send();
                     }),
                 // Botón Borrar (Opcional, pero útil en desarrollo)
                 DeleteAction::make(),
