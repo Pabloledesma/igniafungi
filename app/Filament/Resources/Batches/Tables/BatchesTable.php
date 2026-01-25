@@ -133,6 +133,18 @@ class BatchesTable
                             // 1. Decrementar Inventario Padre
                             $record->decrement('quantity', $parentQty);
 
+                            // Si llegamos a 0, cerramos el lote
+                            if ($record->fresh()->quantity <= 0) {
+                                $record->update(['status' => 'seeded']);
+                                $currentPhase = $record->current_phase;
+                                if ($currentPhase) {
+                                    $record->phases()->updateExistingPivot($currentPhase->id, [
+                                        'finished_at' => now(),
+                                        'notes' => 'Lote consumido totalmente en expansión G2G.'
+                                    ]);
+                                }
+                            }
+
                             // 2. Crear Lote Hijo
                             $newBatch = $record->replicate();
                             $newBatch->parent_batch_id = $record->id;
@@ -257,6 +269,19 @@ class BatchesTable
                             // 1. Descontar grano
                             if ($unitsToConsume > 0) {
                                 $record->decrement('quantity', $unitsToConsume);
+
+                                // Si llegamos a 0, cerramos el lote
+                                if ($record->fresh()->quantity <= 0) {
+                                    $record->update(['status' => 'seeded']); // o completed/consumido
+                                    // Cerrar fase actual
+                                    $currentPhase = $record->current_phase;
+                                    if ($currentPhase) {
+                                        $record->phases()->updateExistingPivot($currentPhase->id, [
+                                            'finished_at' => now(),
+                                            'notes' => 'Lote consumido totalmente en siembra.'
+                                        ]);
+                                    }
+                                }
                             }
 
                             // 2. Configurar Lote Destino (común para Create y Existing)
@@ -393,11 +418,11 @@ class BatchesTable
                             ->send();
                     }),
                 // Botón Borrar (Opcional, pero útil en desarrollo)
-                DeleteAction::make(),
+                // DeleteAction removed as per requirements
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
-                    DeleteBulkAction::make(),
+                    // DeleteBulkAction removed
                 ]),
             ]);
     }

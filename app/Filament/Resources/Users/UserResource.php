@@ -13,6 +13,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
 use App\Filament\Resources\Users\RelationManagers\OrdersRelationManager;
+use UnitEnum;
 
 
 class UserResource extends Resource
@@ -20,6 +21,7 @@ class UserResource extends Resource
     protected static ?string $model = User::class;
 
     protected static string|BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+    protected static string|UnitEnum|null $navigationGroup = 'Sistema';
 
     protected static ?string $recordTitleAttribute = 'name';
 

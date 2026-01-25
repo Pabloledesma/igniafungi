@@ -155,11 +155,14 @@ class Batch extends Model
     public function transitionTo(Phase $nextPhase, $notes = null)
     {
         return DB::transaction(function () use ($nextPhase, $notes) {
-            // Cerrar fase actual
-            $this->phases()->wherePivot('finished_at', null)->updateExistingPivot(
-                $this->phases()->wherePivot('finished_at', null)->first()->id,
-                ['finished_at' => now()]
-            );
+            // Cerrar fase actual si existe
+            $currentPhase = $this->phases()->wherePivot('finished_at', null)->first();
+
+            if ($currentPhase) {
+                $this->phases()->updateExistingPivot($currentPhase->id, [
+                    'finished_at' => now()
+                ]);
+            }
 
             // Abrir nueva fase
             return $this->phases()->attach($nextPhase->id, [
