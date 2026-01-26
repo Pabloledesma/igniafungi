@@ -1,5 +1,5 @@
-@section('title', 'Hongos Frescos en Bogotá, Orellanas y Shiitake | Ignia Fungi')
-@section('meta_description', 'Compra hongos frescos en Bogotá: Orellanas, Shiitake y Melena de León. Cultivo urbano y sostenible con preventas gourmet.')
+@section('title', 'Shiitake, Melena de León y Eryngii en Bogotá | Frescos y Deshidratados | Ignia Fungi')
+@section('meta_description', 'Hongos premium en Bogotá: Shiitake, Melena de León y Eryngii. Disponibles frescos para cocina gourmet y deshidratados para infusiones y caldos potentes.')
 
 <div>
   {{-- Hero section Start --}}
@@ -16,14 +16,11 @@
         <div class="max-w-3xl">
 
           <h1 class="block text-3xl font-bold text-orange-100 sm:text-4xl lg:text-6xl lg:leading-tight">
-            Hongos Frescos en Bogotá <span class="text-gold-ignia">Orellanas y Shiitake</span>
+            Hongos de Especialidad <span class="text-gold-ignia">Frescos y Deshidratados</span>
           </h1>
-          <p class="mt-2 text-xl text-orange-200/80 italic font-serif">"La Fuerza del Fuego, El Poder del Reino Fungi"
-          </p>
-
           <p class="mt-5 text-lg text-stone-200 max-w-2xl mx-auto drop-shadow-md">
-            En Ignia Fungi creemos en la transformación. Descubre la medicina ancestral y la belleza oculta de los
-            hongos para sanar cuerpo y espíritu.
+            Desde la frescura del cultivo hasta la potencia del hongo deshidratado. Descubre el sabor profundo del
+            Shiitake y la medicina cognitiva de la Melena de León.
           </p>
 
           <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
@@ -221,6 +218,54 @@
     </div>
   </div>
   {{-- Category section End --}}
+
+  {{-- Sección Deshidratados --}}
+  <div class="bg-stone-900/50 py-16 border-y border-gold-ignia/10">
+    <div class="max-w-[85rem] px-4 mx-auto grid lg:grid-cols-2 gap-12 items-center">
+      {{-- Columna de Texto --}}
+      <div class="order-2 lg:order-1">
+        <h2 class="text-3xl font-bold text-white mb-6">El Secreto del <span class="text-orange-500">Sabor Umami</span>
+        </h2>
+        <p class="text-stone-300 mb-6 text-lg">
+          Nuestros hongos deshidratados no solo duran más; concentran sus propiedades y sabores. Ideales para risottos,
+          caldos medicinales o para tener siempre medicina natural en tu despensa.
+        </p>
+        <ul class="space-y-4 text-stone-400">
+          <li class="flex items-start gap-3">
+            <svg class="text-gold-ignia w-5 h-5 mt-1 flex-shrink-0" fill="none" stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span><strong class="text-orange-200">Shiitake Deshidratado:</strong> Potencia el sistema inmune y aporta un
+              sabor profundo.</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <svg class="text-gold-ignia w-5 h-5 mt-1 flex-shrink-0" fill="none" stroke="currentColor"
+              viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span><strong class="text-orange-200">Melena de León:</strong> Polvo y trozos para biohacking, enfoque y
+              regeneración neuronal.</span>
+          </li>
+        </ul>
+      </div>
+
+      {{-- Columna de Imagen con Tarjeta Flotante --}}
+      <div class="relative order-1 lg:order-2 px-4 lg:px-0">
+        <div class="relative inline-block w-full">
+          <img src="{{ asset('images/deshidratados_ignia.webp') }}" alt="Hongos Deshidratados"
+            class="rounded-2xl shadow-2xl border border-white/10 w-full object-cover">
+
+          {{-- Tarjeta de Vida Útil--}}
+          <div
+            class="absolute -bottom-4 -right-2 md:-right-6 bg-orange-600 p-4 md:p-6 rounded-xl shadow-xl z-30 max-w-[150px] md:max-w-none">
+            <p class="text-white font-bold text-lg md:text-xl">+6 meses</p>
+            <p class="text-orange-100 text-xs md:text-sm leading-tight">Vida útil garantizada</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   {{-- Reviews Section Start --}}
   <div class="bg-stone-950 py-20 border-t border-white/5 relative z-20">
