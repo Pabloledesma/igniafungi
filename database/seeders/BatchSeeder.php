@@ -46,9 +46,16 @@ class BatchSeeder extends Seeder
             $strain = $strains->random();
             $this->createBatch($strain, $phases['cooling'], null);
         }
+        // 5. GRATIN (Mature Grain Batches for Expansion)
+        // Inoculated > 20 days ago
+        foreach ($strains as $strain) {
+            for ($i = 0; $i < 3; $i++) {
+                $this->createBatch($strain, $phases['incubation'], now()->subDays(rand(21, 35)), 'grain');
+            }
+        }
     }
 
-    private function createBatch($strain, $phase, $inoculationDate)
+    private function createBatch($strain, $phase, $inoculationDate, $type = 'bulk')
     {
         // Create the batch initially without inoculation date to trigger observer cleanly later if needed,
         // OR create with it if we move logic to 'saving'. 
@@ -58,10 +65,10 @@ class BatchSeeder extends Seeder
             'strain_id' => $strain->id,
             'user_id' => 1,
             'quantity' => 10,
-            'weigth_dry' => 1000,
+            'initial_wet_weight' => 20, // 20kg Total Wet Weight (example)
             'bag_weight' => 2.0, // 2kg per block as requested
-            'expected_yield' => 10 * 500, // 500g per block (25% BE of 2kg)
-            'type' => 'bulk',
+            'expected_yield' => 10 * 0.5, // 500g per block (Example assumption)
+            'type' => $type,
             'status' => 'active',
             'observations' => 'Seeded automatically via BatchSeeder',
             // We don't set inoculation_date here to ensure 'updating' event catches it next
@@ -71,7 +78,7 @@ class BatchSeeder extends Seeder
         if ($phase) {
             $batch->phases()->attach($phase->id, [
                 'user_id' => 1,
-                'started_at' => now(),
+                'started_at' => $inoculationDate ?? now(),
             ]);
         }
 
