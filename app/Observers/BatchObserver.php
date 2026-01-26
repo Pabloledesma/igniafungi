@@ -73,6 +73,72 @@ class BatchObserver
     }
 
     /**
+     * Contexto: Después de actualizar (After Update)
+     */
+    public function updated(Batch $batch): void
+    {
+        // --- CONTAMINATION SYNC (Batch -> BatchLoss) ---
+        if (!self::$isSyncingLoss && $batch->isDirty('contaminated_quantity')) {
+            $newVal = $batch->contaminated_quantity;
+            $oldVal = $batch->getOriginal('contaminated_quantity');
+            $diff = $newVal - $oldVal;
+
+            if ($diff > 0) {
+                self::$isSyncingLoss = true;
+
+                try {
+                    // 1. Create Loss Record
+                    // Prevent Loop: LossObserver should NOT touch Batch
+                    \App\Observers\LossObserver::$shouldUpdateBatch = false;
+
+                    $reason = $batch->lossReason ?? 'Contaminación';
+                    $details = $batch->lossDetails ?? 'Ajuste manual desde formulario';
+
+                    $batch->recordLoss(
+                        $diff,
+                        $reason,
+                        auth()->id() ?? $batch->user_id,
+                        $details
+                    );
+
+                    \App\Observers\LossObserver::$shouldUpdateBatch = true;
+
+                    // 2. Sync Units (Backfill for API/Direct edits)
+                    // If 'quantity' was NOT explicitly adjusted in the same transaction,
+                    // we do it here to enforce integrity.
+                    // However, if Form ALREADY did it, $batch->quantity is already lower.
+                    // We check if quantity + contaminated == original total (roughly).
+                    // Or simpler: We trust the form, but if this is an API call, we need to decr.
+
+                    // Actually, if we are in 'updated', the batch is already saved.
+                    // Deducting quantity here requires another SAVE.
+                    // $batch->decrement('quantity', $diff); // This triggers update again!
+                    // We must use saveQuietly or quiet update.
+
+                    // Check if quantity needs adjustment?
+                    // $originalQty = $batch->getOriginal('quantity');
+                    // $currentQty = $batch->quantity;
+                    // Expected: currentQty = originalQty - diff.
+                    // If currentQty == originalQty, then it wasn't deducted.
+
+                    /* 
+                    // Comentado para evitar doble descuento si el formulario ya lo hizo.
+                    // Solo activamos si detectamos que no se bajó.
+                    if ($batch->quantity == $batch->getOriginal('quantity')) {
+                         $batch->decrement('quantity', $diff); 
+                    }
+                    */
+
+                } catch (\Exception $e) {
+                    Log::warning("Error creando pérdida automática: " . $e->getMessage());
+                }
+
+                self::$isSyncingLoss = false;
+            }
+        }
+    }
+
+    /**
      * Contexto: Antes de actualizar (Before Update)
      */
     public function updating(Batch $batch): void
@@ -111,24 +177,7 @@ class BatchObserver
             }
         }
 
-        // --- CONTAMINATION SYNC (Batch -> BatchLoss) ---
-        if (!self::$isSyncingLoss && $batch->isDirty('contaminated_quantity')) {
-            $diff = $batch->contaminated_quantity - $batch->getOriginal('contaminated_quantity');
-
-            if ($diff > 0) {
-                // Prevenir bucle: LossObserver no debe actualizar el batch de nuevo
-                \App\Observers\LossObserver::$shouldUpdateBatch = false;
-
-                $batch->recordLoss(
-                    $diff,
-                    'Contaminación',
-                    auth()->id() ?? $batch->user_id,
-                    'Registro automático desde edición de lote'
-                );
-
-                \App\Observers\LossObserver::$shouldUpdateBatch = true;
-            }
-        }
+        // --- CONTAMINATION SYNC MOVED TO updated() ---
 
         // --- PHASE TRANSITION (Edit Form) ---
         // Si phase_id viene seteado (desde el form) y es diferente a la fase actual logicamente esperada
