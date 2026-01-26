@@ -7,13 +7,13 @@ use Livewire\Component;
 use App\Models\Category;
 use Livewire\Attributes\Title;
 
-#[Title('Home Page')]
+
 class HomePage extends Component
 {
     public function render()
     {
-        $strains = Strain::where('is_active', 1)->get();
-        $categories = Category::where('is_active', 1)->get();
+        $strains = Strain::where('is_active', '=', 1)->get();
+        $categories = Category::where('is_active', '=', 1)->get();
 
         $reviews = app(\App\Services\GooglePlacesService::class)->getReviews();
 

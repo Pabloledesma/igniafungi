@@ -7,7 +7,7 @@ use App\Models\Product;
 use Livewire\Component;
 use Livewire\Attributes\Title;
 
-#[Title('Product Detail Page')]
+
 class ProductDetailPage extends Component
 {
     public $slug;

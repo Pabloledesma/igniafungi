@@ -10,8 +10,8 @@ class SitemapController extends Controller
 {
     public function index()
     {
-        $posts = Post::where('is_published', true)->latest()->get();
-        $products = Product::where('is_active', true)->latest()->get();
+        $posts = Post::where('is_published', '=', true)->latest()->get();
+        $products = Product::where('is_active', '=', true)->latest()->get();
 
         return response()->view('sitemap', [
             'posts' => $posts,

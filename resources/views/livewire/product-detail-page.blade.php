@@ -1,3 +1,38 @@
+@section('title', $product->name . ' Fresco y Deshidratado en Bogotá | Ignia Fungi')
+@section('meta_description', Str::limit(strip_tags($product->description), 150) . ' Compra ' . $product->name . ' orgánico en Bogotá. Calidad Gourmet.')
+
+@push('schema')
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org/",
+    "@type": "Product",
+    "name": "{{ $product->name }}",
+    "image": [
+      @if(!empty($product->images) && count($product->images) > 0)
+         @foreach($product->images as $image)
+           "{{ asset('storage/' . $image) }}"{{ $loop->last ? '' : ',' }}
+         @endforeach
+      @else
+         "{{ asset('images/og-default.jpg') }}"
+      @endif
+     ],
+    "description": "{{ Str::limit(strip_tags($product->description), 160) }}",
+    "brand": {
+      "@type": "Brand",
+      "name": "Ignia Fungi"
+    },
+    "offers": {
+      "@type": "Offer",
+      "url": "{{ url()->current() }}",
+      "priceCurrency": "COP",
+      "price": "{{ (!$product->in_stock && isset($preorderBatch) && $preorderBatch) ? $product->price * 0.9 : $product->price }}",
+      "availability": "{{ $product->in_stock ? 'https://schema.org/InStock' : (($preorderBatch) ? 'https://schema.org/PreOrder' : 'https://schema.org/OutOfStock') }}",
+      "itemCondition": "https://schema.org/NewCondition"
+    }
+  }
+  </script>
+@endpush
+
 <div class="w-full max-w-[85rem] py-10 px-4 sm:px-6 lg:px-8 mx-auto">
   <section class="overflow-hidden bg-white py-11 font-poppins dark:bg-gray-800">
     <div class="max-w-6xl px-4 py-4 mx-auto lg:py-8 md:px-6">
