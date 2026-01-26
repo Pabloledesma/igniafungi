@@ -315,6 +315,7 @@ class BatchesTable
                                     ->pluck('name', 'id');
                             })
                             ->required()
+                            ->live() // Hacerlo reactivo para mostrar/ocultar Cepa
                             ->default(function (Batch $record) {
                                 $currentOrder = $record->current_phase?->order ?? 0;
                                 return \App\Models\Phase::where('order', '>', $currentOrder)
@@ -322,12 +323,83 @@ class BatchesTable
                                     ->limit(1)
                                     ->value('id');
                             }),
+
+                        Select::make('strain_id')
+                            ->label('Cepa / Genética')
+                            ->relationship('strain', 'name')
+                            ->searchable()
+                            ->preload()
+                            ->required(function ($get) {
+                                $phaseId = $get('phase_id');
+                                if (!$phaseId)
+                                    return false;
+
+                                $phase = \App\Models\Phase::find($phaseId);
+                                return $phase && $phase->slug === 'inoculation';
+                            })
+                            ->visible(function ($get) {
+                                $phaseId = $get('phase_id');
+                                if (!$phaseId)
+                                    return false;
+
+                                $phase = \App\Models\Phase::find($phaseId);
+                                return $phase && $phase->slug === 'inoculation';
+                            })
+                            ->default(fn(Batch $record) => $record->strain_id)
+                            ->live()
+                            ->afterStateUpdated(function ($state, $set) {
+                                // Reset source batch if strain changes
+                                $set('source_batch_id', null);
+                            }),
+
+                        Select::make('source_batch_id')
+                            ->label('Lote de Semilla (Origen)')
+                            ->options(function ($get) {
+                                $strainId = $get('strain_id');
+                                if (!$strainId)
+                                    return [];
+
+                                return Batch::where('type', 'grain')
+                                    ->where('strain_id', $strainId)
+                                    ->where('quantity', '>', 0)
+                                    ->where('status', '!=', 'contaminated')
+                                    ->where('inoculation_date', '<=', now()->subDays(15))
+                                    ->get()
+                                    ->mapWithKeys(function ($batch) {
+                                        return [$batch->id => "{$batch->code} ({$batch->quantity} un. / {$batch->bag_weight}kg)"];
+                                    });
+                            })
+                            ->required(function ($get) {
+                                $phaseId = $get('phase_id');
+                                if (!$phaseId)
+                                    return false;
+                                $phase = \App\Models\Phase::find($phaseId);
+                                return $phase && $phase->slug === 'inoculation';
+                            })
+                            ->visible(function ($get) {
+                                $phaseId = $get('phase_id');
+                                if (!$phaseId)
+                                    return false;
+                                $phase = \App\Models\Phase::find($phaseId);
+                                return $phase && $phase->slug === 'inoculation';
+                            })
+                            ->validationMessages([
+                                'required' => 'Debes seleccionar un lote de semilla para inocular.',
+                            ]),
+
                         \Filament\Forms\Components\Textarea::make('notes')
                             ->label('Notas de transición'),
                     ])
                     ->visible(fn(Batch $record) => $record->current_phase?->slug !== 'fruiting')
                     ->action(function (Batch $record, array $data) {
                         $phase = \App\Models\Phase::findOrFail($data['phase_id']);
+
+                        // Guardar Cepa si se envió
+                        if (!empty($data['strain_id'])) {
+                            $record->strain_id = $data['strain_id'];
+                            $record->save();
+                        }
+
                         $record->transitionTo($phase, $data['notes'] ?? null);
 
                         Notification::make()
