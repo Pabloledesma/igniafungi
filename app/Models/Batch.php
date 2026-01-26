@@ -39,7 +39,50 @@ class Batch extends Model
         'origin_code'
     ];
 
+    public $lossReason = null;
+    public $lossDetails = null;
     public $phase_id;
+
+    public function discard($reason, $qty, $details = null)
+    {
+        return DB::transaction(function () use ($reason, $qty, $details) {
+            // 1. Validate quantity
+            if ($qty > $this->quantity) {
+                throw new \Exception("No puedes descartar más de lo que existe ({$this->quantity}).");
+            }
+
+            // 2. Set transient properties for Observer
+            $this->lossReason = $reason;
+            $this->lossDetails = $details;
+
+            // 3. Update quantities manually on the instance
+            // (Avoid using decrement/increment directly so properties persist to Observer)
+            $this->quantity -= $qty;
+            $this->contaminated_quantity += $qty;
+
+            // 4. Handle Partial vs Total Discard
+            if ($this->quantity <= 0) {
+                // Ensure quantity is exactly 0
+                $this->quantity = 0;
+
+                // Total: Close Batch Phase
+                $currentPhase = $this->phases()->wherePivot('finished_at', null)->first();
+
+                if ($currentPhase) {
+                    $this->phases()->updateExistingPivot($currentPhase->id, [
+                        'finished_at' => now()
+                    ]);
+                }
+
+                $this->status = 'contaminated';
+            }
+
+            // 5. Save (Triggers Observer -> recordLoss)
+            $this->save();
+
+            return true;
+        });
+    }
 
     protected $casts = [
         'inoculation_date' => 'date',
@@ -191,41 +234,7 @@ class Batch extends Model
         ]);
     }
 
-    public function discard($reason, $qty, $details = null)
-    {
-        return DB::transaction(function () use ($reason, $qty, $details) {
-            // 1. Validate quantity
-            if ($qty > $this->quantity) {
-                throw new \Exception("No puedes descartar más de lo que existe ({$this->quantity}).");
-            }
 
-            // 2. Registrar la merma
-            $this->recordLoss($qty, $reason, auth()->id(), $details);
-
-            // 3. Handle Partial vs Total Discard
-            if ($qty < $this->quantity) {
-                // Partial: Just decrement
-                $this->decrement('quantity', $qty);
-                $this->increment('contaminated_quantity', $qty); // Optional tracking
-            } else {
-                // Total: Close Batch
-                $currentPhase = $this->phases()->wherePivot('finished_at', null)->first();
-
-                if ($currentPhase) {
-                    $this->phases()->updateExistingPivot($currentPhase->id, [
-                        'finished_at' => now()
-                    ]);
-                }
-
-                $this->update([
-                    'status' => 'contaminated',
-                    'quantity' => 0 // Explicitly set to 0
-                ]);
-            }
-
-            return true;
-        });
-    }
 
     public function getDaysInCurrentPhaseAttribute()
     {
@@ -313,5 +322,6 @@ class Batch extends Model
                 ]);
             }
         });
+
     }
 }
