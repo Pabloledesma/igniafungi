@@ -406,7 +406,8 @@ class AiAgentService
                 }
                 // Store Pending
                 $list = $dryProducts->map(function ($p) {
-                    return "• {$p->name} ($" . number_format($p->price, 0) . ")"; })->join("<br>");
+                    return "• {$p->name} ($" . number_format($p->price, 0) . ")";
+                })->join("<br>");
                 $context = session('ai_context', []);
                 $context['pending_suggestion_products'] = $dryProducts->pluck('id')->toArray();
                 session(['ai_context' => $context]);
@@ -434,9 +435,16 @@ class AiAgentService
 
         // Bogota or Acceptable Product (Just Shipping Info)
         $locSuffix = $matchedLocality ? ", localidad {$matchedLocality}" : "";
+        $message = "El costo de envío a {$targetCity}{$locSuffix} es de ${price} COP.";
+
+        // If we have a product in context, prompt to close the deal
+        if ($this->getLastProductConsulted()) {
+            $message .= "<br><br>¿Deseas confirmar la orden de compra?";
+        }
+
         return [
             'type' => 'answer',
-            'message' => "El costo de envío a {$targetCity}{$locSuffix} es de ${price} COP."
+            'message' => $message
         ];
     }
 
