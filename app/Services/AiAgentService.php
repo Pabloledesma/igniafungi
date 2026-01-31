@@ -124,12 +124,24 @@ class AiAgentService
 
     protected function isAffirmation(string $content): bool
     {
-        $affirmatives = ['si', 'sí', 'dale', 'acepto', 'bueno', 'ok', 'está bien', 'claro'];
+        // Normalize: remove punctuation, lowercase
+        $normalized = Str::lower(preg_replace('/[^\w\s]/u', '', $content));
+        $normalized = trim($normalized);
+
+        $affirmatives = ['si', 'sí', 'dale', 'acepto', 'bueno', 'ok', 'está bien', 'claro', 'de una', 'perfecto', 'listo', 'hágale'];
+
         foreach ($affirmatives as $word) {
-            if (Str::lower($content) === $word || str_starts_with(Str::lower($content), $word . ' ')) {
+            // Exact match "si" OR starts with "si " (e.g. "si gracias")
+            if ($normalized === $word || str_starts_with($normalized, $word . ' ')) {
                 return true;
             }
         }
+
+        // Also check if content implies confirmation like "los quiero"
+        if (str_contains($normalized, 'los quiero') || str_contains($normalized, 'quiero comprar')) {
+            return true;
+        }
+
         return false;
     }
 
@@ -665,13 +677,29 @@ class AiAgentService
                 continue; // "Cali" is 4, but let's be safe with 3 for short names if any (e.g. Ica?) No, shortest is usually 4.
 
             // Avoid matching common words "para", "pero", "donde" that might fuzzy match
-            $commonWords = ['para', 'pero', 'como', 'donde', 'envio', 'valor', 'costo', 'tienen', 'hongo', 'luego', 'puedo', 'quiero'];
+            $commonWords = ['para', 'pero', 'como', 'donde', 'envio', 'valor', 'costo', 'tienen', 'hongo', 'luego', 'puedo', 'quiero', 'dale', 'bien', 'bueno', 'gracias'];
             if (in_array(strtolower($word), $commonWords))
                 continue;
 
-            $matchedCity = $this->findBestMatch($word, $dbCities);
-            if ($matchedCity) {
-                return ['city' => $matchedCity];
+            // Stricter checking for short words
+            $options = $dbCities;
+            $bestMatch = null;
+            $shortestDistance = -1;
+
+            foreach ($options as $option) {
+                $dist = levenshtein(strtolower($word), strtolower(Str::ascii($option)));
+
+                // If short word (<= 4 chars), allow max 1 mistake. Else 2.
+                $maxDist = strlen($word) <= 4 ? 1 : 2;
+
+                if ($dist <= $maxDist && ($shortestDistance === -1 || $dist < $shortestDistance)) {
+                    $bestMatch = $option;
+                    $shortestDistance = $dist;
+                }
+            }
+
+            if ($bestMatch) {
+                return ['city' => $bestMatch];
             }
         }
 
