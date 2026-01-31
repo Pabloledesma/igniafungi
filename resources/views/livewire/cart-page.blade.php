@@ -294,5 +294,5 @@
       </div>
     @endif
   </div>
-  <x-whatsapp-btn />
+
 </div>

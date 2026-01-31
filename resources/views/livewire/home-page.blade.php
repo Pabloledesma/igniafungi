@@ -317,7 +317,7 @@
     </div>
   </div>
   {{-- Reviews Section End --}}
-  <x-whatsapp-btn />
+
 
   <script type="application/ld+json">
     {

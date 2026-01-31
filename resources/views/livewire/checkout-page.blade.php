@@ -267,11 +267,15 @@
 
 							@if($shipping_method === 'bogota')
 								<div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-									<p class="text-sm text-blue-800 mb-2 font-semibold">Selecciona una fecha (Días Pares):</p>
+									<p class="text-sm text-blue-800 mb-2 font-semibold">Selecciona una fecha (Días Pares):
+									</p>
 									<div class="space-y-2">
 										@foreach($this->deliveryOptions as $option)
-											<label class="flex items-center p-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors {{ $delivery_date == $option['date'] ? 'ring-2 ring-blue-500 border-transparent' : '' }}">
-												<input type="radio" wire:model.live="delivery_date" value="{{ $option['date'] }}" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300">
+											<label
+												class="flex items-center p-3 bg-white border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 transition-colors {{ $delivery_date == $option['date'] ? 'ring-2 ring-blue-500 border-transparent' : '' }}">
+												<input type="radio" wire:model.live="delivery_date"
+													value="{{ $option['date'] }}"
+													class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300">
 												<span class="ml-3 block text-sm font-medium text-gray-700">
 													{{ $option['label'] }}
 												</span>
@@ -434,5 +438,5 @@
 			</div>
 		</div>
 	</div>
-	<x-whatsapp-btn />
+
 </div>

@@ -40,6 +40,7 @@
     </main>
 
     @livewire('partials.footer')
+    <livewire:ai-chat />
     @livewireScripts
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
