@@ -180,9 +180,22 @@ class AiAgentService
             ];
         }
 
-        $list = $products->map(function ($p) {
-            return "• *{$p->name}*: $" . number_format($p->price, 0);
-        })->join("<br>");
+        // Store IDs for number matching
+        $ids = [];
+        $list = "";
+        $index = 1;
+
+        foreach ($products as $p) {
+            $list .= "{$index}. *{$p->name}*: $" . number_format($p->price, 0) . "<br>";
+            $ids[] = $p->id;
+            $index++;
+        }
+
+        // Context Update for Numeric Selection
+        $context = session('ai_context', []);
+        $context['pending_suggestion_products'] = $ids;
+        // Note: For numeric selection, we can map number N to index N-1 in this array.
+        session(['ai_context' => $context]);
 
         return [
             'type' => 'answer',
@@ -192,8 +205,14 @@ class AiAgentService
 
     protected function isSpam(string $content): bool
     {
+        // Allow numeric selection (1-9) even if short
+        if (preg_match('/^[1-9]$/', trim($content))) {
+            return false;
+        }
+
         if (strlen($content) < 2)
-            return true; // Too short
+            return true; // Too short, unless it's a number
+
         $spamKeywords = ['casino', 'viagra', 'buy crypto', 'free money'];
         foreach ($spamKeywords as $keyword) {
             if (stripos($content, $keyword) !== false)
@@ -373,15 +392,20 @@ class AiAgentService
                 $alternatives = $this->findDryAlternatives($pivotSourceProduct);
 
                 if ($alternatives->isNotEmpty()) {
-                    $list = $alternatives->map(function ($p) {
-                        return "• {$p->name} ($" . number_format($p->price, 0) . ")";
-                    })->join("<br>");
+                    $list = "";
+                    $index = 1;
+                    $ids = [];
+                    foreach ($alternatives as $p) {
+                        $list .= "{$index}. {$p->name} ($" . number_format($p->price, 0) . ")<br>";
+                        $ids[] = $p->id;
+                        $index++;
+                    }
 
                     $strainName = $pivotSourceProduct->strain->name ?? 'la misma cepa';
 
                     // STORE PENDING SUGGESTION
                     $context = session('ai_context', []);
-                    $context['pending_suggestion_products'] = $alternatives->pluck('id')->toArray();
+                    $context['pending_suggestion_products'] = $ids;
                     session(['ai_context' => $context]);
 
                     return [
@@ -391,7 +415,7 @@ class AiAgentService
                 }
             }
 
-            // Generic Fallback
+            // Generic Fallback (If no pivots found OR generic fresh request)
             if ($isFreshRequest || (!$product && $isFreshRequest)) {
                 // ... (Existing Fallback Logic) ...
                 // Re-implement simplified or keep existing structure
@@ -405,11 +429,17 @@ class AiAgentService
                     ];
                 }
                 // Store Pending
-                $list = $dryProducts->map(function ($p) {
-                    return "• {$p->name} ($" . number_format($p->price, 0) . ")";
-                })->join("<br>");
+                $list = "";
+                $index = 1;
+                $ids = [];
+                foreach ($dryProducts as $p) {
+                    $list .= "{$index}. {$p->name} ($" . number_format($p->price, 0) . ")<br>";
+                    $ids[] = $p->id;
+                    $index++;
+                }
+
                 $context = session('ai_context', []);
-                $context['pending_suggestion_products'] = $dryProducts->pluck('id')->toArray();
+                $context['pending_suggestion_products'] = $ids;
                 session(['ai_context' => $context]);
 
                 return [
@@ -601,6 +631,27 @@ class AiAgentService
 
     protected function detectProduct(string $content): ?Product
     {
+        // 0. Check for Numeric Selection (e.g. "1", "2", "el 1")
+        // Clean input to find a number
+        if (preg_match('/^(\d+)$/', trim($content), $matches) || preg_match('/opcion (\d+)/i', $content, $matches) || preg_match('/el (\d+)/i', $content, $matches)) {
+            $index = (int) end($matches);
+            $context = session('ai_context', []);
+            $pendingIds = $context['pending_suggestion_products'] ?? [];
+
+            // Adjust for 1-based index (User sees 1, Array has 0)
+            $arrayIndex = $index - 1;
+
+            if (isset($pendingIds[$arrayIndex])) {
+                $product = Product::find($pendingIds[$arrayIndex]);
+                if ($product) {
+                    // Update context as if they named it
+                    $context['last_product_id'] = $product->id;
+                    session(['ai_context' => $context]);
+                    return $product;
+                }
+            }
+        }
+
         // 1. Exact/Approximate Name Match using Fuzzy Search
         // Get all active product names
         $allProducts = Product::where('is_active', true)->pluck('name', 'id');
@@ -653,18 +704,40 @@ class AiAgentService
             $isFresh = true;
 
         if ($isFresh) {
-            if (strtolower($city) !== 'bogotá' && strtolower($city) !== 'bogota') {
+            if ($city && strtolower($city) !== 'bogotá' && strtolower($city) !== 'bogota') {
                 // Suggest Dry
                 return [
                     'type' => 'suggestion',
-                    'message' => "El producto '{$product->name}' es fresco y solo se entrega en Bogotá. Para tu ciudad te recomendamos nuestros hongos deshidratados."
+                    'message' => "El producto '{$product->name}' es fresco y solo se entrega en Bogotá. Para tu ciudad (Here: $city) te recomendamos nuestros hongos deshidratados." // Logic usually handled in ShippingQuery, but good safeguard.
                 ];
             }
         }
 
+        // IMPROVEMENT: Drive the sale forward.
+        // If we don't have location, ask for it using the standard prompt.
+        if (empty($city)) {
+            return [
+                'type' => 'question',
+                'message' => "¡Excelente elección! Has seleccionado **{$product->name}**. <br><br>Para calcular el costo del envío y generar tu orden, necesito saber: ¿En qué ciudad te encuentras?"
+            ];
+        }
+
+        // If we DO have location, we might want to trigger shipping calc immediately.
+        // But since this method returns an array, we can return a message that calls the shipping tool effectively? 
+        // Or simply ask for confirmation if we know the price?
+
+        // Simpler: Just acknowledge and ask for locality if Bogota, or confirm if National.
+        if (Str::slug($city) === 'bogota') {
+            return [
+                'type' => 'question',
+                'message' => "¡Perfecto, **{$product->name}**! Como estás en Bogotá, ¿me podrías confirmar tu localidad (ej. Usaquén, Chapinero) para darte el valor exacto del domicilio?"
+            ];
+        }
+
+        // National with City known
         return [
-            'type' => 'answer',
-            'message' => "Tenemos '{$product->name}' disponible. " . $product->short_description
+            'type' => 'question',
+            'message' => "¡Listo! Para enviar **{$product->name}** a {$city}, ¿deseas que calcule el costo del envío ya mismo?"
         ];
     }
 
@@ -698,9 +771,31 @@ class AiAgentService
             if (strlen($word) < 4)
                 continue;
 
-            $matchedLocality = $this->findBestMatch($word, $bogotaLocalities);
-            if ($matchedLocality) {
-                return ['city' => 'Bogotá', 'locality' => $matchedLocality];
+            // Common words to ignore
+            $commonWords = ['para', 'pero', 'como', 'donde', 'envio', 'valor', 'costo', 'tienen', 'hongo', 'luego', 'puedo', 'quiero', 'dale', 'bien', 'bueno', 'gracias', 'dame'];
+            if (in_array(strtolower($word), $commonWords))
+                continue;
+
+            // Stricter checking for short words
+            $options = $bogotaLocalities;
+            $bestMatch = null;
+            $shortestDistance = -1;
+
+            foreach ($options as $option) {
+                $dist = levenshtein(strtolower($word), strtolower(Str::ascii($option)));
+
+                // Localities are often short (Usme, Suba, Bosa). 
+                // Allow max 1 mistake for short words (<=4), 2 for longer.
+                $maxDist = strlen($word) <= 4 ? 1 : 2;
+
+                if ($dist <= $maxDist && ($shortestDistance === -1 || $dist < $shortestDistance)) {
+                    $bestMatch = $option;
+                    $shortestDistance = $dist;
+                }
+            }
+
+            if ($bestMatch) {
+                return ['city' => 'Bogotá', 'locality' => $bestMatch];
             }
         }
 
