@@ -47,8 +47,9 @@ class AiAgentService
         // 1.5 Strict Coherence Validation (Fresh vs City) on Affirmation
         // If user says "Yes/Dale/Acepto", check if what they accepted is valid for their city
         if ($this->isAffirmation($content)) {
-            // Check for Pending Suggestions (Order Confirmation)
-            if (isset($context['pending_suggestion_products'])) {
+            // Check for Pending Suggestions OR Confirmed Products (Order Confirmation)
+            // Fix: Allow "OK" to trigger order if we have items in the mental cart
+            if (isset($context['pending_suggestion_products']) || !empty($context['confirmed_products'])) {
                 return $this->handleOrderConfirmation($context);
             }
 
@@ -353,10 +354,16 @@ class AiAgentService
 
         // Persist validated city/locality
         if ($targetCity) {
-            $context['city'] = $targetCity;
+            // Fix: Reload context to ensure we don't overwrite products added by inferLocation or parallel logic
+            $freshContext = session('ai_context', []);
+            $freshContext['city'] = $targetCity;
             if ($matchedLocality)
-                $context['locality'] = $matchedLocality;
-            session(['ai_context' => $context]);
+                $freshContext['locality'] = $matchedLocality;
+
+            session(['ai_context' => $freshContext]);
+
+            // Update local context for the rest of this function
+            $context = $freshContext;
         }
 
         // 3. Product Detection & Order Intent
@@ -474,8 +481,14 @@ class AiAgentService
         $locSuffix = $matchedLocality ? ", localidad {$matchedLocality}" : "";
         $message = "El costo de envío a {$targetCity}{$locSuffix} es de ${price} COP.";
 
-        // If we have a product in context, prompt to close the deal
-        if ($this->getLastProductConsulted()) {
+        // If we have products in context (accumulated or just detected), list them
+        $confirmedIds = $context['confirmed_products'] ?? [];
+        if (!empty($confirmedIds)) {
+            $productNames = Product::whereIn('id', $confirmedIds)->pluck('name')->toArray();
+            $list = implode(', ', $productNames);
+            $message .= "<br><br>Tienes en tu lista: <strong>{$list}</strong>.<br>¿Deseas agregar algo más o generamos la orden?";
+        } elseif ($this->getLastProductConsulted()) {
+            // Fallback for single product flow if array wasn't populated
             $message .= "<br><br>¿Deseas agregar algún otro producto al pedido o generamos la orden?";
         }
 
@@ -535,6 +548,7 @@ class AiAgentService
         // CLEANUP
         unset($context['pending_suggestion_products']);
         unset($context['confirmed_products']); // Clear basket after order
+        unset($context['last_product_id']); // Prevent stale product context
         session(['ai_context' => $context]);
 
         // Generate Link
@@ -684,8 +698,10 @@ class AiAgentService
         }
 
         // 1. Exact/Approximate Name Match using Fuzzy Search
-        // Get all active product names
-        $allProducts = Product::where('is_active', true)->pluck('name', 'id');
+        // Get all active product names with stock
+        $allProducts = Product::where('is_active', true)
+            ->where('stock', '>', 0)
+            ->pluck('name', 'id');
 
         // Check for best match in the whole content string 
         // (Improving simple explode approach)
