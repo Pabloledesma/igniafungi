@@ -40,10 +40,54 @@
             @foreach($messages as $msg)
                     <div class="flex {{ $msg['role'] === 'user' ? 'justify-end' : 'justify-start' }}">
                         <div class="max-w-[85%] rounded-lg px-4 py-2 text-sm shadow-sm break-words
-                                        {{ $msg['role'] === 'user'
+                                                {{ $msg['role'] === 'user'
                 ? 'bg-green-100 text-green-900 rounded-br-none'
                 : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none' }}">
                             {!! $msg['content'] !!}
+
+                            {{-- UI Interactions --}}
+                            @if(isset($msg['role']) && $msg['role'] === 'assistant' && isset($msg['type']))
+                                {{-- 1. Catalog / List --}}
+                                @if($msg['type'] === 'catalog' && !empty($msg['payload']))
+                                    <div class="mt-3 flex flex-col gap-2">
+                                        @foreach($msg['payload'] as $prod)
+                                            <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}')"
+                                                class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">
+                                                <span class="font-medium text-green-800 group-hover:text-green-900">🍄
+                                                    {{ $prod['name'] }}</span>
+                                                <span
+                                                    class="text-gray-600 font-mono text-[10px] bg-gray-100 px-1 rounded">${{ number_format($prod['price']) }}</span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+
+                                {{-- 2. Suggestions (Pivot) --}}
+                                @if($msg['type'] === 'suggestion' && !empty($msg['payload']))
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        @foreach($msg['payload'] as $prod)
+                                            <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}')"
+                                                class="bg-yellow-50 border border-yellow-200 text-yellow-800 hover:bg-yellow-100 px-3 py-1 rounded-full text-xs font-semibold shadow-sm transition flex items-center gap-1">
+                                                <span>☀️</span> {{ $prod['name'] }}
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+
+                                {{-- 3. Closure Actions --}}
+                                @if($msg['type'] === 'order_closure')
+                                    <div class="mt-3 grid grid-cols-2 gap-2">
+                                        <button wire:click="triggerAction('add_more')"
+                                            class="bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold py-2 px-2 rounded-lg text-xs border border-gray-200 transition flex justify-center items-center gap-1">
+                                            ➕ Agregar más
+                                        </button>
+                                        <button wire:click="triggerAction('generate_order')"
+                                            class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-2 rounded-lg text-xs shadow-md transition flex justify-center items-center gap-1">
+                                            🛒 Generar Orden
+                                        </button>
+                                    </div>
+                                @endif
+                            @endif
                         </div>
                     </div>
             @endforeach

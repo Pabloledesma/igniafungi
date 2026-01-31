@@ -461,8 +461,9 @@ class AiAgentService
         session(['ai_context' => $context]);
 
         return [
-            'type' => 'answer',
-            'message' => "¡Claro! Estos son los hongos que tenemos disponibles para ti hoy:<br><br>" . $list
+            'type' => 'catalog',
+            'message' => "¡Claro! Estos son los hongos que tenemos disponibles para ti hoy:<br><br>" . $list,
+            'payload' => $products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])->toArray()
         ];
     }
 
@@ -745,7 +746,8 @@ class AiAgentService
 
                     return [
                         'type' => 'suggestion',
-                        'message' => "Veo que estás en {$targetCity}. Por seguridad, no enviamos productos frescos allí, pero tengo disponibles estas opciones deshidratadas de **{$strainName}**:<br><br>{$list}<br><br>¿Te gustaría cambiar tu pedido a alguna de estas opciones?"
+                        'message' => "Veo que estás en {$targetCity}. Por seguridad, no enviamos productos frescos allí, pero tengo disponibles estas opciones deshidratadas de **{$strainName}**:<br><br>{$list}<br><br>¿Te gustaría cambiar tu pedido a alguna de estas opciones?",
+                        'payload' => $alternatives->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->toArray()
                     ];
                 }
             }
@@ -779,7 +781,8 @@ class AiAgentService
 
                 return [
                     'type' => 'suggestion',
-                    'message' => "El costo de envío a {$targetCity} es de ${price} COP.<br><br>⚠️ <strong>Importante:</strong> En {$targetCity} no podemos entregar productos frescos (solo en Bogotá), pero tenemos disponibles estos productos secos para ti:<br>{$list}"
+                    'message' => "El costo de envío a {$targetCity} es de ${price} COP.<br><br>⚠️ <strong>Importante:</strong> En {$targetCity} no podemos entregar productos frescos (solo en Bogotá), pero tenemos disponibles estos productos secos para ti:<br>{$list}",
+                    'payload' => $dryProducts->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->toArray()
                 ];
             }
         }
@@ -820,7 +823,7 @@ class AiAgentService
         }
 
         return [
-            'type' => 'answer',
+            'type' => 'order_closure',
             'message' => $message
         ];
     }

@@ -68,11 +68,28 @@ class AiChat extends Component
         $response = $aiService->processMessage($input, Request::ip(), $context);
 
         // 5. Handle Response
-        $this->messages[] = ['role' => 'assistant', 'content' => $response['message']];
+        // We merge the full response to keep 'type' and 'payload'
+        $this->messages[] = array_merge(['role' => 'assistant', 'content' => $response['message']], $response);
 
-        // 6. Update local state if needed (e.g. if AI asked for City and user provided it, 
-        // ideally the service extracts it and returns it, simplified here)
-        // In a real app we'd parse the 'type' to see if we need to show a form field for City
+        // 6. Check for Closure/UI Events that need auto-interaction?
+        // No, we wait for user to click.
+    }
+
+    public function selectProduct($productId, $productName)
+    {
+        // Simulate user typing
+        $this->userInput = "He seleccionado " . $productName;
+        $this->sendMessage(app(AiAgentService::class));
+    }
+
+    public function triggerAction($action)
+    {
+        if ($action === 'generate_order') {
+            $this->userInput = "Generar orden";
+        } elseif ($action === 'add_more') {
+            $this->userInput = "Quiero agregar más productos";
+        }
+        $this->sendMessage(app(AiAgentService::class));
     }
 
     public function render()

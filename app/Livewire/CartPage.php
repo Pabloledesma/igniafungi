@@ -192,6 +192,22 @@ class CartPage extends Component
 
             $this->is_bogota = ($this->city === 'Bogotá');
             $this->location = $shipping['location'] ?? null;
+
+            // Fuzzy Match for City Selection (e.g. "Medellin" vs "Medellín")
+            if (!in_array($this->city, $this->cities)) {
+                $closest = null;
+                $minDist = 3; // Tolerance
+                foreach ($this->cities as $c) {
+                    $dist = levenshtein(strtolower(\Illuminate\Support\Str::ascii($this->city)), strtolower(\Illuminate\Support\Str::ascii($c)));
+                    if ($dist < $minDist) {
+                        $minDist = $dist;
+                        $closest = $c;
+                    }
+                }
+                if ($closest) {
+                    $this->city = $closest;
+                }
+            }
         }
     }
 
