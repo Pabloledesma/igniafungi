@@ -57,6 +57,16 @@ class ShippingZoneSeeder extends Seeder
             ['city' => 'Ibagué', 'price' => 18000],
             ['city' => 'Santa Marta', 'price' => 26000],
             ['city' => 'Villavicencio', 'price' => 18000],
+            ['city' => 'Popayán', 'price' => 23000],
+            ['city' => 'Pasto', 'price' => 24000],
+            ['city' => 'Neiva', 'price' => 20000],
+            ['city' => 'Armenia', 'price' => 20000],
+            ['city' => 'Tunja', 'price' => 18000],
+            ['city' => 'Montería', 'price' => 25000],
+            ['city' => 'Sincelejo', 'price' => 25000],
+            ['city' => 'Valledupar', 'price' => 25000],
+            ['city' => 'Riohacha', 'price' => 26000],
+            ['city' => 'Leticia', 'price' => 35000],
         ];
 
         foreach ($cities as $city) {
