@@ -15,26 +15,26 @@ class ShippingZoneSeeder extends Seeder
         // 1. Bogotá Localities
         // Precios estimados para ejemplo
         $bogotaZones = [
-            ['locality' => 'Usaquén', 'price' => 12000],
-            ['locality' => 'Chapinero', 'price' => 10000],
-            ['locality' => 'Santa Fe', 'price' => 12000],
-            ['locality' => 'San Cristóbal', 'price' => 15000],
-            ['locality' => 'Usme', 'price' => 18000],
-            ['locality' => 'Tunjuelito', 'price' => 15000],
-            ['locality' => 'Bosa', 'price' => 15000],
+            ['locality' => 'Engativá', 'price' => 9000],
+            ['locality' => 'Fontibón', 'price' => 9500],
+            ['locality' => 'Barrios Unidos', 'price' => 10000],
+            ['locality' => 'Teusaquillo', 'price' => 10500],
+            ['locality' => 'Suba', 'price' => 11000],
+            ['locality' => 'Puente Aranda', 'price' => 12000],
+            ['locality' => 'Chapinero', 'price' => 12500],
+            ['locality' => 'Los Mártires', 'price' => 13000],
+            ['locality' => 'Usaquén', 'price' => 13500],
             ['locality' => 'Kennedy', 'price' => 14000],
-            ['locality' => 'Fontibón', 'price' => 14000],
-            ['locality' => 'Engativá', 'price' => 12000],
-            ['locality' => 'Suba', 'price' => 12000],
-            ['locality' => 'Barrios Unidos', 'price' => 11000],
-            ['locality' => 'Teusaquillo', 'price' => 11000],
-            ['locality' => 'Los Mártires', 'price' => 12000],
-            ['locality' => 'Antonio Nariño', 'price' => 12000],
-            ['locality' => 'Puente Aranda', 'price' => 13000],
-            ['locality' => 'La Candelaria', 'price' => 12000],
-            ['locality' => 'Rafael Uribe Uribe', 'price' => 14000],
-            ['locality' => 'Ciudad Bolívar', 'price' => 18000], // Zona lejana
-            ['locality' => 'Sumapaz', 'price' => 25000], // Zona rural
+            ['locality' => 'Santa Fe', 'price' => 14500],
+            ['locality' => 'La Candelaria', 'price' => 15000],
+            ['locality' => 'Antonio Nariño', 'price' => 15500],
+            ['locality' => 'Rafael Uribe Uribe', 'price' => 16000],
+            ['locality' => 'Tunjuelito', 'price' => 16500],
+            ['locality' => 'San Cristóbal', 'price' => 17500],
+            ['locality' => 'Bosa', 'price' => 18000],
+            ['locality' => 'Ciudad Bolívar', 'price' => 18500],
+            ['locality' => 'Usme', 'price' => 19500],
+            ['locality' => 'Sumapaz', 'price' => 20000],
         ];
 
         foreach ($bogotaZones as $zone) {

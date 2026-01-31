@@ -9,28 +9,6 @@ class CartManagement
 {
     public const FREE_SHIPPING_THRESHOLD = 200000;
     public const DEFAULT_NATIONAL_SHIPPING = 45000;
-    public const LOCALIDAD_PRECIOS = [
-        'Engativa' => 9000,
-        'Fontibon' => 9500,
-        'Barrios Unidos' => 10000,
-        'Teusaquillo' => 10500,
-        'Suba' => 11000,
-        'Puente Aranda' => 12000,
-        'Chapinero' => 12500,
-        'Martires' => 13000,
-        'Usaquen' => 13500,
-        'Kennedy' => 14000,
-        'Santa Fe' => 14500,
-        'Candelaria' => 15000,
-        'Antonio Nariño' => 15500,
-        'Rafael Uribe Uribe' => 16000,
-        'Tunjuelito' => 16500,
-        'San Cristobal' => 17500,
-        'Bosa' => 18000,
-        'Ciudad Bolivar' => 18500,
-        'Usme' => 19500,
-        'Sumapaz' => 20000,
-    ];
 
     /**
      * Centraliza la lógica de cobro de envío.
@@ -44,13 +22,24 @@ class CartManagement
                 return 0; // Envío gratis solo para Bogotá
             }
 
-            // Si no alcanza el monto, se cobra según la localidad
-            return self::LOCALIDAD_PRECIOS[$location] ?? 9000;
+            // Consultar costo en base de datos
+            $zone = \App\Models\ShippingZone::where('city', 'Bogotá')
+                ->where('locality', $location)
+                ->first();
+
+            return $zone ? (int) $zone->price : 9000; // Fallback seguro
         }
 
         // 2. Lógica para el RESTO DEL PAÍS (Nacional)
-        // Sin importar el subtotal, se cobra la tarifa estándar
-        return self::DEFAULT_NATIONAL_SHIPPING; // Retorna 15000
+        // Consultar costo nacional por ciudad si es posible
+        $zone = \App\Models\ShippingZone::where('city', $city)->whereNull('locality')->first();
+
+        if ($zone) {
+            return (int) $zone->price;
+        }
+
+        // Sin importar el subtotal, se cobra la tarifa estándar si no está en DB
+        return self::DEFAULT_NATIONAL_SHIPPING;
     }
 
     public static function getColombiaCities()

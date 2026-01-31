@@ -264,6 +264,31 @@ class CheckoutPage extends Component
         $this->grand_total = ($subtotal - $this->discount_amount) + $this->shipping_cost;
     }
 
+    public $available_locations = []; // NEW: Dynamic Locations
+
+    public function updatedCity($value)
+    {
+        $this->available_locations = [];
+        $this->location = null;
+
+        if ($value === 'Bogotá') {
+            $this->available_locations = \App\Models\ShippingZone::where('city', 'Bogotá')
+                ->whereNotNull('locality')
+                ->pluck('locality')
+                ->toArray();
+            $this->is_bogota = true;
+            $this->shipping_method = 'bogota';
+        } else {
+            $this->is_bogota = false;
+            // Ensure logic doesn't override manual selection if already set
+            if ($this->shipping_method !== 'pickup') {
+                $this->shipping_method = 'interrapidisimo';
+            }
+        }
+
+        $this->calculateShipping();
+    }
+
     public function mount()
     {
         $this->first_name = auth()->user()->name;
@@ -275,10 +300,19 @@ class CheckoutPage extends Component
         $shipping_data = session('checkout_shipping');
 
         if ($shipping_data) {
-            $this->is_bogota = $shipping_data['is_bogota'] ?? false;
-            $this->city = $this->is_bogota ? 'Bogotá' : null;
+            $isBogota = $shipping_data['is_bogota'] ?? false;
+            $this->is_bogota = $isBogota;
+            $this->city = $isBogota ? 'Bogotá' : ($shipping_data['city'] ?? null);
             $this->location = $shipping_data['location'] ?? null;
             $this->delivery_date = $shipping_data['delivery_date'] ?? null;
+
+            // Load locations if Bogota
+            if ($this->city === 'Bogotá') {
+                $this->available_locations = \App\Models\ShippingZone::where('city', 'Bogotá')
+                    ->whereNotNull('locality')
+                    ->pluck('locality')
+                    ->toArray();
+            }
 
             // Set Shipping Method based on session context
             if ($this->is_bogota) {
@@ -286,9 +320,6 @@ class CheckoutPage extends Component
             } else {
                 $this->shipping_method = 'interrapidisimo'; // Default for National
             }
-
-            // We usually don't need to force cost from session if we recalculate, 
-            // but to be safe we can, though calculateShipping will override.
         }
 
         $this->calculateShipping();

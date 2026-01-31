@@ -146,26 +146,9 @@
 									<select wire:model.live="location"
 										class="py-3 px-4 pe-9 block w-full border-gray-200 rounded-lg text-sm focus:border-blue-500 focus:ring-blue-500 disabled:opacity-50 disabled:pointer-events-none">
 										<option value="">Seleccione una localidad</option>
-										<option value="Suba">Suba</option>
-										<option value="Engativa">Engativa</option>
-										<option value="Kennedy">Kennedy</option>
-										<option value="Fontibon">Fontibon</option>
-										<option value="Teusaquillo">Teusaquillo</option>
-										<option value="Usaquen">Usaquen</option>
-										<option value="Puente Aranda">Puente Aranda</option>
-										<option value="Usme">Usme</option>
-										<option value="Bosa">Bosa</option>
-										<option value="Ciudad Bolivar">Ciudad Bolivar</option>
-										<option value="Rafael Uribe Uribe">Rafael Uribe Uribe</option>
-										<option value="Tunjuelito">Tunjuelito</option>
-										<option value="Santa Fe">Santa Fe</option>
-										<option value="San Cristobal">San Cristobal</option>
-										<option value="Barrios Unidos">Barrios Unidos</option>
-										<option value="Antonio Nariño">Antonio Nariño</option>
-										<option value="Martires">Martires</option>
-										<option value="Candelaria">Candelaria</option>
-										<option value="Chapinero">Chapinero</option>
-										<option value="Sumapaz">Sumapaz</option>
+										@foreach($available_locations as $loc)
+											<option value="{{ $loc }}">{{ $loc }}</option>
+										@endforeach
 									</select>
 									@error('location')
 										<div class="text-red-500 text-sm">{{ $message }}</div>

@@ -316,7 +316,8 @@ class AiAgentService
                 $locality = $inferredContext['locality'] ?? null;
                 $inferred = true;
 
-                // Persist inferred location
+                // Fix: Fetch existing context to avoid overwriting last_product_id
+                $context = session('ai_context', []);
                 $context['city'] = $city;
                 if ($locality)
                     $context['locality'] = $locality;
@@ -450,17 +451,23 @@ class AiAgentService
         }
 
         // 3.2 Bogotá Logic (or Valid Location for Fresh)
-        // If product is detected AND intent is high ("Enviame", "Quiero"), convert to Order
+        // If product is detected AND intent is high ("Enviame", "Quiero"), previously we converted to Order directly.
+        // User Feedback: Show Price + CTA "Add more" first.
         if ($product) {
-            // Direct Order Logic
-            // We reuse handleOrderConfirmation logic by setting pending products and calling it
-            $context['pending_suggestion_products'] = [$product->id];
+            // Ensure product is in context for next step
+            $context = session('ai_context', []);
+            $context['last_product_id'] = $product->id;
 
-            // Force save context for handleOrderConfirmation
+            // Add to confirmed products if not already
+            $confirmed = $context['confirmed_products'] ?? [];
+            if (!in_array($product->id, $confirmed)) {
+                $confirmed[] = $product->id;
+            }
+            $context['confirmed_products'] = $confirmed;
+
             session(['ai_context' => $context]);
 
-            // Call Order Confirmation directly
-            return $this->handleOrderConfirmation($context);
+            // DO NOT jump to handleOrderConfirmation yet. Fall through to price quote.
         }
 
         // Bogota or Acceptable Product (Just Shipping Info)
@@ -469,7 +476,7 @@ class AiAgentService
 
         // If we have a product in context, prompt to close the deal
         if ($this->getLastProductConsulted()) {
-            $message .= "<br><br>¿Deseas confirmar la orden de compra?";
+            $message .= "<br><br>¿Deseas agregar algún otro producto al pedido o generamos la orden?";
         }
 
         return [
@@ -480,12 +487,27 @@ class AiAgentService
 
     protected function handleOrderConfirmation(array $context): array
     {
-        $productIds = $context['pending_suggestion_products'] ?? [];
+        // USE CONFIRMED PRODUCTS (Accumulated via detectProduct)
+        $productIds = $context['confirmed_products'] ?? [];
+
+        // Fallback: If no confirmed list but we have a last product (e.g. direct flow)
+        if (empty($productIds) && isset($context['last_product_id'])) {
+            $productIds = [$context['last_product_id']];
+        }
+
+        if (empty($productIds) && isset($context['pending_suggestion_products'])) {
+            // Second fallback: Pending suggestions (only if explicit direct accept happened?)
+            // Actually, this was the source of the bug. We should probably avoid this unless size is 1.
+            // Let's assume detectProduct handled it. If empty here, we have a problem.
+            if (count($context['pending_suggestion_products']) === 1) {
+                $productIds = $context['pending_suggestion_products'];
+            }
+        }
 
         if (empty($productIds)) {
             return [
                 'type' => 'error',
-                'message' => 'Lo siento, no tengo un pedido pendiente por confirmar. ¿Qué te gustaría comprar?'
+                'message' => 'Lo siento, no tengo claro qué productos deseas incluir en tu orden. ¿Podrías decirme el nombre o número del producto?'
             ];
         }
 
@@ -510,8 +532,9 @@ class AiAgentService
             'delivery_date' => null // Let user select
         ]);
 
-        // CLEANUP PENDING
+        // CLEANUP
         unset($context['pending_suggestion_products']);
+        unset($context['confirmed_products']); // Clear basket after order
         session(['ai_context' => $context]);
 
         // Generate Link
@@ -646,6 +669,14 @@ class AiAgentService
                 if ($product) {
                     // Update context as if they named it
                     $context['last_product_id'] = $product->id;
+
+                    // ADD TO CONFIRMED BASKET
+                    $confirmed = $context['confirmed_products'] ?? [];
+                    if (!in_array($product->id, $confirmed)) {
+                        $confirmed[] = $product->id;
+                    }
+                    $context['confirmed_products'] = $confirmed;
+
                     session(['ai_context' => $context]);
                     return $product;
                 }
@@ -667,6 +698,14 @@ class AiAgentService
             if ($product) {
                 $context = session('ai_context', []);
                 $context['last_product_id'] = $product->id;
+
+                // ADD TO CONFIRMED BASKET
+                $confirmed = $context['confirmed_products'] ?? [];
+                if (!in_array($product->id, $confirmed)) {
+                    $confirmed[] = $product->id;
+                }
+                $context['confirmed_products'] = $confirmed;
+
                 session(['ai_context' => $context]);
             }
             return $product;
@@ -683,6 +722,14 @@ class AiAgentService
                     if ($product) {
                         $context = session('ai_context', []);
                         $context['last_product_id'] = $product->id;
+
+                        // ADD TO CONFIRMED BASKET
+                        $confirmed = $context['confirmed_products'] ?? [];
+                        if (!in_array($product->id, $confirmed)) {
+                            $confirmed[] = $product->id;
+                        }
+                        $context['confirmed_products'] = $confirmed;
+
                         session(['ai_context' => $context]);
                     }
                     return $product;
