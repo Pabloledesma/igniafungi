@@ -17,18 +17,20 @@ class AiAgentService
      */
     public function processMessage(string $content, string $ip, ?array $context = []): array
     {
-        // 0. Context Inference: Check if message is just a City or Locality
-        // This solves "Respondi la pregunta de la ciudad y no busco"
+        // 0. Load Context from Session (Persistence)
+        $sessionContext = session('ai_context', []);
+        $context = array_merge($sessionContext, $context);
+
+        // 0.1 Context Inference: Check if message is just a City or Locality
         $locationContext = $this->inferLocationFromContent($content);
         if ($locationContext) {
             $context['city'] = $locationContext['city'];
             if (isset($locationContext['locality'])) {
                 $context['locality'] = $locationContext['locality'];
             }
+            // Update Session
+            session(['ai_context' => $context]);
 
-            // If we inferred a location, we assume it's a shipping or availability query context.
-            // Priority: Shipping > Availability
-            // If the user just says "Bogota", we assume they are answering the shipping question.
             return $this->handleShippingQuery($content, $context);
         }
 
@@ -42,7 +44,20 @@ class AiAgentService
         }
         RateLimiter::hit($key, 60);
 
-        // 2. Spam/Junk Filter
+        // 1.5 Strict Coherence Validation (Fresh vs City) on Affirmation
+        // If user says "Yes/Dale/Acepto", check if what they accepted is valid for their city
+        if ($this->isAffirmation($content)) {
+            if (isset($context['city']) && isset($context['last_offered_product_type'])) {
+                if ($context['last_offered_product_type'] === 'fresh' && Str::slug($context['city']) !== 'bogota') {
+                    return [
+                        'type' => 'suggestion',
+                        'message' => "Entiendo que quieres continuar, pero recuerda que **en {$context['city']} solo podemos entregar productos secos**. ¿Te gustaría ver nuestras opciones deshidratadas?"
+                    ];
+                }
+            }
+        }
+
+        // 2. Spam/Junk Filter (Keep original)
         if ($this->isSpam($content)) {
             return [
                 'type' => 'ignore',
@@ -50,7 +65,7 @@ class AiAgentService
             ];
         }
 
-        // 3. Lead Generation (Simple intent detection)
+        // 3. Lead Generation (Keep original)
         if ($this->detectLeadIntent($content)) {
             $user = $this->createOrUpdateLead($content, $context);
             if ($user) {
@@ -72,26 +87,45 @@ class AiAgentService
         }
 
         // 6. Business Logic: Products/Freshness
-        // Simple keyword search for products in the message
         $product = $this->detectProduct($content);
         if ($product) {
+            // Check coherence BEFORE handling
+            if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
+                $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
+                if ($isFresh) {
+                    return [
+                        'type' => 'suggestion',
+                        'message' => "Veo que te interesa *{$product->name}* (Fresco), pero en **{$context['city']}** solo podemos enviarte productos secos/deshidratados. ¿Te muestro las opciones disponibles?"
+                    ];
+                }
+            }
+            // Store for context
+            $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
+            $context['last_offered_product_type'] = $isFresh ? 'fresh' : 'dry';
+            session(['ai_context' => $context]);
+
             return $this->handleProductQuery($product, $context);
         }
 
-        // En lugar de ir directo a callLlm
+        // 7. General Shipping/Availability fallback check
         if ($this->isShippingQuery($content) || $this->isAvailabilityQuery($content)) {
-            $result = $this->handleShippingQuery($content, $context);
-
-            if (isset($result['type']) && $result['type'] === 'handoff') {
-                return [
-                    'type' => 'question',
-                    'message' => "No estoy seguro de haber entendido la ubicación o el producto. ¿Podrías escribirlo de nuevo? (Ej: 'Envío a Medellín' o '¿Tienen Orellanas?')"
-                ];
-            }
+            // Already handled above if strict match, but this block was in previous code
+            return $this->handleShippingQuery($content, $context);
         }
 
-        // 7. LLM Communication (Stub)
+        // 8. LLM Communication (Stub)
         return $this->callLlm($content);
+    }
+
+    protected function isAffirmation(string $content): bool
+    {
+        $affirmatives = ['si', 'sí', 'dale', 'acepto', 'bueno', 'ok', 'está bien', 'claro'];
+        foreach ($affirmatives as $word) {
+            if (Str::lower($content) === $word || str_starts_with(Str::lower($content), $word . ' ')) {
+                return true;
+            }
+        }
+        return false;
     }
 
     protected function isAvailabilityQuery(string $content): bool
@@ -222,17 +256,19 @@ class AiAgentService
         $locality = $context['locality'] ?? null;
 
         if (!$city) {
-            // New Feature: Try to infer city/locality from content (Reverse Lookup)
-            // Get all Bogotá localities
-            $bogotaLocalities = ShippingZone::where('city', 'Bogotá')->whereNotNull('locality')->pluck('locality');
+            // Try to infer city/locality from content using shared helper
+            $inferredContext = $this->inferLocationFromContent($content);
 
-            foreach ($bogotaLocalities as $dbLocality) {
-                if (stripos($content, $dbLocality) !== false) {
-                    $city = 'Bogotá';
-                    $locality = $dbLocality;
-                    $inferred = true;
-                    break;
-                }
+            if ($inferredContext) {
+                $city = $inferredContext['city'];
+                $locality = $inferredContext['locality'] ?? null;
+                $inferred = true;
+
+                // Persist inferred location
+                $context['city'] = $city;
+                if ($locality)
+                    $context['locality'] = $locality;
+                session(['ai_context' => $context]);
             }
 
             if (!$city) {
@@ -262,14 +298,25 @@ class AiAgentService
         $price = number_format($info['price'], 0);
         $matchedLocality = $info['locality'] ?? null;
 
+        // Persist validated city/locality
+        if ($targetCity) {
+            $context['city'] = $targetCity;
+            if ($matchedLocality)
+                $context['locality'] = $matchedLocality;
+            session(['ai_context' => $context]);
+        }
+
         // 3. Strict Product Validation for Non-Bogota
         if (Str::slug($targetCity) !== 'bogota') {
             // Check if user is asking for a Fresh product or has one in context
-            // We re-detect product in content just in case, or use context
             $product = $this->detectProduct($content); // Use robust detection
 
             $isFreshRequest = false;
+            $pivotSourceProduct = null;
+
+            // Check current message
             if ($product) {
+                $pivotSourceProduct = $product;
                 if (
                     ($product->category && str_contains(strtolower($product->category->name), 'fresco')) ||
                     str_contains(strtolower($product->name), 'fresco')
@@ -277,9 +324,40 @@ class AiAgentService
                     $isFreshRequest = true;
                 }
             }
+            // Check stored context (Memory) via helper
+            elseif ($lastProduct = $this->getLastProductConsulted()) {
+                $pivotSourceProduct = $lastProduct;
+                // Re-evaluate freshness from stored product
+                if (
+                    ($lastProduct->category && str_contains(strtolower($lastProduct->category->name), 'fresco')) ||
+                    str_contains(strtolower($lastProduct->name), 'fresco')
+                ) {
+                    $isFreshRequest = true;
+                }
+            }
 
             // Auto-suggest logic if Fresh requested OR just as a general rule
-            // "Si el usuario preguntó por un producto fresco o no especificó uno" -> Default to warning
+            if ($isFreshRequest && $pivotSourceProduct) {
+                // PIVOT LOGIC: Find dry products of the SAME STRAIN
+                $alternatives = $this->findDryAlternatives($pivotSourceProduct);
+
+                if ($alternatives->isNotEmpty()) {
+                    $list = $alternatives->map(function ($p) {
+                        return "• {$p->name} (${$p->price})";
+                    })->join("<br>");
+
+                    $strainName = $pivotSourceProduct->strain->name ?? 'la misma cepa';
+
+                    // Context update instruction (implicit in flow, but could be made explicit if next msg is yes)
+                    // We inform usage of alternatives
+                    return [
+                        'type' => 'suggestion',
+                        'message' => "Veo que estás en {$targetCity}. Por seguridad, no enviamos productos frescos allí, pero tengo disponibles estas opciones deshidratadas de **{$strainName}**:<br><br>{$list}<br><br>¿Te gustaría cambiar tu pedido a alguna de estas opciones?"
+                    ];
+                }
+            }
+
+            // Generic Fallback
             if ($isFreshRequest || !$product) {
                 $dryProducts = $this->findDryProducts();
                 $list = $dryProducts->map(function ($p) {
@@ -299,6 +377,39 @@ class AiAgentService
             'type' => 'answer',
             'message' => "El costo de envío a {$targetCity}{$locSuffix} es de ${price} COP."
         ];
+    }
+
+    protected function getLastProductConsulted(): ?Product
+    {
+        $context = session('ai_context', []);
+        if (isset($context['last_product_id'])) {
+            return Product::find($context['last_product_id']);
+        }
+        return null;
+    }
+
+    protected function findDryAlternatives(Product $sourceProduct)
+    {
+        return Product::where('is_active', true)
+            ->where('stock', '>', 0)
+            ->where('id', '!=', $sourceProduct->id) // Exclude self
+            ->where(function ($q) use ($sourceProduct) {
+                // Same strain
+                if ($sourceProduct->strain_id) {
+                    $q->where('strain_id', $sourceProduct->strain_id);
+                }
+                // AND is dry
+                $q->where(function ($q2) {
+                    $q2->whereHas('category', function ($q3) {
+                        $q3->where('name', 'like', '%deshidratado%')
+                            ->orWhere('name', 'like', '%seco%');
+                    })
+                        ->orWhere('name', 'like', '%deshidratado%')
+                        ->orWhere('name', 'like', '%seco%');
+                });
+            })
+            ->limit(3)
+            ->get();
     }
 
     protected function findDryProducts()
@@ -386,7 +497,14 @@ class AiAgentService
 
         if ($bestMatchName) {
             // Retrieve by name
-            return Product::where('name', $bestMatchName)->first();
+            $product = Product::where('name', $bestMatchName)->first();
+            // Store in session (Memory)
+            if ($product) {
+                $context = session('ai_context', []);
+                $context['last_product_id'] = $product->id;
+                session(['ai_context' => $context]);
+            }
+            return $product;
         }
 
         // Fallback: Word by word check (Legacy but useful)
@@ -395,7 +513,14 @@ class AiAgentService
             if (strlen($word) > 3) {
                 $match = $this->findBestMatch($word, $allProducts);
                 if ($match) {
-                    return Product::where('name', $match)->first();
+                    $product = Product::where('name', $match)->first();
+                    // Store in session (Memory)
+                    if ($product) {
+                        $context = session('ai_context', []);
+                        $context['last_product_id'] = $product->id;
+                        session(['ai_context' => $context]);
+                    }
+                    return $product;
                 }
             }
         }
