@@ -47,6 +47,11 @@ class AiAgentService
         // 1.5 Strict Coherence Validation (Fresh vs City) on Affirmation
         // If user says "Yes/Dale/Acepto", check if what they accepted is valid for their city
         if ($this->isAffirmation($content)) {
+            // Check for Pending Suggestions (Order Confirmation)
+            if (isset($context['pending_suggestion_products'])) {
+                return $this->handleOrderConfirmation($context);
+            }
+
             if (isset($context['city']) && isset($context['last_offered_product_type'])) {
                 if ($context['last_offered_product_type'] === 'fresh' && Str::slug($context['city']) !== 'bogota') {
                     return [
@@ -130,11 +135,23 @@ class AiAgentService
 
     protected function isAvailabilityQuery(string $content): bool
     {
-        $phrases = ['disponibles', 'que tienes', 'tienen', 'stock', 'variedades', 'cuales hongos', 'que venden'];
+        $content = strtolower($content);
+
+        // 1. Direct Phrases
+        $phrases = ['disponibles', 'que tienes', 'tienen', 'stock', 'variedades', 'cuales hongos', 'que venden', 'catalogo', 'catálogo', 'precio', 'lista'];
         foreach ($phrases as $phrase) {
-            if (stripos($content, $phrase) !== false)
+            if (str_contains($content, $phrase))
                 return true;
         }
+
+        // 2. Combination Logic (e.g. "que" + "hongos")
+        if (str_contains($content, 'que') && str_contains($content, 'hongos')) {
+            return true;
+        }
+        if (str_contains($content, 'cuales') && str_contains($content, 'hongos')) {
+            return true;
+        }
+
         return false;
     }
 
@@ -236,9 +253,13 @@ class AiAgentService
 
     protected function isShippingQuery(string $content): bool
     {
-        return stripos($content, 'envio') !== false ||
-            stripos($content, 'domicilio') !== false ||
-            stripos($content, 'costo') !== false;
+        $content = strtolower($content);
+        return str_contains($content, 'envi') || // envio, enviar, enviame
+            str_contains($content, 'domicilio') ||
+            str_contains($content, 'costo') ||
+            str_contains($content, 'pedir') ||
+            str_contains($content, 'mand') || // mandar, mandame
+            str_contains($content, 'llev');    // llevar, llevame
     }
 
     protected function handleShippingQuery(string $content, array $context): array
@@ -343,10 +364,15 @@ class AiAgentService
 
                 if ($alternatives->isNotEmpty()) {
                     $list = $alternatives->map(function ($p) {
-                        return "• {$p->name} (${$p->price})";
+                        return "• {$p->name} ($" . number_format($p->price, 0) . ")";
                     })->join("<br>");
 
                     $strainName = $pivotSourceProduct->strain->name ?? 'la misma cepa';
+
+                    // STORE PENDING SUGGESTION
+                    $context = session('ai_context', []);
+                    $context['pending_suggestion_products'] = $alternatives->pluck('id')->toArray();
+                    session(['ai_context' => $context]);
 
                     // Context update instruction (implicit in flow, but could be made explicit if next msg is yes)
                     // We inform usage of alternatives
@@ -357,12 +383,26 @@ class AiAgentService
                 }
             }
 
-            // Generic Fallback
+            // Generic Fallback (If no pivots found OR generic fresh request)
             if ($isFreshRequest || !$product) {
                 $dryProducts = $this->findDryProducts();
+
+                if ($dryProducts->isEmpty()) {
+                    // Strict "No Stock" Message
+                    return [
+                        'type' => 'answer',
+                        'message' => "En el momento no tenemos stock disponible para hongos deshidratados, que son los únicos que podemos enviar a {$targetCity}. ¡Vuelve pronto!"
+                    ];
+                }
+
                 $list = $dryProducts->map(function ($p) {
-                    return "• {$p->name} (${$p->price})";
+                    return "• {$p->name} ($" . number_format($p->price, 0) . ")";
                 })->join("<br>");
+
+                // STORE PENDING SUGGESTION
+                $context = session('ai_context', []);
+                $context['pending_suggestion_products'] = $dryProducts->pluck('id')->toArray();
+                session(['ai_context' => $context]);
 
                 return [
                     'type' => 'suggestion',
@@ -376,6 +416,33 @@ class AiAgentService
         return [
             'type' => 'answer',
             'message' => "El costo de envío a {$targetCity}{$locSuffix} es de ${price} COP."
+        ];
+    }
+
+    protected function handleOrderConfirmation(array $context): array
+    {
+        $productIds = $context['pending_suggestion_products'] ?? [];
+
+        if (empty($productIds)) {
+            return [
+                'type' => 'error',
+                'message' => 'Lo siento, no tengo un pedido pendiente por confirmar. ¿Qué te gustaría comprar?'
+            ];
+        }
+
+        // CLEANUP PENDING
+        unset($context['pending_suggestion_products']);
+        session(['ai_context' => $context]);
+
+        // Generate Link (Simulation, assuming a route exists or just query params)
+        // In a real app we might create an Order record here.
+        // For now, we point to a generic checkout with products query param
+        $idsParam = implode(',', $productIds);
+        $link = url("/checkout?products={$idsParam}");
+
+        return [
+            'type' => 'system',
+            'message' => "¡Perfecto! He añadido los productos a tu carrito. Puedes finalizar tu compra aquí:<br><br>👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>"
         ];
     }
 
@@ -574,19 +641,44 @@ class AiAgentService
     }
     protected function inferLocationFromContent(string $content): ?array
     {
-        // 1. Check for Bogota Localities
+        // 1. Check for Bogota Localities first (Specific > General)
         $bogotaLocalities = ShippingZone::where('city', 'Bogotá')->whereNotNull('locality')->pluck('locality');
-        foreach ($bogotaLocalities as $dbLocality) {
-            if (stripos($content, $dbLocality) !== false) {
-                return ['city' => 'Bogotá', 'locality' => $dbLocality];
+
+        // Use findBestMatch on words for localities too
+        $words = explode(' ', str_replace([',', '.', '!', '?'], ' ', $content));
+
+        foreach ($words as $word) {
+            if (strlen($word) < 4)
+                continue;
+
+            $matchedLocality = $this->findBestMatch($word, $bogotaLocalities);
+            if ($matchedLocality) {
+                return ['city' => 'Bogotá', 'locality' => $matchedLocality];
             }
         }
 
         // 2. Check for Cities
         $dbCities = ShippingZone::select('city')->distinct()->pluck('city');
+
+        foreach ($words as $word) {
+            if (strlen($word) < 3)
+                continue; // "Cali" is 4, but let's be safe with 3 for short names if any (e.g. Ica?) No, shortest is usually 4.
+
+            // Avoid matching common words "para", "pero", "donde" that might fuzzy match
+            $commonWords = ['para', 'pero', 'como', 'donde', 'envio', 'valor', 'costo', 'tienen', 'hongo', 'luego', 'puedo', 'quiero'];
+            if (in_array(strtolower($word), $commonWords))
+                continue;
+
+            $matchedCity = $this->findBestMatch($word, $dbCities);
+            if ($matchedCity) {
+                return ['city' => $matchedCity];
+            }
+        }
+
+        // Fallback: Check multi-word cities (e.g. San Andres) using ascii stripos
+        // This covers cases where the user types "San Andres" and fuzzy match on "San" or "Andres" alone might be ambiguous or weak
         foreach ($dbCities as $dbCity) {
-            // Check exact match or normalized match for single words (e.g. "Cali", "Bogota")
-            if (Str::slug($content) === Str::slug($dbCity) || stripos($content, $dbCity) !== false) {
+            if (str_contains(Str::ascii(strtolower($content)), Str::ascii(strtolower($dbCity)))) {
                 return ['city' => $dbCity];
             }
         }
