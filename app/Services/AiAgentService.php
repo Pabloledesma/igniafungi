@@ -94,7 +94,16 @@ class AiAgentService
 
         // 6. Business Logic: Products/Freshness
         $product = $this->detectProduct($content);
+
+        // Fallback: If no product detected but query is informational, assume context
+        if (!$product && $this->isInformationalQuery($content)) {
+            $product = $this->getLastProductConsulted();
+        }
+
         if ($product) {
+            // RELOAD CONTEXT because detectProduct modified it
+            $context = session('ai_context', []);
+
             // Check coherence BEFORE handling
             if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
                 $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
@@ -110,8 +119,83 @@ class AiAgentService
             $context['last_offered_product_type'] = $isFresh ? 'fresh' : 'dry';
             session(['ai_context' => $context]);
 
+            // 6.1 Check for Informational Intent
+            if ($this->isInformationalQuery($content)) {
+                $description = $product->description ?? $product->short_description ?? "Es un excelente producto de Ignia Fungi.";
+
+                // Extract keywords to see if specific info is requested
+                // Add product name parts to stop words
+                $nameParts = explode(' ', strtolower($product->name));
+                $stopWords = array_merge($this->stopWords, $nameParts);
+
+                $words = explode(' ', mb_strtolower(preg_replace('/[^\p{L}\p{N}\s]/u', '', $content)));
+                $keywords = array_filter($words, fn($w) => mb_strlen($w) > 3 && !in_array($w, $stopWords));
+
+                // If generic query (no specific keywords), return description
+                if (empty($keywords)) {
+                    return [
+                        'type' => 'answer',
+                        'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}"
+                    ];
+                }
+
+                // Check if description covers keys
+                $covered = false;
+                foreach ($keywords as $kw) {
+                    if (str_contains(mb_strtolower($description), $kw)) {
+                        $covered = true;
+                        break;
+                    }
+                }
+
+                if ($covered) {
+                    return [
+                        'type' => 'answer',
+                        'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}"
+                    ];
+                }
+
+                // Search Posts
+                // Use fully qualified class name or import at top (Post is not imported?)
+                // Use \App\Models\Post just to be safe or add use statement later.
+                // Assuming \App\Models\Post works (it was used in tests).
+                $posts = \App\Models\Post::where('product_id', $product->id)
+                    ->where('is_published', true)
+                    ->where(function ($q) use ($keywords) {
+                        foreach ($keywords as $kw) {
+                            $q->orWhere('content', 'like', "%{$kw}%")
+                                ->orWhere('title', 'like', "%{$kw}%")
+                                ->orWhere('summary', 'like', "%{$kw}%");
+                        }
+                    })->limit(3)->get();
+
+                if ($posts->isNotEmpty()) {
+                    $extraInfo = "";
+                    foreach ($posts as $post) {
+                        $extraInfo .= "<br>🔹 **{$post->title}:** {$post->summary}";
+                    }
+                    return [
+                        'type' => 'answer',
+                        'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}<br><br>💡 **Información Adicional (Blog):**{$extraInfo}"
+                    ];
+                }
+
+                // Handoff if info not found
+                return $this->callLlm("Consulta sobre {$product->name}: {$content} (Info no encontrada en descripción ni posts)");
+            }
+
             return $this->handleProductQuery($product, $context);
         }
+
+        // 6.5 Check strictly for informational queries about a product (even if detectProduct handled it, we intercepted it)
+        // Actually, detectProduct calls session update and return matched product.
+        // We can check intent here.
+
+        // Refactor: Logic 6 checks detectProduct.
+        // Inside logic 6, we should branch: Is it a Sales Intent ("Lo quiero") or Info Intent ("Que es?")?
+
+        // Let's modify block 6 in a larger chunk
+
 
         // 7. General Shipping/Availability fallback check
         if ($this->isShippingQuery($content) || $this->isAvailabilityQuery($content)) {
@@ -144,6 +228,153 @@ class AiAgentService
         }
 
         return false;
+    }
+
+    protected array $stopWords = [
+        'que',
+        'es',
+        'el',
+        'la',
+        'los',
+        'las',
+        'un',
+        'una',
+        'de',
+        'del',
+        'para',
+        'sirve',
+        'cuentame',
+        'sobre',
+        'hongo',
+        'producto',
+        'informacion',
+        'detalle',
+        'beneficios',
+        'propiedades',
+        'no',
+        'se',
+        'sabes',
+        'tienes',
+        'me',
+        'puedes',
+        'decir',
+        'como',
+        'cuando',
+        'donde',
+        'interesa',
+        'quiero',
+        'quisiera',
+        'deseo',
+        'gustaria',
+        'precio',
+        'costo',
+        'valor',
+        'cuanto',
+        'vale',
+        'comprar'
+    ];
+
+    protected function isInformationalQuery(string $content): bool
+    {
+        // ... (Keep existing keywords logic)
+        $content = strtolower($content);
+        $keywords = [
+            'que es',
+            'qué es',
+            'para que sirve',
+            'para qué sirve',
+            'informacion',
+            'información',
+            'cuentame',
+            'cuéntame',
+            'sobre',
+            'detalle',
+            'beneficios',
+            'propiedades',
+            'no se',
+            'no sé',
+            'desconozco',
+            'sirve para',
+            'usar',
+            'consumir',
+            'preparar',
+            'cocina',
+            'receta',
+            'uso',
+            'dosis',
+            'como se usa'
+        ];
+
+        foreach ($keywords as $kw) {
+            if (str_contains($content, $kw))
+                return true;
+        }
+        return false;
+    }
+
+    // ... (rest of methods)
+
+    protected function detectProduct(string $content): ?Product
+    {
+        // ... (Keep existing numeric and exact/fuzzy/substring checks)
+        // 0. Check for Numeric Selection
+        if (preg_match('/^(\d+)$/', trim($content), $matches) || preg_match('/opcion (\d+)/i', $content, $matches) || preg_match('/el (\d+)/i', $content, $matches)) {
+            $index = (int) end($matches);
+            $context = session('ai_context', []);
+            $pendingIds = $context['pending_suggestion_products'] ?? [];
+            $arrayIndex = $index - 1;
+
+            if (isset($pendingIds[$arrayIndex])) {
+                $product = Product::find($pendingIds[$arrayIndex]);
+                if ($product) {
+                    $this->updateProductContext($product);
+                    return $product;
+                }
+            }
+        }
+
+        // 1. Exact/Approximate & Substring
+        $allProducts = Product::where('is_active', true)
+            ->where('stock', '>', 0)
+            ->pluck('name', 'id');
+
+        $bestMatchName = $this->findBestMatch($content, $allProducts);
+        if ($bestMatchName) {
+            $product = Product::where('name', $bestMatchName)->first();
+            if ($product) {
+                $this->updateProductContext($product);
+                return $product;
+            }
+        }
+
+        foreach ($allProducts as $id => $pName) {
+            if (stripos($content, $pName) !== false) {
+                $product = Product::find($id);
+                if ($product) {
+                    $this->updateProductContext($product);
+                    return $product;
+                }
+            }
+        }
+
+        // 3. KEYWORD PARTIAL MATCH (New)
+        $words = explode(' ', mb_strtolower(preg_replace('/[^\p{L}\p{N}\s]/u', '', $content)));
+        $potentialKeywords = array_filter($words, fn($w) => mb_strlen($w) > 3 && !in_array($w, $this->stopWords));
+
+        foreach ($potentialKeywords as $word) {
+            // Find product with name containing this word
+            $product = Product::where('is_active', true)
+                ->where('stock', '>', 0)
+                ->where('name', 'like', "%{$word}%")
+                ->first();
+
+            if ($product) {
+                $this->updateProductContext($product);
+                return $product;
+            }
+        }
+
+        return null;
     }
 
     protected function isAvailabilityQuery(string $content): bool
@@ -710,95 +941,21 @@ class AiAgentService
         return ['error' => "No tenemos tarifa registrada para {$matchedCity}."];
     }
 
-    protected function detectProduct(string $content): ?Product
+    protected function updateProductContext(Product $product): void
     {
-        // 0. Check for Numeric Selection (e.g. "1", "2", "el 1")
-        // Clean input to find a number
-        if (preg_match('/^(\d+)$/', trim($content), $matches) || preg_match('/opcion (\d+)/i', $content, $matches) || preg_match('/el (\d+)/i', $content, $matches)) {
-            $index = (int) end($matches);
-            $context = session('ai_context', []);
-            $pendingIds = $context['pending_suggestion_products'] ?? [];
+        $context = session('ai_context', []);
+        $context['last_product_id'] = $product->id;
 
-            // Adjust for 1-based index (User sees 1, Array has 0)
-            $arrayIndex = $index - 1;
-
-            if (isset($pendingIds[$arrayIndex])) {
-                $product = Product::find($pendingIds[$arrayIndex]);
-                if ($product) {
-                    // Update context as if they named it
-                    $context['last_product_id'] = $product->id;
-
-                    // ADD TO CONFIRMED BASKET
-                    $confirmed = $context['confirmed_products'] ?? [];
-                    if (!in_array($product->id, $confirmed)) {
-                        $confirmed[] = $product->id;
-                    }
-                    $context['confirmed_products'] = $confirmed;
-
-                    session(['ai_context' => $context]);
-                    return $product;
-                }
-            }
+        $confirmed = $context['confirmed_products'] ?? [];
+        if (!in_array($product->id, $confirmed)) {
+            $confirmed[] = $product->id;
         }
+        $context['confirmed_products'] = $confirmed;
 
-        // 1. Exact/Approximate Name Match using Fuzzy Search
-        // Get all active product names with stock
-        $allProducts = Product::where('is_active', true)
-            ->where('stock', '>', 0)
-            ->pluck('name', 'id');
-
-        // Check for best match in the whole content string 
-        // (Improving simple explode approach)
-        $bestMatchName = $this->findBestMatch($content, $allProducts);
-
-        if ($bestMatchName) {
-            // Retrieve by name
-            $product = Product::where('name', $bestMatchName)->first();
-            // Store in session (Memory)
-            if ($product) {
-                $context = session('ai_context', []);
-                $context['last_product_id'] = $product->id;
-
-                // ADD TO CONFIRMED BASKET
-                $confirmed = $context['confirmed_products'] ?? [];
-                if (!in_array($product->id, $confirmed)) {
-                    $confirmed[] = $product->id;
-                }
-                $context['confirmed_products'] = $confirmed;
-
-                session(['ai_context' => $context]);
-            }
-            return $product;
-        }
-
-        // Fallback: Word by word check (Legacy but useful)
-        $words = explode(' ', $content);
-        foreach ($words as $word) {
-            if (strlen($word) > 3) {
-                $match = $this->findBestMatch($word, $allProducts);
-                if ($match) {
-                    $product = Product::where('name', $match)->first();
-                    // Store in session (Memory)
-                    if ($product) {
-                        $context = session('ai_context', []);
-                        $context['last_product_id'] = $product->id;
-
-                        // ADD TO CONFIRMED BASKET
-                        $confirmed = $context['confirmed_products'] ?? [];
-                        if (!in_array($product->id, $confirmed)) {
-                            $confirmed[] = $product->id;
-                        }
-                        $context['confirmed_products'] = $confirmed;
-
-                        session(['ai_context' => $context]);
-                    }
-                    return $product;
-                }
-            }
-        }
-
-        return null;
+        session(['ai_context' => $context]);
     }
+
+
 
     protected function handleProductQuery(Product $product, array $context): array
     {

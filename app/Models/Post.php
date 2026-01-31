@@ -15,8 +15,9 @@ class Post extends Model
         'image',
         'is_published',
         'user_id',
-        'meta_description'
-        ];
+        'meta_description',
+        'product_id'
+    ];
 
     protected static function booted()
     {
