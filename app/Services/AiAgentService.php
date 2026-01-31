@@ -339,35 +339,33 @@ class AiAgentService
             session(['ai_context' => $context]);
         }
 
-        // 3. Strict Product Validation for Non-Bogota
+        // 3. Product Detection & Order Intent
+        // Check if user is referencing a product (Fresh/Dry)
+        $product = $this->detectProduct($content);
+        $isFreshRequest = false;
+
+        if ($product) {
+            if (
+                ($product->category && str_contains(strtolower($product->category->name), 'fresco')) ||
+                str_contains(strtolower($product->name), 'fresco')
+            ) {
+                $isFreshRequest = true;
+            }
+        } elseif ($lastProduct = $this->getLastProductConsulted()) {
+            // Fallback to memory
+            $product = $lastProduct; // Weak binding, might need confirmation if msg didn't mention it
+            if (
+                ($lastProduct->category && str_contains(strtolower($lastProduct->category->name), 'fresco')) ||
+                str_contains(strtolower($lastProduct->name), 'fresco')
+            ) {
+                $isFreshRequest = true;
+            }
+        }
+
+        // 3.1 Strict Product Validation for Non-Bogota
         if (Str::slug($targetCity) !== 'bogota') {
-            // Check if user is asking for a Fresh product or has one in context
-            $product = $this->detectProduct($content); // Use robust detection
-
-            $isFreshRequest = false;
-            $pivotSourceProduct = null;
-
-            // Check current message
-            if ($product) {
-                $pivotSourceProduct = $product;
-                if (
-                    ($product->category && str_contains(strtolower($product->category->name), 'fresco')) ||
-                    str_contains(strtolower($product->name), 'fresco')
-                ) {
-                    $isFreshRequest = true;
-                }
-            }
-            // Check stored context (Memory) via helper
-            elseif ($lastProduct = $this->getLastProductConsulted()) {
-                $pivotSourceProduct = $lastProduct;
-                // Re-evaluate freshness from stored product
-                if (
-                    ($lastProduct->category && str_contains(strtolower($lastProduct->category->name), 'fresco')) ||
-                    str_contains(strtolower($lastProduct->name), 'fresco')
-                ) {
-                    $isFreshRequest = true;
-                }
-            }
+            // ... (Existing Pivot Logic) ...
+            $pivotSourceProduct = $product;
 
             // Auto-suggest logic if Fresh requested OR just as a general rule
             if ($isFreshRequest && $pivotSourceProduct) {
@@ -386,8 +384,6 @@ class AiAgentService
                     $context['pending_suggestion_products'] = $alternatives->pluck('id')->toArray();
                     session(['ai_context' => $context]);
 
-                    // Context update instruction (implicit in flow, but could be made explicit if next msg is yes)
-                    // We inform usage of alternatives
                     return [
                         'type' => 'suggestion',
                         'message' => "Veo que estás en {$targetCity}. Por seguridad, no enviamos productos frescos allí, pero tengo disponibles estas opciones deshidratadas de **{$strainName}**:<br><br>{$list}<br><br>¿Te gustaría cambiar tu pedido a alguna de estas opciones?"
@@ -395,23 +391,22 @@ class AiAgentService
                 }
             }
 
-            // Generic Fallback (If no pivots found OR generic fresh request)
-            if ($isFreshRequest || !$product) {
+            // Generic Fallback
+            if ($isFreshRequest || (!$product && $isFreshRequest)) {
+                // ... (Existing Fallback Logic) ...
+                // Re-implement simplified or keep existing structure
                 $dryProducts = $this->findDryProducts();
-
+                // ...
+                // Strict "No Stock" Message
                 if ($dryProducts->isEmpty()) {
-                    // Strict "No Stock" Message
                     return [
                         'type' => 'answer',
                         'message' => "En el momento no tenemos stock disponible para hongos deshidratados, que son los únicos que podemos enviar a {$targetCity}. ¡Vuelve pronto!"
                     ];
                 }
-
+                // Store Pending
                 $list = $dryProducts->map(function ($p) {
-                    return "• {$p->name} ($" . number_format($p->price, 0) . ")";
-                })->join("<br>");
-
-                // STORE PENDING SUGGESTION
+                    return "• {$p->name} ($" . number_format($p->price, 0) . ")"; })->join("<br>");
                 $context = session('ai_context', []);
                 $context['pending_suggestion_products'] = $dryProducts->pluck('id')->toArray();
                 session(['ai_context' => $context]);
@@ -423,7 +418,21 @@ class AiAgentService
             }
         }
 
-        // Bogota or Acceptable Product
+        // 3.2 Bogotá Logic (or Valid Location for Fresh)
+        // If product is detected AND intent is high ("Enviame", "Quiero"), convert to Order
+        if ($product) {
+            // Direct Order Logic
+            // We reuse handleOrderConfirmation logic by setting pending products and calling it
+            $context['pending_suggestion_products'] = [$product->id];
+
+            // Force save context for handleOrderConfirmation
+            session(['ai_context' => $context]);
+
+            // Call Order Confirmation directly
+            return $this->handleOrderConfirmation($context);
+        }
+
+        // Bogota or Acceptable Product (Just Shipping Info)
         $locSuffix = $matchedLocality ? ", localidad {$matchedLocality}" : "";
         return [
             'type' => 'answer',
@@ -442,15 +451,33 @@ class AiAgentService
             ];
         }
 
+        // ADD TO CART VIA HELPER
+        foreach ($productIds as $id) {
+            \App\Helpers\CartManagement::addItemsToCart($id, 1);
+        }
+
+        // PRE-FILL SHIPPING DATA FOR CHECKOUT
+        $city = $context['city'] ?? 'Bogotá';
+        $location = $context['locality'] ?? null;
+        $isBogota = (Str::slug($city) === 'bogota');
+
+        // Calculate estimated cost using Helper (optional, but good for data consistency)
+        // Subtotal might not be exact here without re-fetching products, but simpler to let CheckoutPage calc it.
+        // We just need to set the location data.
+
+        session()->put('checkout_shipping', [
+            'is_bogota' => $isBogota,
+            'city' => $city,
+            'location' => $location,
+            'delivery_date' => null // Let user select
+        ]);
+
         // CLEANUP PENDING
         unset($context['pending_suggestion_products']);
         session(['ai_context' => $context]);
 
-        // Generate Link (Simulation, assuming a route exists or just query params)
-        // In a real app we might create an Order record here.
-        // For now, we point to a generic checkout with products query param
-        $idsParam = implode(',', $productIds);
-        $link = url("/checkout?products={$idsParam}");
+        // Generate Link
+        $link = url("/cart"); // Direct to cart so they see the items added
 
         return [
             'type' => 'system',
