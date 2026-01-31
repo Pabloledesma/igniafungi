@@ -317,8 +317,129 @@ class AiAgentServiceTest extends TestCase
 
         // Query doesn't name product, just "usarla" (use it) or "cocina"
         $response = $this->service->processMessage("como puedo usarla en la cocina?", '127.0.0.1');
-
         $this->assertEquals('answer', $response['type']);
         $this->assertStringContainsString('Deliciosa en el sartén', $response['message']);
+    }
+
+    public function test_product_query_synonym_expansion()
+    {
+        $product = Product::factory()->create([
+            'name' => 'Melena de León',
+            'description' => 'Ayuda a la concentración.',
+            'stock' => 10,
+            'is_active' => true
+        ]);
+
+        // Create a post about RECETAS (Synonym for Prepara)
+        \App\Models\Post::create([
+            'title' => 'Recetas con Melena',
+            'slug' => 'recetas-melena',
+            'summary' => 'Deliciosa en el sartén.',
+            'content' => 'Uso culinario.',
+            'is_published' => true,
+            'user_id' => \App\Models\User::factory()->create()->id,
+            'product_id' => $product->id
+        ]);
+
+        // Query uses "prepara" (not in post title/content explicitly, but triggers expansion)
+        // Wait, "prepara" is synonymous with "receta"? 
+        // My logic: if query has "prepara", merge "receta", "cocina" etc.
+        // So search will look for "receta" and find the post.
+
+        $response = $this->service->processMessage("Como se prepara la melena?", '127.0.0.1');
+
+        $this->assertEquals('answer', $response['type']);
+        $this->assertStringContainsString('Recetas con Melena', $response['message']);
+    }
+
+
+    public function test_fresh_product_restriction_on_shipping_query_with_context()
+    {
+        \App\Models\ShippingZone::create(['city' => 'Popayán', 'price' => 20000]); // Seed Popayan
+
+        $freshProduct = Product::factory()->create([
+            'name' => 'Melena Fresca', // Contains 'fresc'
+            'category_id' => Category::factory()->create(['name' => 'General'])->id, // Category doesn't help
+            'is_active' => true,
+            'stock' => 5
+        ]);
+
+        $dryProduct = Product::factory()->create([
+            'name' => 'Melena Seca',
+            'category_id' => Category::factory()->create(['name' => 'Hongos Deshidratados'])->id,
+            'is_active' => true,
+            'stock' => 5
+        ]);
+
+        // Scenario: User already selected Fresh product
+        session([
+            'ai_context' => [
+                'confirmed_products' => [$freshProduct->id],
+                'last_product_id' => $freshProduct->id
+            ]
+        ]);
+
+        // User asks for shipping to Popayan
+        $response = $this->service->processMessage("Hacen domicilios a Popayan?", '127.0.0.1');
+
+        // Should NOT show price. Should warn about freshness.
+        $this->assertEquals('suggestion', $response['type']);
+        $this->assertStringContainsString('no enviamos frescos allí', $response['message']);
+        $this->assertStringContainsString('Melena Seca', $response['message']); // Should suggest dry
+    }
+
+    public function test_numeric_selection_on_clean_session_asks_city()
+    {
+        // 1. Setup products
+        $product = Product::factory()->create(['name' => 'Melena', 'price' => 50000, 'stock' => 10, 'is_active' => true]);
+
+        // 2. Clear Session
+        session(['ai_context' => []]);
+
+        // 3. User asks list (Populates pending suggestions)
+        // We simulate this by setting pending suggestions manually or running the query
+        // Let's run the query to be sure
+        session(['ai_context' => ['pending_suggestion_products' => [$product->id]]]);
+
+        // Assert context has pending suggestions
+        $context = session('ai_context');
+        $this->assertNotEmpty($context['pending_suggestion_products']);
+
+        // 4. User selects "1"
+        $response = $this->service->processMessage("1", '127.0.0.1');
+
+        // 5. Expect Question about City (because Context has NO city)
+        $this->assertEquals('question', $response['type']);
+        $this->assertStringContainsString('ciudad', $response['message']);
+        $this->assertStringNotContainsString('Popayán', $response['message']);
+    }
+
+
+    public function test_checkout_session_has_city()
+    {
+        // 1. Setup
+        $product = Product::factory()->create(['name' => 'Melena', 'price' => 50000, 'stock' => 10, 'is_active' => true]);
+
+        // 2. Set Context with City (Simulate previous "Envio a Cali")
+        session([
+            'ai_context' => [
+                'confirmed_products' => [$product->id],
+                'city' => 'Cali',
+                'locality' => null
+            ]
+        ]);
+
+        // 3. User says "Generar orden"
+        $response = $this->service->processMessage("Generar orden", '127.0.0.1');
+
+
+
+        // 4. Assert Session 'checkout_shipping' has Cali
+        $shipping = session('checkout_shipping');
+        $this->assertNotNull($shipping, 'Checkout shipping session not set');
+        $this->assertEquals('Cali', $shipping['city']);
+
+        // 5. Assert Message contains Link
+        $this->assertStringContainsString('/cart', $response['message']);
     }
 }

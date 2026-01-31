@@ -155,14 +155,25 @@ class AiAgentService
                     ];
                 }
 
+                // Expand keywords for Usage/Preparation context
+                $usageTerms = ['usar', 'uso', 'consumir', 'consumo', 'preparar', 'prepara', 'cocina', 'receta', 'dosis', 'tomar', 'comer'];
+                $isUsageQuery = false;
+                foreach ($keywords as $kw) {
+                    foreach ($usageTerms as $term) {
+                        if (str_contains($kw, $term)) {
+                            $isUsageQuery = true;
+                            break 2;
+                        }
+                    }
+                }
+
+                $searchKeywords = $isUsageQuery ? array_unique(array_merge($keywords, $usageTerms)) : $keywords;
+
                 // Search Posts
-                // Use fully qualified class name or import at top (Post is not imported?)
-                // Use \App\Models\Post just to be safe or add use statement later.
-                // Assuming \App\Models\Post works (it was used in tests).
                 $posts = \App\Models\Post::where('product_id', $product->id)
                     ->where('is_published', true)
-                    ->where(function ($q) use ($keywords) {
-                        foreach ($keywords as $kw) {
+                    ->where(function ($q) use ($searchKeywords) {
+                        foreach ($searchKeywords as $kw) {
                             $q->orWhere('content', 'like', "%{$kw}%")
                                 ->orWhere('title', 'like', "%{$kw}%")
                                 ->orWhere('summary', 'like', "%{$kw}%");
@@ -213,7 +224,24 @@ class AiAgentService
         $normalized = Str::lower(preg_replace('/[^\w\s]/u', '', $content));
         $normalized = trim($normalized);
 
-        $affirmatives = ['si', 'sí', 'dale', 'acepto', 'bueno', 'ok', 'está bien', 'claro', 'de una', 'perfecto', 'listo', 'hágale'];
+        $affirmatives = [
+            'si',
+            'sí',
+            'dale',
+            'acepto',
+            'bueno',
+            'ok',
+            'está bien',
+            'claro',
+            'de una',
+            'perfecto',
+            'listo',
+            'hágale',
+            'generar orden',
+            'proceder',
+            'confirmar',
+            'comprar'
+        ];
 
         foreach ($affirmatives as $word) {
             // Exact match "si" OR starts with "si " (e.g. "si gracias")
@@ -302,7 +330,10 @@ class AiAgentService
             'receta',
             'uso',
             'dosis',
-            'como se usa'
+            'como se usa',
+            'prepara',
+            'como se prepara',
+            'como preparar'
         ];
 
         foreach ($keywords as $kw) {
@@ -598,48 +629,69 @@ class AiAgentService
         }
 
         // 3.0 Critical Geographic Interceptor
-        // Validate if the LAST CONSULTED PRODUCT is fresh and we are outside Bogota.
-        // This must run before any price is shown.
-        $interceptProduct = $this->detectProduct($content) ?? $this->getLastProductConsulted();
+        // Validate if ANY product (Last or Confirmed) is fresh and we are outside Bogota.
+        $interceptProduct = null;
+        $checkQueue = [];
 
-        if ($targetCity && Str::slug($targetCity) !== 'bogota' && $interceptProduct) {
-            $isFresh = ($interceptProduct->category && str_contains(strtolower($interceptProduct->category->name), 'fresco')) ||
-                str_contains(strtolower($interceptProduct->name), 'fresco');
+        $last = $this->detectProduct($content) ?? $this->getLastProductConsulted();
+        if ($last)
+            $checkQueue[] = $last;
 
-            if ($isFresh) {
-                // INTERCEPTED!
-                // Update context to avoid future fresh suggestions
-                $context['last_offered_product_type'] = 'dry';
-                session(['ai_context' => $context]);
+        $confirmedIds = $context['confirmed_products'] ?? [];
+        foreach ($confirmedIds as $pid) {
+            $p = Product::find($pid);
+            if ($p)
+                $checkQueue[] = $p;
+        }
 
-                // Find alternatives
-                $alternatives = $this->findDryAlternatives($interceptProduct);
+        if ($targetCity && Str::slug($targetCity) !== 'bogota') {
+            foreach ($checkQueue as $p) {
+                $isFresh = ($p->category && str_contains(strtolower($p->category->name), 'fresc')) ||
+                    str_contains(strtolower($p->name), 'fresc');
 
-                // If no specific alternatives, find generic dry
-                if ($alternatives->isEmpty()) {
-                    $alternatives = $this->findDryProducts();
+                if ($isFresh) {
+                    $interceptProduct = $p; // Found a problematic one
+                    break;
                 }
-
-                $list = "";
-                $index = 1;
-                $ids = [];
-                foreach ($alternatives as $p) {
-                    $list .= "{$index}. {$p->name} ($" . number_format($p->price, 0) . ")<br>";
-                    $ids[] = $p->id;
-                    $index++;
-                }
-
-                // Store suggested dry products
-                $context = session('ai_context', []);
-                $context['pending_suggestion_products'] = $ids;
-                session(['ai_context' => $context]);
-
-                return [
-                    'type' => 'suggestion',
-                    'message' => "Veo que estás en {$targetCity}. Por la delicadeza del producto (**{$interceptProduct->name}**), no enviamos frescos allí, pero tengo estas opciones secas:<br><br>{$list}<br><br>¿Cambiamos tu pedido por uno de estos?"
-                ];
             }
         }
+
+        if ($interceptProduct) {
+            // INTERCEPTED!
+            $isFresh = true; // For logic flow consistency
+            // Update context to avoid future fresh suggestions
+            // Update context to avoid future fresh suggestions
+            $context['last_offered_product_type'] = 'dry';
+            session(['ai_context' => $context]);
+
+            // Find alternatives
+            $alternatives = $this->findDryAlternatives($interceptProduct);
+
+            // If no specific alternatives, find generic dry
+            if ($alternatives->isEmpty()) {
+                $alternatives = $this->findDryProducts();
+            }
+
+            $list = "";
+            $index = 1;
+            $ids = [];
+            foreach ($alternatives as $p) {
+                $list .= "{$index}. {$p->name} ($" . number_format($p->price, 0) . ")<br>";
+                $ids[] = $p->id;
+                $index++;
+            }
+
+            // Store suggested dry products
+            $context = session('ai_context', []);
+            $context['pending_suggestion_products'] = $ids;
+            session(['ai_context' => $context]);
+
+            return [
+                'type' => 'suggestion',
+                'message' => "Veo que estás en {$targetCity}. Por la delicadeza del producto (**{$interceptProduct->name}**), no enviamos frescos allí, pero tengo estas opciones secas:<br><br>{$list}<br><br>¿Cambiamos tu pedido por uno de estos?"
+            ];
+        }
+
 
         // 3. Product Detection & Order Intent
         // Check if user is referencing a product (Fresh/Dry)
@@ -857,11 +909,11 @@ class AiAgentService
                 // AND is dry
                 $q->where(function ($q2) {
                     $q2->whereHas('category', function ($q3) {
-                        $q3->where('name', 'like', '%deshidratado%')
-                            ->orWhere('name', 'like', '%seco%');
+                        $q3->where('name', 'like', '%deshidratad%')
+                            ->orWhere('name', 'like', '%sec%');
                     })
-                        ->orWhere('name', 'like', '%deshidratado%')
-                        ->orWhere('name', 'like', '%seco%');
+                        ->orWhere('name', 'like', '%deshidratad%')
+                        ->orWhere('name', 'like', '%sec%');
                 });
             })
             ->limit(3)
@@ -874,11 +926,11 @@ class AiAgentService
             ->where('stock', '>', 0)
             ->where(function ($q) {
                 $q->whereHas('category', function ($q2) {
-                    $q2->where('name', 'like', '%deshidratado%')
-                        ->orWhere('name', 'like', '%seco%');
+                    $q2->where('name', 'like', '%deshidratad%')
+                        ->orWhere('name', 'like', '%sec%');
                 })
-                    ->orWhere('name', 'like', '%deshidratado%')
-                    ->orWhere('name', 'like', '%seco%');
+                    ->orWhere('name', 'like', '%deshidratad%')
+                    ->orWhere('name', 'like', '%sec%');
             })
             ->limit(5)
             ->get();
