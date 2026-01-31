@@ -366,6 +366,50 @@ class AiAgentService
             $context = $freshContext;
         }
 
+        // 3.0 Critical Geographic Interceptor
+        // Validate if the LAST CONSULTED PRODUCT is fresh and we are outside Bogota.
+        // This must run before any price is shown.
+        $interceptProduct = $this->detectProduct($content) ?? $this->getLastProductConsulted();
+
+        if ($targetCity && Str::slug($targetCity) !== 'bogota' && $interceptProduct) {
+            $isFresh = ($interceptProduct->category && str_contains(strtolower($interceptProduct->category->name), 'fresco')) ||
+                str_contains(strtolower($interceptProduct->name), 'fresco');
+
+            if ($isFresh) {
+                // INTERCEPTED!
+                // Update context to avoid future fresh suggestions
+                $context['last_offered_product_type'] = 'dry';
+                session(['ai_context' => $context]);
+
+                // Find alternatives
+                $alternatives = $this->findDryAlternatives($interceptProduct);
+
+                // If no specific alternatives, find generic dry
+                if ($alternatives->isEmpty()) {
+                    $alternatives = $this->findDryProducts();
+                }
+
+                $list = "";
+                $index = 1;
+                $ids = [];
+                foreach ($alternatives as $p) {
+                    $list .= "{$index}. {$p->name} ($" . number_format($p->price, 0) . ")<br>";
+                    $ids[] = $p->id;
+                    $index++;
+                }
+
+                // Store suggested dry products
+                $context = session('ai_context', []);
+                $context['pending_suggestion_products'] = $ids;
+                session(['ai_context' => $context]);
+
+                return [
+                    'type' => 'suggestion',
+                    'message' => "Veo que estás en {$targetCity}. Por la delicadeza del producto (**{$interceptProduct->name}**), no enviamos frescos allí, pero tengo estas opciones secas:<br><br>{$list}<br><br>¿Cambiamos tu pedido por uno de estos?"
+                ];
+            }
+        }
+
         // 3. Product Detection & Order Intent
         // Check if user is referencing a product (Fresh/Dry)
         $product = $this->detectProduct($content);
