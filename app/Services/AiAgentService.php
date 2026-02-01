@@ -372,7 +372,7 @@ class AiAgentService
         }
 
         // Also check if content implies confirmation like "los quiero"
-        if (str_contains($normalized, 'los quiero') || str_contains($normalized, 'quiero comprar')) {
+        if (str_contains($normalized, 'los quiero') || str_contains($normalized, 'quiero comprar') || str_contains($normalized, 'carrito') || str_contains($normalized, 'agregala') || str_contains($normalized, 'lo quiero')) {
             return true;
         }
 
@@ -1152,7 +1152,7 @@ class AiAgentService
                     'type' => 'system',
                     'message' => $msg,
                     'actions' => [
-                        ['label' => '💳 Ir a Pagar', 'type' => 'checkout']
+                        ['label' => '💳 Ir a Pagar', 'type' => 'link', 'url' => $link]
                     ]
                 ];
             }
@@ -1162,7 +1162,7 @@ class AiAgentService
             'type' => 'system',
             'message' => "¡Perfecto! He añadido los productos a tu carrito. Puedes finalizar tu compra aquí:\n\n👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>",
             'actions' => [
-                ['label' => '💳 Ir a Pagar', 'type' => 'checkout']
+                ['label' => '💳 Ir a Pagar', 'type' => 'link', 'url' => $link]
             ]
         ];
     }
@@ -1339,6 +1339,16 @@ class AiAgentService
 
     protected function callLlm(string $content): array
     {
+        // 0. Safety Net for Guest Users (Lazy Registration / Lead Capture)
+        // If we don't know who they are, don't handoff yet. Ask for data.
+        if (!auth()->check()) {
+            session(['ai_waiting_for_user_data' => true]);
+            return [
+                'type' => 'question',
+                'message' => "Antes de pasarte con uno de nuestros agentes o procesar tu solicitud, necesito registrarte. Por favor indícame tu **nombre** y **correo electrónico**."
+            ];
+        }
+
         // 1. Notify via Slack Channel (Using Notification Facade)
         // Build rich payload
         $context = session('ai_context', []);

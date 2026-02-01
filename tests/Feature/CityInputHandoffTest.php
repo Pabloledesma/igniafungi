@@ -88,6 +88,10 @@ class CityInputHandoffTest extends TestCase
         $context = ['last_product_id' => $product->id, 'city' => 'Cali'];
         session(['ai_context' => $context]);
 
+        // Authenticate User to bypass guest safety net
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
         // Trigger fallback
         $this->aiService->processMessage("ayuda humana por favor", '127.0.0.1', []);
 
