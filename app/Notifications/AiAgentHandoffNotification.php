@@ -46,6 +46,7 @@ class AiAgentHandoffNotification extends Notification
         $content = $this->message;
 
         return (new SlackMessage)
+            ->to(config('services.slack.notifications.channel'))
             ->text('🚨 Atención Humana Requerida')
             ->headerBlock('🚨 Atención Humana Requerida')
             ->sectionBlock(function ($block) use ($user, $city) {
