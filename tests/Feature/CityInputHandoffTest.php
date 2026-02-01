@@ -33,7 +33,7 @@ class CityInputHandoffTest extends TestCase
     }
 
     /** @test */
-    public function it_prompts_for_registration_if_guest_provides_city()
+    public function it_proceeds_to_shipping_check_if_guest_provides_city()
     {
         // 1. Simulate Context: Product selected 
         $product = Product::first();
@@ -41,12 +41,21 @@ class CityInputHandoffTest extends TestCase
         session(['ai_context' => $context]);
 
         // 2. Act: User provides "Bogotá" (City)
+        // Note: Bogota usually requires Locality check
         $response = $this->aiService->processMessage("Vivo en Bogotá", '127.0.0.1', []);
 
-        // 3. Assert: Should NOT be Handoff. Should be Question for Name/Email.
+        // 3. Assert: Should NOT be Handoff. Should be Locality Prompt OR Shipping Quote (not Registration)
         $this->assertNotEquals('handoff', $response['type']);
-        $this->assertEquals('question', $response['type']);
-        $this->assertStringContainsString('dime tu nombre y correo', $response['message']);
+
+        $msg = strtolower($response['message']);
+        $this->assertStringNotContainsString('dime tu nombre', $msg);
+        $this->assertStringNotContainsString('registrate', $msg);
+
+        // Expect Locality prompt or cost
+        $this->assertTrue(
+            str_contains($msg, 'localidad') || str_contains($msg, 'costo') || str_contains($msg, 'envío'),
+            "Expected locality or shipping cost message, got: " . $response['message']
+        );
     }
 
     /** @test */

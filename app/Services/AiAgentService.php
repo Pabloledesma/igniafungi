@@ -223,31 +223,7 @@ class AiAgentService
             session(['ai_registration_data' => $regData]);
 
             // CONTINUITY LOGIC:
-            // 1. If Guest: Trigger Lazy Registration Protocol
-            if (!auth()->check()) {
-                // Check if we have a product in "Mental Cart"
-                $productName = "tu pedido";
-                if (!empty($context['last_product_id'])) {
-                    $p = Product::find($context['last_product_id']);
-                    if ($p)
-                        $productName = $p->name;
-                } elseif (!empty($context['confirmed_products'])) {
-                    $productName = "tus productos";
-                }
-
-                $city = $context['city'];
-
-                // CRITICAL FIX: Set session flag so we know we are waiting for data
-                session(['ai_waiting_for_user_data' => true]);
-
-                Log::info("Returning Location Context (0.2 Inference)");
-                return [
-                    'type' => 'question',
-                    'message' => "¡Perfecto! Para poder generar tu orden de **{$productName}** en **{$city}**, por favor dime tu nombre y correo electrónico con este formato: *Soy [Nombre], mi correo es [email]*"
-                ];
-            }
-
-            // 2. If Auth: Proceed to Shipping/Availability
+            // Proceed to Shipping/Availability regardless of Auth status (Deferred Registration logic)
             // If explicit shipping query OR implicit context flow (User providing city after product selection)
             $hasProducts = !empty($context['confirmed_products'])
                 || !empty($context['last_product_id'])
@@ -264,7 +240,7 @@ class AiAgentService
 
         // 1. Rate Limiting (Keep existing)
         $key = 'ai_chat:' . $ip;
-        if (RateLimiter::tooManyAttempts($key, 5)) {
+        if (RateLimiter::tooManyAttempts($key, 60)) {
             return [
                 'type' => 'error',
                 'message' => 'Has excedido el límite de mensajes. Por favor intenta de nuevo en un minuto.'
@@ -1143,9 +1119,23 @@ class AiAgentService
         // If we have products in context (accumulated or just detected), list them
         $confirmedIds = $context['confirmed_products'] ?? [];
         if (!empty($confirmedIds)) {
-            $productNames = Product::whereIn('id', $confirmedIds)->pluck('name')->toArray();
+            $products = Product::whereIn('id', $confirmedIds)->get(['name', 'price']);
+            $productNames = $products->pluck('name')->toArray();
+            $totalList = $products->sum('price');
             $list = implode(', ', $productNames);
-            $message .= "<br><br>Tienes en tu lista: <strong>{$list}</strong>.<br>¿Deseas agregar algo más o generamos la orden?";
+
+            $message .= "<br><br>Tienes en tu lista: <strong>{$list}</strong>.<br>";
+
+            // Free Shipping Progress
+            $threshold = 200000;
+            if ($totalList >= $threshold) {
+                $message .= "🎉 <strong>¡Felicidades! Tienes envío GRATIS.</strong><br>";
+            } else {
+                $missing = number_format($threshold - $totalList, 0, ',', '.');
+                $message .= "🚛 Te faltan <strong>\${$missing}</strong> para tener <strong>envío gratis</strong>.<br>";
+            }
+
+            $message .= "¿Deseas agregar algo más o generamos la orden?";
         } elseif ($this->getLastProductConsulted()) {
             // Fallback for single product flow if array wasn't populated
             $message .= "<br><br>¿Deseas agregar algún otro producto al pedido o generamos la orden?";
@@ -1379,9 +1369,12 @@ class AiAgentService
         $context['last_product_id'] = $product->id;
 
         $confirmed = $context['confirmed_products'] ?? [];
-        if (!in_array($product->id, $confirmed)) {
-            $confirmed[] = $product->id;
-        }
+
+        // Allow duplicates to support quantity (User adds same product twice = 2 units)
+        // Only avoid adding if it was just added in the exact same request check? 
+        // No, let's allow it. Front-end selection triggers distinct request.
+        $confirmed[] = $product->id;
+
         $context['confirmed_products'] = $confirmed;
 
         session(['ai_context' => $context]);
@@ -1391,7 +1384,25 @@ class AiAgentService
 
     protected function handleProductQuery(Product $product, array $context): array
     {
-        $city = $context['city'] ?? '';
+        // RELOAD Context from session to be absolutely sure we have the latest city
+        $fullContext = session('ai_context', []);
+        $city = $fullContext['city'] ?? $context['city'] ?? '';
+        $locality = $fullContext['locality'] ?? $context['locality'] ?? null;
+
+        // Fallback: Check registration data if city is missing in main context
+        if (empty($city)) {
+            $regData = session('ai_registration_data', []);
+            $city = $regData['city'] ?? '';
+            $locality = $regData['locality'] ?? null;
+
+            // If found in reg data, restore to main context
+            if ($city) {
+                $fullContext['city'] = $city;
+                if ($locality)
+                    $fullContext['locality'] = $locality;
+                session(['ai_context' => $fullContext]);
+            }
+        }
 
         if ($product->is_fresh) {
             if ($city && strtolower($city) !== 'bogotá' && strtolower($city) !== 'bogota') {
@@ -1417,16 +1428,18 @@ class AiAgentService
         // Or simply ask for confirmation if we know the price?
 
         // Simpler: Just acknowledge and ask for locality if Bogota, or confirm if National.
-        if (Str::slug($city) === 'bogota') {
+        // Simpler: Just acknowledge and ask for locality if Bogota AND we don't know it yet.
+        if (Str::slug($city) === 'bogota' && empty($locality)) {
             return [
                 'type' => 'question',
                 'message' => "¡Perfecto, **{$product->name}**! Como estás en Bogotá, ¿me podrías confirmar tu localidad (ej. Usaquén, Chapinero) para darte el valor exacto del domicilio?"
             ];
         }
 
-        // National with City known
+        // National with City known OR Bogota with Locality known
         // Just show the price/closure directly (Delegate to Shipping Query logic)
-        return $this->handleShippingQuery('costo envio', $context);
+        // CRITICAL: Pass $fullContext so handleShippingQuery sees the reloaded city/locality
+        return $this->handleShippingQuery('costo envio', $fullContext);
     }
 
     protected function callLlm(string $content): array
