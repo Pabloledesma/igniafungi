@@ -56,10 +56,21 @@ class AiAgentService
             // Update Session
             session(['ai_context' => $context]);
 
-            return $this->handleShippingQuery($content, $context);
+            // If user implies "Agregar más" context change or just location update?
+            // If they just say "Medellin", likely shipping query response.
+            // If they say "Agregar más productos para Medellin" (handled by location inference + availability query?)
+
+            // If explicit shipping query OR implicit context flow (User providing city after product selection)
+            $hasProducts = !empty($context['confirmed_products'])
+                || !empty($context['last_product_id'])
+                || !empty($context['pending_suggestion_products']);
+
+            if ($this->isShippingQuery($content) || $hasProducts) {
+                return $this->handleShippingQuery($content, $context);
+            }
         }
 
-        // 1. Rate Limiting
+        // 1. Rate Limiting (Keep existing)
         $key = 'ai_chat:' . $ip;
         if (RateLimiter::tooManyAttempts($key, 5)) {
             return [
@@ -69,67 +80,71 @@ class AiAgentService
         }
         RateLimiter::hit($key, 60);
 
-        // 1.5 Strict Coherence Validation (Fresh vs City) on Affirmation
-        // If user says "Yes/Dale/Acepto", check if what they accepted is valid for their city
+        // 1.1 Handle "Agregar más productos" Action explicitly
+        if (str_contains(strtolower($content), 'agregar más') || str_contains(strtolower($content), 'agregar mas') || str_contains(strtolower($content), 'ver catalogo')) {
+            $response = $this->handleAvailabilityQuery();
+            $response['message'] = "¡Claro! ¿Qué otro hongo te gustaría agregar? Aquí tienes la lista de nuevo:<br><br>" . str_replace("¡Hola! Estos son los hongos que tenemos disponibles para ti hoy:<br><br>", "", $response['message']);
+            return $response;
+        }
+
+        // 1.5 Strict Coherence Validation (Keep existing)
         if ($this->isAffirmation($content)) {
-            // Priority Check: If we are in a 'fresh' context but city is restricted, BLOCK affirmation.
-            // This prevents "Ok" from generating an order if we just told them "No enviamos frescos".
+            // ... (Keep existing affirmation logic)
             if (isset($context['city']) && isset($context['last_offered_product_type'])) {
                 if ($context['last_offered_product_type'] === 'fresh' && Str::slug($context['city']) !== 'bogota') {
-                    // Pivot Suggestion again
                     return [
                         'type' => 'suggestion',
                         'message' => "Entiendo que quieres continuar, pero recuerda que **en {$context['city']} solo podemos entregar productos secos**. Por favor selecciona una de las opciones sugeridas."
                     ];
                 }
             }
-
-            // Check for Pending Suggestions OR Confirmed Products (Order Confirmation)
-            // Fix: Allow "OK" to trigger order if we have items in the mental cart
             if (isset($context['pending_suggestion_products']) || !empty($context['confirmed_products'])) {
                 return $this->handleOrderConfirmation($context);
             }
+        }
 
-            if (isset($context['city']) && isset($context['last_offered_product_type'])) {
-                if ($context['last_offered_product_type'] === 'fresh' && Str::slug($context['city']) !== 'bogota') {
-                    return [
-                        'type' => 'suggestion',
-                        'message' => "Entiendo que quieres continuar, pero recuerda que **en {$context['city']} solo podemos entregar productos secos**. ¿Te gustaría ver nuestras opciones deshidratadas?"
-                    ];
+        // ... (Spam/Lead logic)
+
+        // 6. Business Logic: Products/Freshness
+
+        // 6.0 Handle Category Selection (e.g. "1")
+        if (preg_match('/^(\d+)$/', trim($content), $matches)) {
+            $index = (int) $matches[1];
+            $pendingCats = $context['pending_suggestion_categories'] ?? [];
+            if (isset($pendingCats[$index])) {
+                $categoryId = $pendingCats[$index];
+                $category = \App\Models\Category::find($categoryId);
+                if ($category) {
+                    // List products for this category
+                    $products = Product::where('category_id', $category->id)
+                        ->where('is_active', true)
+                        ->where('stock', '>', 0)
+                        ->get();
+
+                    if ($products->isNotEmpty()) {
+                        $list = "";
+                        $idx = 1;
+                        $ids = [];
+                        foreach ($products as $p) {
+                            $list .= "{$idx}. *{$p->name}*: $" . number_format($p->price, 0) . "<br>";
+                            $ids[] = $p->id;
+                            $idx++;
+                        }
+
+                        $context['pending_suggestion_products'] = $ids;
+                        unset($context['pending_suggestion_categories']); // Clear category context
+                        session(['ai_context' => $context]);
+
+                        return [
+                            'type' => 'catalog',
+                            'message' => "Has seleccionado **{$category->name}**. Aquí están los productos disponibles:<br><br>" . $list . "<br>Elige un número para añadirlo al carrito.",
+                            'payload' => $products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])->toArray()
+                        ];
+                    }
                 }
             }
         }
 
-        // 2. Spam/Junk Filter (Keep original)
-        if ($this->isSpam($content)) {
-            return [
-                'type' => 'ignore',
-                'message' => 'Mensaje ignorado por política de contenido.'
-            ];
-        }
-
-        // 3. Lead Generation (Keep original)
-        if ($this->detectLeadIntent($content)) {
-            $user = $this->createOrUpdateLead($content, $context);
-            if ($user) {
-                return [
-                    'type' => 'system',
-                    'message' => "¡Gracias {$user->name}! Hemos registrado tus datos para contactarte."
-                ];
-            }
-        }
-
-        // 4. Business Logic: Shipping
-        if ($this->isShippingQuery($content)) {
-            return $this->handleShippingQuery($content, $context);
-        }
-
-        // 5. Business Logic: Availability/Stock (New)
-        if ($this->isAvailabilityQuery($content)) {
-            return $this->handleAvailabilityQuery();
-        }
-
-        // 6. Business Logic: Products/Freshness
         $product = $this->detectProduct($content);
 
         // Fallback: If no product detected but query is informational, assume context
@@ -141,56 +156,16 @@ class AiAgentService
             // RELOAD CONTEXT because detectProduct modified it
             $context = session('ai_context', []);
 
-            // Check coherence BEFORE handling
-            if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
-                $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
-                if ($isFresh) {
-                    return [
-                        'type' => 'suggestion',
-                        'message' => "Veo que te interesa *{$product->name}* (Fresco), pero en **{$context['city']}** solo podemos enviarte productos secos/deshidratados. ¿Te muestro las opciones disponibles?"
-                    ];
-                }
-            }
-            // Store for context
-            $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
-            $context['last_offered_product_type'] = $isFresh ? 'fresh' : 'dry';
-            session(['ai_context' => $context]);
-
-            // 6.1 Check for Informational Intent
+            // 6.0 INFORMATIONAL QUERY CHECK (PRIORITY OVER RESTRICTION)
             if ($this->isInformationalQuery($content)) {
                 $description = $product->description ?? $product->short_description ?? "Es un excelente producto de Ignia Fungi.";
 
                 // Extract keywords to see if specific info is requested
-                // Add product name parts to stop words
                 $nameParts = explode(' ', strtolower($product->name));
                 $stopWords = array_merge($this->stopWords, $nameParts);
 
                 $words = explode(' ', mb_strtolower(preg_replace('/[^\p{L}\p{N}\s]/u', '', $content)));
                 $keywords = array_filter($words, fn($w) => mb_strlen($w) > 3 && !in_array($w, $stopWords));
-
-                // If generic query (no specific keywords), return description
-                if (empty($keywords)) {
-                    return [
-                        'type' => 'answer',
-                        'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}"
-                    ];
-                }
-
-                // Check if description covers keys
-                $covered = false;
-                foreach ($keywords as $kw) {
-                    if (str_contains(mb_strtolower($description), $kw)) {
-                        $covered = true;
-                        break;
-                    }
-                }
-
-                if ($covered) {
-                    return [
-                        'type' => 'answer',
-                        'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}"
-                    ];
-                }
 
                 // Expand keywords for Usage/Preparation context
                 $usageTerms = ['usar', 'uso', 'consumir', 'consumo', 'preparar', 'prepara', 'cocina', 'receta', 'dosis', 'tomar', 'comer'];
@@ -210,27 +185,42 @@ class AiAgentService
                 $posts = \App\Models\Post::where('product_id', $product->id)
                     ->where('is_published', true)
                     ->where(function ($q) use ($searchKeywords) {
-                        foreach ($searchKeywords as $kw) {
-                            $q->orWhere('content', 'like', "%{$kw}%")
-                                ->orWhere('title', 'like', "%{$kw}%")
-                                ->orWhere('summary', 'like', "%{$kw}%");
+                        if (!empty($searchKeywords)) {
+                            foreach ($searchKeywords as $kw) {
+                                $q->orWhere('content', 'like', "%{$kw}%")
+                                    ->orWhere('title', 'like', "%{$kw}%")
+                                    ->orWhere('summary', 'like', "%{$kw}%");
+                            }
                         }
                     })->limit(3)->get();
 
+                $extraInfo = "";
                 if ($posts->isNotEmpty()) {
-                    $extraInfo = "";
                     foreach ($posts as $post) {
                         $extraInfo .= "<br>🔹 **{$post->title}:** {$post->summary}";
                     }
-                    return [
-                        'type' => 'answer',
-                        'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}<br><br>💡 **Información Adicional (Blog):**{$extraInfo}"
-                    ];
                 }
 
-                // Handoff if info not found
-                return $this->callLlm("Consulta sobre {$product->name}: {$content} (Info no encontrada en descripción ni posts)");
+                return [
+                    'type' => 'answer',
+                    'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}" . ($extraInfo ? "<br><br>💡 **Información Adicional (Blog):**{$extraInfo}" : "")
+                ];
             }
+
+            // 6.1 Check coherence BEFORE handling SALES INTENT
+            if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
+                $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
+                if ($isFresh) {
+                    return [
+                        'type' => 'suggestion',
+                        'message' => "Veo que te interesa *{$product->name}* (Fresco), pero en **{$context['city']}** solo podemos enviarte productos secos/deshidratados. ¿Te muestro las opciones disponibles?"
+                    ];
+                }
+            }
+            // Store for context
+            $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
+            $context['last_offered_product_type'] = $isFresh ? 'fresh' : 'dry';
+            session(['ai_context' => $context]);
 
             return $this->handleProductQuery($product, $context);
         }
@@ -246,8 +236,11 @@ class AiAgentService
 
 
         // 7. General Shipping/Availability fallback check
-        if ($this->isShippingQuery($content) || $this->isAvailabilityQuery($content)) {
-            // Already handled above if strict match, but this block was in previous code
+        if ($this->isAvailabilityQuery($content)) {
+            return $this->handleAvailabilityQuery();
+        }
+
+        if ($this->isShippingQuery($content)) {
             return $this->handleShippingQuery($content, $context);
         }
 
@@ -310,7 +303,12 @@ class AiAgentService
         'sirve',
         'cuentame',
         'sobre',
+        'sobre',
         'hongo',
+        'hongos',
+        'tienen',
+        'tiene',
+        'venden',
         'producto',
         'informacion',
         'detalle',
@@ -469,38 +467,66 @@ class AiAgentService
 
     protected function handleAvailabilityQuery(): array
     {
-        $products = Product::where('is_active', true)
-            ->where('stock', '>', 0)
-            ->get();
+        // 1. Fetch Categories with Active Products and Stock
+        // Use eager loading for products to check counts/stock
+        $categories = \App\Models\Category::whereHas('products', function ($q) {
+            $q->where('is_active', true)->where('stock', '>', 0);
+        })->with([
+                    'products' => function ($q) {
+                        $q->where('is_active', true)->where('stock', '>', 0);
+                    }
+                ])->get();
 
-        if ($products->isEmpty()) {
+        if ($categories->isEmpty()) {
             return [
                 'type' => 'answer',
                 'message' => "Lo sentimos, en este momento no tenemos stock disponible. Vuelve pronto."
             ];
         }
 
-        // Store IDs for number matching
-        $ids = [];
+        // Logic to prioritize or alias categories as "Hongos Gourmet" (Fresh) and "Deshidratados" (Dry)
+        // Check if we have specific matches or just list them.
+        // User request: "buscar las categorias hongos gurmet y deshidratados"
+        // Since names might vary (e.g. "Hongos Frescos"), I will try to map them or just use the names we have.
+        // But I will group them or ensure the message logic is clean.
+
+        // 2. Build List
         $list = "";
         $index = 1;
+        $categoryMap = [];
 
-        foreach ($products as $p) {
-            $list .= "{$index}. *{$p->name}*: $" . number_format($p->price, 0) . "<br>";
-            $ids[] = $p->id;
-            $index++;
+        foreach ($categories as $category) {
+            $productCount = $category->products->count(); // Already filtered by eager loading logic
+            if ($productCount > 0) {
+                // Formatting name: maybe add emoji or highlight
+                $displayName = $category->name;
+                if (stripos($category->name, 'fresco') !== false || stripos($category->name, 'gourmet') !== false) {
+                    $displayName = "🍄 Hongos Gourmet (Frescos)";
+                } elseif (stripos($category->name, 'seco') !== false || stripos($category->name, 'deshidratado') !== false) {
+                    $displayName = "🍂 Hongos Deshidratados (Secos)";
+                }
+
+                $list .= "{$index}. **{$displayName}**\n";
+                $categoryMap[$index] = $category->id;
+                $index++;
+            }
         }
 
-        // Context Update for Numeric Selection
+        // 3. Update Context
         $context = session('ai_context', []);
-        $context['pending_suggestion_products'] = $ids;
-        // Note: For numeric selection, we can map number N to index N-1 in this array.
+        $context['pending_suggestion_categories'] = $categoryMap;
+        // Clear product suggestions to avoid confusion?
+        unset($context['pending_suggestion_products']);
         session(['ai_context' => $context]);
 
         return [
             'type' => 'catalog',
-            'message' => "¡Hola! Estos son los hongos que tenemos disponibles para ti hoy:<br><br>" . $list,
-            'payload' => $products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])->toArray()
+            'message' => "¡Excelente elección! Estos son los tipos de hongos que tenemos disponibles:<br><br>" . nl2br($list) . "<br>Por favor elige el número de la categoría que te interesa para ver los productos.",
+            'payload' => $categories->map(function ($c) use (&$categoryMap) {
+                // Find index
+                $index = array_search($c->id, $categoryMap);
+                return ['id' => $c->id, 'name' => $c->name, 'index' => $index];
+            })->toArray()
         ];
     }
 

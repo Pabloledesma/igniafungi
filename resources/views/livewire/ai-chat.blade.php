@@ -40,7 +40,7 @@
             @foreach($messages as $msg)
                     <div class="flex {{ $msg['role'] === 'user' ? 'justify-end' : 'justify-start' }}">
                         <div class="max-w-[85%] rounded-lg px-4 py-2 text-sm shadow-sm break-words
-                                                        {{ $msg['role'] === 'user'
+                                                                {{ $msg['role'] === 'user'
                 ? 'bg-green-100 text-green-900 rounded-br-none'
                 : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none' }}">
                             {!! $msg['content'] !!}
@@ -51,13 +51,22 @@
                                 @if($msg['type'] === 'catalog' && !empty($msg['payload']))
                                     <div class="mt-3 flex flex-col gap-2">
                                         @foreach($msg['payload'] as $prod)
-                                            <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}')"
-                                                class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">
-                                                <span class="font-medium text-green-800 group-hover:text-green-900">🍄
-                                                    {{ $prod['name'] }}</span>
-                                                <span
-                                                    class="text-gray-600 font-mono text-[10px] bg-gray-100 px-1 rounded">${{ number_format($prod['price']) }}</span>
-                                            </button>
+                                            @if(isset($prod['price']))
+                                                <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}')"
+                                                    class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">
+                                                    <span class="font-medium text-green-800 group-hover:text-green-900">🍄
+                                                        {{ $prod['name'] }}</span>
+                                                    <span
+                                                        class="text-gray-600 font-mono text-[10px] bg-gray-100 px-1 rounded">${{ number_format($prod['price']) }}</span>
+                                                </button>
+                                            @elseif(isset($prod['index']))
+                                                <button wire:click="selectOption({{ $prod['index'] }})"
+                                                    class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">
+                                                    <span class="font-medium text-green-800 group-hover:text-green-900">📂
+                                                        {{ $prod['index'] }}. {{ $prod['name'] }}</span>
+                                                    <span class="text-green-600">Ver productos &rarr;</span>
+                                                </button>
+                                            @endif
                                         @endforeach
                                     </div>
                                 @endif

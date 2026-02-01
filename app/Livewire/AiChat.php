@@ -105,6 +105,12 @@ class AiChat extends Component
         $this->sendMessage(app(AiAgentService::class));
     }
 
+    public function selectOption($option)
+    {
+        $this->userInput = (string) $option;
+        $this->sendMessage(app(AiAgentService::class));
+    }
+
     public function triggerAction($action, $payload = null)
     {
         if ($action === 'checkout' || $action === 'generate_order') {
