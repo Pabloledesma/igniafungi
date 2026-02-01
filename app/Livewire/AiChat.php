@@ -6,6 +6,7 @@ use App\Services\AiAgentService;
 use Illuminate\Support\Str;
 use Livewire\Component;
 use Illuminate\Support\Facades\Request;
+use App\Models\Product;
 
 class AiChat extends Component
 {
@@ -67,7 +68,7 @@ class AiChat extends Component
         $this->isOpen = !$this->isOpen;
     }
 
-    public function sendMessage(AiAgentService $aiService)
+    public function sendMessage(AiAgentService $aiService, $extraContext = [])
     {
         // 1. Honeypot check
         if (!empty($this->website)) {
@@ -87,12 +88,11 @@ class AiChat extends Component
         $this->messages[] = ['role' => 'user', 'content' => $input];
 
         // 3. Prepare Context
-        $context = [
+        $context = array_merge([
             'session_id' => $this->sessionId,
             'city' => $this->city,
             'locality' => $this->locality,
-            // 'cart_total' => session('cart_total', 0) // Example
-        ];
+        ], $extraContext);
 
         // 4. Call Service
         $response = $aiService->processMessage($input, Request::ip(), $context);
@@ -111,12 +111,49 @@ class AiChat extends Component
         }
     }
 
-    public function selectProduct($productId, $productName, $qty = 1)
+    // Selection state for checkboxes
+    public $selected_products = [];
+
+    public function addSelected()
     {
-        // Simulate user typing with quantity
-        $qtyStr = ($qty > 1) ? "{$qty}x " : "";
-        $this->userInput = "He seleccionado " . $qtyStr . $productName;
+        // Filter only checked items (value == true)
+        $ids = array_keys(array_filter($this->selected_products));
+
+        if (empty($ids))
+            return;
+
+        // Fetch names for the user message
+        $names = Product::whereIn('id', $ids)->pluck('name')->implode(', ');
+
+        $this->userInput = "He seleccionado: " . $names;
+
+        // Pass explicit IDs to Service
+        $this->sendMessage(app(AiAgentService::class), ['explicit_product_ids' => $ids]);
+
+        // Reset selection
+        $this->selected_products = [];
+    }
+
+    public function selectProduct($productId, $productName)
+    {
+        // Legacy single select
+        $this->userInput = "He seleccionado " . $productName;
         $this->sendMessage(app(AiAgentService::class));
+    }
+
+    public function addMultiple($products)
+    {
+        // $products is array of ['id' => x, 'name' => y]
+        if (empty($products))
+            return;
+
+        $names = collect($products)->pluck('name')->implode(', ');
+        $ids = collect($products)->pluck('id')->toArray();
+
+        $this->userInput = "He seleccionado: " . $names;
+
+        // Pass explicit IDs to Service to bypass NLP detection
+        $this->sendMessage(app(AiAgentService::class), ['explicit_product_ids' => $ids]);
     }
 
     public function selectOption($option)

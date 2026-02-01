@@ -18,18 +18,59 @@ class AiAgentService
      */
     public function processMessage(string $content, string $ip, ?array $context = []): array
     {
+        // 0. Deduplication Guard (Prevent Double Clicks / Livewire Retries)
+        // If exact same content comes within 2 seconds, return cached response.
+        $msgHash = md5($content . $ip); // Include IP for extra safety? content is mostly enough for user.
+        $lastHash = session('ai_last_msg_hash');
+        $lastTime = session('ai_last_msg_timestamp');
+
+        if ($lastHash === $msgHash && $lastTime && (time() - $lastTime < 2)) {
+            $cached = session('ai_last_response');
+            if ($cached) {
+                return $cached;
+            }
+        }
+
+        // 1. Process Logic
+        $response = $this->generateResponse($content, $ip, $context);
+
+        // 2. Cache Result
+        session([
+            'ai_last_msg_hash' => $msgHash,
+            'ai_last_msg_timestamp' => time(),
+            'ai_last_response' => $response
+        ]);
+
+        return $response;
+    }
+
+    protected function generateResponse(string $content, string $ip, ?array $context = []): array
+    {
         Log::info("ProcessMessage Start: '{$content}'");
 
-        // 0. GLOBAL INTERCEPTOR: Handoff Request (High Priority)
+        // MERGE SESSION CONTEXT PRIORITY
+        // We ensure we have the full session history + any new explicit data passed (like IDs)
+        $sessionContext = session('ai_context', []);
+        $context = array_merge($sessionContext, $context);
+
+        // 1. Explicit ID Handling (Checkbox Batch) from UI
+        if (!empty($context['explicit_product_ids'])) {
+            Log::info("Explicit IDs: " . implode(',', $context['explicit_product_ids']));
+            foreach ($context['explicit_product_ids'] as $pid) {
+                $p = Product::find($pid);
+                if ($p)
+                    $this->updateProductContext($p);
+            }
+            // Return simplified summary immediately
+            return $this->handleShippingQuery($content, $context);
+        }
+
+        // 2. GLOBAL INTERCEPTOR: Handoff Request (High Priority)
         // If user explicitly asks for human/agent, we stop everything and trigger handoff.
         if ($this->isHandoffRequest($content)) {
-            // We need to load context just for the notification payload
-            $sessionContext = session('ai_context', []);
-            // Merge but don't save yet, just for reading
-            $tempContext = array_merge($sessionContext, $context);
-
+            // Context is already merged above
             // Ensure session matches for callLlm to pick it up (it reads from session)
-            session(['ai_context' => $tempContext]);
+            session(['ai_context' => $context]);
 
             Log::info("Returning Handoff");
             return $this->callLlm($content);
@@ -129,7 +170,11 @@ class AiAgentService
 
                 // RESTRICTION CHECK (Fresh products outside Bogota)
                 $hasFresh = false;
-                $cartProducts = Product::whereIn('id', $context['confirmed_products'] ?? [])->get();
+                $confirmed = $context['confirmed_products'] ?? [];
+                // Robustness: Get IDs whether List or Map
+                $ids = (is_array($confirmed) && !array_is_list($confirmed)) ? array_keys($confirmed) : $confirmed;
+
+                $cartProducts = Product::whereIn('id', $ids)->get();
                 foreach ($cartProducts as $p) {
                     if ($p->is_fresh) {
                         $hasFresh = true;
@@ -280,40 +325,73 @@ class AiAgentService
             $index = (int) $matches[1];
             $pendingCats = $context['pending_suggestion_categories'] ?? [];
             if (isset($pendingCats[$index])) {
-                $categoryId = $pendingCats[$index];
-                $category = \App\Models\Category::find($categoryId);
-                if ($category) {
-                    // List products for this category
-                    $products = Product::where('category_id', $category->id)
-                        ->where('is_active', true)
-                        ->where('stock', '>', 0)
-                        ->get();
+                $categoryData = $pendingCats[$index];
+                $catIds = is_array($categoryData) ? $categoryData : [$categoryData];
 
-                    if ($products->isNotEmpty()) {
-                        $list = "";
-                        $idx = 1;
-                        $ids = [];
-                        foreach ($products as $p) {
-                            $list .= "{$idx}. *{$p->name}*: $" . number_format($p->price, 0) . "<br>";
-                            $ids[] = $p->id;
-                            $idx++;
-                        }
+                // Fetch products for one or multiple categories
+                $products = Product::whereIn('category_id', $catIds)
+                    ->where('is_active', true)
+                    ->where('stock', '>', 0)
+                    ->get();
 
-                        $context['pending_suggestion_products'] = $ids;
-                        unset($context['pending_suggestion_categories']); // Clear category context
-                        session(['ai_context' => $context]);
+                // Determine display name
+                $catName = "Selección";
+                if (count($catIds) === 1) {
+                    $c = \App\Models\Category::find($catIds[0]);
+                    if ($c)
+                        $catName = $c->name;
+                } else {
+                    $catName = "Hongos Frescos (Gourmet y Medicina)";
+                }
 
-                        return [
-                            'type' => 'catalog',
-                            'message' => "Has seleccionado **{$category->name}**. Aquí están los productos disponibles:<br><br>" . $list . "<br>Elige un número para añadirlo al carrito.",
-                            'payload' => $products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])->toArray()
-                        ];
+                if ($products->isNotEmpty()) {
+                    $list = "";
+                    $idx = 1;
+                    $ids = [];
+                    foreach ($products as $p) {
+                        $list .= "{$idx}. *{$p->name}*: $" . number_format($p->price, 0) . "<br>";
+                        $ids[] = $p->id;
+                        $idx++;
                     }
+
+                    // CONTEXT PRESERVATION (CRITICAL)
+                    // Reload fresh session context to prevent overwriting city/locality
+                    $currentContext = session('ai_context', []);
+                    $currentContext['pending_suggestion_products'] = $ids;
+
+                    // Remove pending categories to clean up? Or keep?
+                    // Safe to keep, but unset for cleanliness if logic dictates.
+                    // unset($currentContext['pending_suggestion_categories']); 
+
+                    session(['ai_context' => $currentContext]);
+
+                    return [
+                        'type' => 'catalog',
+                        'message' => "Has seleccionado **{$catName}**. Aquí están los productos disponibles:<br><br>" . $list . "<br>Marca los hongos que te interesan y presiona el botón para añadirlos a tu pedido.",
+                        'payload' => $products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])->toArray()
+                    ];
                 }
             }
         }
 
-        $product = $this->detectProduct($content);
+        // 2. Conditional Product Detection
+        // Only run detectProduct if we are NOT handling a location response and NOT making an affirmation
+        // This prevents double counting when user says "Bogota" or "Si"
+        $locationContext = $this->inferLocationFromContent($content); // We ran this earlier, but checking availability/product is orthogonal. Wait, processMessage logic calls inferLocation earlier.
+
+        // Actually, logic flow:
+        // 0.2 inferLocation -> Update Context.
+        // If inferred, we typically return ShippingQuery.
+        // But if we fall through, we might detect product.
+
+        // We should skip detection if it looks like a location or simple affirmation
+        $isAffirmation = $this->isAffirmation($content);
+        $looksLikeLocation = !empty($locationContext);
+
+        $product = null;
+        if (!$looksLikeLocation && !$isAffirmation) {
+            $product = $this->detectProduct($content);
+        }
 
         // Fallback: If no product detected but query is informational, assume context
         if (!$product && $this->isInformationalQuery($content)) {
@@ -326,7 +404,17 @@ class AiAgentService
 
             // 6.1 Check coherence BEFORE handling SALES INTENT
             if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
-                $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
+                $isFresh = false;
+                if ($product->category) {
+                     $slug = $product->category->slug;
+                     if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
+                         $isFresh = true;
+                     }
+                }
+                if (!$isFresh && str_contains(strtolower($product->name), 'fresco')) {
+                    $isFresh = true;
+                }
+
                 if ($isFresh) {
                     return [
                         'type' => 'suggestion',
@@ -541,21 +629,12 @@ class AiAgentService
 
         $allProducts = $query->pluck('name', 'id');
 
-        // Detect Quantity (default 1)
-        // Match specific patterns: "2x", "2 de", "2 unidades de", or just start with number "2 Orellanas"
-        $quantity = 1;
-        if (preg_match('/(\d+)\s*(?:x|de|unidades|unidad)?\s+/i', $content, $m)) {
-            $val = (int) $m[1];
-            if ($val > 0 && $val < 20)
-                $quantity = $val; // Reasonable limit
-        }
-
         // 1. Exact/Approximate & Substring
         $bestMatchName = $this->findBestMatch($content, $allProducts);
         if ($bestMatchName) {
             $product = Product::where('name', $bestMatchName)->first();
             if ($product) {
-                $this->updateProductContext($product, $quantity);
+                $this->updateProductContext($product);
                 return $product;
             }
         }
@@ -564,7 +643,7 @@ class AiAgentService
             if (stripos($content, $pName) !== false) {
                 $product = Product::find($id);
                 if ($product) {
-                    $this->updateProductContext($product, $quantity);
+                    $this->updateProductContext($product);
                     return $product;
                 }
             }
@@ -584,7 +663,7 @@ class AiAgentService
             $product = $clonedQuery->where('name', 'like', "%{$word}%")->first();
 
             if ($product) {
-                $this->updateProductContext($product, $quantity);
+                $this->updateProductContext($product);
                 return $product;
             }
         }
@@ -644,38 +723,64 @@ class AiAgentService
         $index = 1;
         $categoryMap = [];
 
+        // GROUPING LOGIC
+        $freshGroupIds = [];
+        $otherCategories = [];
+
         foreach ($categories as $category) {
-            $productCount = $category->products->count(); // Already filtered by eager loading logic
-            if ($productCount > 0) {
-                // Formatting name: maybe add emoji or highlight
+            $slug = $category->slug;
+            if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
+                $freshGroupIds[] = $category->id;
+            } else {
+                $otherCategories[] = $category;
+            }
+        }
+
+        $list = "";
+        $index = 1;
+        $categoryMap = [];
+
+        // 1. Add Fresh Group if exists
+        if (!empty($freshGroupIds)) {
+            $list .= "{$index}. **🍄 Hongos Frescos (Gourmet y Medicina)**\n";
+            $categoryMap[$index] = $freshGroupIds; // Store array of IDs
+            $index++;
+        }
+
+        // 2. Add Others
+        foreach ($otherCategories as $category) {
+            if ($category->products->count() > 0) {
                 $displayName = $category->name;
-                if (stripos($category->name, 'fresco') !== false || stripos($category->name, 'gourmet') !== false) {
-                    $displayName = "🍄 Hongos Gourmet (Frescos)";
-                } elseif (stripos($category->name, 'seco') !== false || stripos($category->name, 'deshidratado') !== false) {
+                if (stripos($category->name, 'seco') !== false || stripos($category->name, 'deshidratado') !== false) {
                     $displayName = "🍂 Hongos Deshidratados (Secos)";
                 }
-
                 $list .= "{$index}. **{$displayName}**\n";
-                $categoryMap[$index] = $category->id;
+                $categoryMap[$index] = $category->id; // Store single ID
                 $index++;
             }
         }
 
-        // 3. Update Context
+        // 3. Update Context (Preserve existing keys if needed, but here we set new pending)
+        // We merged session at start of generateResponse, so $context has old data.
+        // But we want to ensure we don't wipe it when saving.
         $context = session('ai_context', []);
         $context['pending_suggestion_categories'] = $categoryMap;
-        // Clear product suggestions to avoid confusion?
-        unset($context['pending_suggestion_products']);
         session(['ai_context' => $context]);
 
         return [
             'type' => 'catalog',
-            'message' => "¡Excelente elección! Estos son los tipos de hongos que tenemos disponibles:<br><br>" . nl2br($list) . "<br>Por favor elige el número de la categoría que te interesa para ver los productos.",
-            'payload' => $categories->map(function ($c) use (&$categoryMap) {
-                // Find index
-                $index = array_search($c->id, $categoryMap);
-                return ['id' => $c->id, 'name' => $c->name, 'index' => $index];
-            })->toArray()
+            'message' => "¡Excelente elección! Estos son los tipos de hongos que tenemos disponibles:<br><br>" . nl2br($list) . "<br>Selecciona la categoría que te interesa para ver los productos.",
+            'payload' => collect($categoryMap)->map(function ($val, $idx) use ($categories) {
+                // Determine name for Payload
+                $name = "Categoría {$idx}";
+                if (is_array($val)) {
+                    $name = "Hongos Frescos (Gourmet y Medicina)";
+                } else {
+                    $cat = $categories->firstWhere('id', $val);
+                    $name = $cat ? $cat->name : $name;
+                }
+                return ['id' => 0, 'name' => $name, 'index' => $idx]; // ID 0 for group/placeholder
+            })->values()->toArray()
         ];
     }
 
@@ -864,6 +969,16 @@ class AiAgentService
             ];
         }
 
+        // STRICT CONTEXT CHECK BEFORE ASKING
+        // If session already has a city, respect it and skip "Where are you?"
+        $sessionCity = session('ai_context.city');
+        if ($sessionCity) {
+            $context['city'] = $sessionCity;
+            if (session('ai_context.locality')) {
+                $context['locality'] = session('ai_context.locality');
+            }
+        }
+
         $city = $context['city'] ?? null;
         $locality = $context['locality'] ?? null;
 
@@ -943,12 +1058,16 @@ class AiAgentService
         $interceptProduct = null;
         $checkQueue = [];
 
-        $last = $this->detectProduct($content) ?? $this->getLastProductConsulted();
+        // Use ONLY memory (Last Consulted) to avoid re-triggering detectProduct (which adds to cart again)
+        $last = $this->getLastProductConsulted();
         if ($last)
             $checkQueue[] = $last;
 
-        $confirmedIds = $context['confirmed_products'] ?? [];
-        foreach ($confirmedIds as $pid) {
+        $confirmed = $context['confirmed_products'] ?? [];
+        // Robustness: Get IDs whether List or Map
+        $ids = (is_array($confirmed) && !array_is_list($confirmed)) ? array_keys($confirmed) : $confirmed;
+
+        foreach ($ids as $pid) {
             $p = Product::find($pid);
             if ($p)
                 $checkQueue[] = $p;
@@ -1050,7 +1169,7 @@ class AiAgentService
 
                     return [
                         'type' => 'suggestion',
-                        'message' => "Veo que estás en {$targetCity}. Por seguridad, no enviamos productos frescos allí, pero tengo disponibles estas opciones deshidratadas de **{$strainName}**:<br><br>{$list}<br><br>¿Te gustaría cambiar tu pedido a alguna de estas opciones?",
+                        'message' => "Veo que estás en {$targetCity}. Por seguridad, no enviamos productos frescos allí, pero tengo disponibles estas opciones deshidratadas de **{$strainName}**:<br><br>{$list}<br><br>Marca las opciones que desees y presiona el botón para agregar.",
                         'payload' => $alternatives->map(fn($p) => [
                             'id' => $p->id,
                             'name' => $p->name,
@@ -1090,7 +1209,7 @@ class AiAgentService
 
                 return [
                     'type' => 'suggestion',
-                    'message' => "El costo de envío a {$targetCity} es de ${price} COP.<br><br>⚠️ <strong>Importante:</strong> En {$targetCity} no podemos entregar productos frescos (solo en Bogotá), pero tenemos disponibles estos productos secos para ti:<br>{$list}",
+                    'message' => "El costo de envío a {$targetCity} es de ${price} COP.<br><br>⚠️ <strong>Importante:</strong> En {$targetCity} no podemos entregar productos frescos (solo en Bogotá), pero tenemos disponibles estos productos secos para ti:<br>{$list}<br>Marca los que te interesen y presiona agregar.",
                     'payload' => $dryProducts->map(fn($p) => [
                         'id' => $p->id,
                         'name' => $p->name,
@@ -1111,6 +1230,9 @@ class AiAgentService
 
             // Add to confirmed products if not already
             $confirmed = $context['confirmed_products'] ?? [];
+            if (!is_array($confirmed) || (count($confirmed) > 0 && !array_is_list($confirmed))) {
+                $confirmed = array_keys($confirmed); // Fallback if previous Map
+            }
             if (!in_array($product->id, $confirmed)) {
                 $confirmed[] = $product->id;
             }
@@ -1126,34 +1248,25 @@ class AiAgentService
         $message = "El costo de envío a {$targetCity}{$locSuffix} es de ${price} COP.";
 
         // If we have products in context (accumulated or just detected), list them
-        $confirmedIds = $context['confirmed_products'] ?? [];
-        if (!empty($confirmedIds)) {
-            $productsKeyed = Product::whereIn('id', $confirmedIds)->get(['id', 'name', 'price'])->keyBy('id');
-            $productNames = [];
-            $totalList = 0;
-            $counts = array_count_values($confirmedIds);
+        $confirmed = $context['confirmed_products'] ?? [];
 
-            foreach ($counts as $pid => $qty) {
+        // Robustness: Get IDs whether List or Map
+        $ids = (is_array($confirmed) && !array_is_list($confirmed)) ? array_keys($confirmed) : $confirmed;
+
+        if (!empty($ids)) {
+            $productsKeyed = Product::whereIn('id', $ids)->get(['id', 'name'])->keyBy('id');
+            $productNames = [];
+
+            foreach ($ids as $pid) {
                 if (isset($productsKeyed[$pid])) {
-                    $p = $productsKeyed[$pid];
-                    $totalList += $p->price * $qty;
-                    $nameStr = ($qty > 1) ? "{$qty}x {$p->name}" : $p->name;
-                    $productNames[] = $nameStr;
+                    $productNames[] = $productsKeyed[$pid]->name;
                 }
             }
+            // Unique names to avoid repetition in display if array had dupes
+            $productNames = array_unique($productNames);
             $list = implode(', ', $productNames);
 
             $message .= "<br><br>Tienes en tu lista: <strong>{$list}</strong>.<br>";
-
-            // Free Shipping Progress
-            $threshold = 200000;
-            if ($totalList >= $threshold) {
-                $message .= "🎉 <strong>¡Felicidades! Tienes envío GRATIS.</strong><br>";
-            } else {
-                $missing = number_format($threshold - $totalList, 0, ',', '.');
-                $message .= "🚛 Te faltan <strong>\${$missing}</strong> para tener <strong>envío gratis</strong>.<br>";
-            }
-
             $message .= "¿Deseas agregar algo más o generamos la orden?";
         } elseif ($this->getLastProductConsulted()) {
             // Fallback for single product flow if array wasn't populated
@@ -1173,23 +1286,23 @@ class AiAgentService
     protected function handleOrderConfirmation(array $context): array
     {
         // USE CONFIRMED PRODUCTS (Accumulated via detectProduct)
-        $productIds = $context['confirmed_products'] ?? [];
+        $confirmed = $context['confirmed_products'] ?? [];
+        // Robustness: Get IDs whether List or Map
+        $ids = (is_array($confirmed) && !array_is_list($confirmed)) ? array_keys($confirmed) : $confirmed;
 
         // Fallback: If no confirmed list but we have a last product (e.g. direct flow)
-        if (empty($productIds) && isset($context['last_product_id'])) {
-            $productIds = [$context['last_product_id']];
+        if (empty($ids) && isset($context['last_product_id'])) {
+            $ids = [$context['last_product_id']];
         }
 
-        if (empty($productIds) && isset($context['pending_suggestion_products'])) {
-            // Second fallback: Pending suggestions (only if explicit direct accept happened?)
-            // Actually, this was the source of the bug. We should probably avoid this unless size is 1.
-            // Let's assume detectProduct handled it. If empty here, we have a problem.
+        if (empty($ids) && isset($context['pending_suggestion_products'])) {
+            // Second fallback: Pending suggestions
             if (count($context['pending_suggestion_products']) === 1) {
-                $productIds = $context['pending_suggestion_products'];
+                $ids = $context['pending_suggestion_products'];
             }
         }
 
-        if (empty($productIds)) {
+        if (empty($ids)) {
             return [
                 'type' => 'error',
                 'message' => 'Lo siento, no tengo claro qué productos deseas incluir en tu orden. ¿Podrías decirme el nombre o número del producto?'
@@ -1210,16 +1323,34 @@ class AiAgentService
         $productsAdded = [];
         $ignoredFresh = false;
 
-        foreach ($productIds as $id) {
-            $p = Product::find($id);
+        // Ensure unique IDs to add qty 1
+        $ids = array_unique($ids);
+
+        foreach ($ids as $id) {
+            $p = Product::with('category')->find($id);
             if (!$p)
                 continue;
 
-            $isFresh = $p->is_fresh;
+            // Freshness Logic (Slug Based)
+            $isFresh = false;
+            if ($p->category) {
+                $slug = $p->category->slug;
+                if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
+                    $isFresh = true;
+                }
+            }
+            if (!$isFresh && str_contains(strtolower($p->name), 'fresco')) {
+                $isFresh = true;
+            }
 
-            if (!$isBogota && $isFresh) {
-                $ignoredFresh = true;
-                continue; // Skip adding this product
+            // Strict Fresh Check: Block ONLY if we are SURE it is NOT Bogota
+            if ($isFresh && !$isBogota) {
+                // Double check session just in case context was stale
+                $sessCity = session('ai_context')['city'] ?? '';
+                if (Str::slug($sessCity) !== 'bogota') {
+                    $ignoredFresh = true;
+                    continue;
+                }
             }
 
             \App\Helpers\CartManagement::addItemsToCart($id, 1);
@@ -1256,7 +1387,7 @@ class AiAgentService
                     'payload' => $this->findDryProducts()->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->toArray()
                 ];
             } else {
-                $msg = "✅ **He añadido los productos secos a tu carrito.**\n\n⚠️ **Nota:** Los hongos frescos no fueron agregados porque solo están disponibles para Bogotá.\n\nPuedes finalizar tu compra aquí:\n\n👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>";
+                $msg = "✅ **He añadido los productos secos a tu carrito.**\n\nPuedes finalizar tu compra aquí:\n\n👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>";
                 return [
                     'type' => 'system',
                     'message' => $msg,
@@ -1382,15 +1513,20 @@ class AiAgentService
         return ['error' => "No tenemos tarifa registrada para {$matchedCity}."];
     }
 
-    protected function updateProductContext(Product $product, int $qty = 1): void
+    protected function updateProductContext(Product $product): void
     {
         $context = session('ai_context', []);
         $context['last_product_id'] = $product->id;
 
         $confirmed = $context['confirmed_products'] ?? [];
 
-        // Allow duplicates to support quantity (User adds same product twice = 2 units)
-        for ($i = 0; $i < $qty; $i++) {
+        // STRICT IDEMPOTENCY (Set of IDs)
+        // Ensure standard indexed array
+        if (!is_array($confirmed) || (count($confirmed) > 0 && !array_is_list($confirmed))) {
+            $confirmed = array_keys($confirmed); // Fallback if previous Map
+        }
+
+        if (!in_array($product->id, $confirmed)) {
             $confirmed[] = $product->id;
         }
 
@@ -1479,8 +1615,12 @@ class AiAgentService
         $city = $context['city'] ?? 'No detectada';
 
         $cartItems = [];
-        if (!empty($context['confirmed_products'])) {
-            foreach ($context['confirmed_products'] as $pid) {
+        $confirmedMap = $context['confirmed_products'] ?? [];
+        if (array_is_list($confirmedMap) && !empty($confirmedMap))
+            $confirmedMap = array_count_values($confirmedMap);
+
+        if (!empty($confirmedMap)) {
+            foreach ($confirmedMap as $pid => $qty) {
                 $p = Product::find($pid);
                 if ($p)
                     $cartItems[] = $p->name;

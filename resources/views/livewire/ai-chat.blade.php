@@ -40,7 +40,7 @@
             @foreach($messages as $msg)
                     <div class="flex {{ $msg['role'] === 'user' ? 'justify-end' : 'justify-start' }}">
                         <div class="max-w-[85%] rounded-lg px-4 py-2 text-sm shadow-sm break-words
-                                                                                                {{ $msg['role'] === 'user'
+                                                                                                                {{ $msg['role'] === 'user'
                 ? 'bg-green-100 text-green-900 rounded-br-none'
                 : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none' }}">
                             {!! $msg['content'] !!}
@@ -52,32 +52,23 @@
                                     <div class="mt-3 flex flex-col gap-2">
                                         @foreach($msg['payload'] as $prod)
                                             @if(isset($prod['price']))
-                                                {{-- Product with Quantity Selector --}}
-                                                <div x-data="{ qty: 1 }"
-                                                    class="w-full bg-white border border-green-200 rounded-lg shadow-sm p-2 flex justify-between items-center hover:bg-green-50 transition">
-                                                    <div class="flex flex-col">
-                                                        <span class="font-medium text-green-900 text-xs flex items-center gap-1">
-                                                            🍄 {{ $prod['name'] }}
-                                                        </span>
-                                                        <span class="text-gray-500 text-[10px]">${{ number_format($prod['price']) }}</span>
+                                                {{-- Checkbox Item --}}
+                                                <label
+                                                    class="w-full bg-white border border-green-200 rounded-lg shadow-sm p-2 flex justify-between items-center hover:bg-green-50 transition cursor-pointer">
+                                                    <div class="flex items-center gap-3">
+                                                        <input type="checkbox" wire:model="selected_products.{{ $prod['id'] }}"
+                                                            class="w-4 h-4 text-green-600 rounded border-gray-300 focus:ring-green-500">
+                                                        <div class="flex flex-col">
+                                                            <span class="font-medium text-green-900 text-xs text-left">
+                                                                🍄 {{ $prod['name'] }}
+                                                            </span>
+                                                            <span
+                                                                class="text-gray-500 text-[10px] text-left">${{ number_format($prod['price']) }}</span>
+                                                        </div>
                                                     </div>
-
-                                                    <div
-                                                        class="flex items-center gap-1 bg-white border border-gray-200 rounded px-1 py-0.5 shadow-sm">
-                                                        <button @click.stop="if(qty > 1) qty--"
-                                                            class="text-gray-400 hover:text-green-600 px-1.5 text-xs font-bold focus:outline-none">-</button>
-                                                        <span x-text="qty" class="text-xs font-bold text-gray-700 w-3 text-center"></span>
-                                                        <button @click.stop="qty++"
-                                                            class="text-gray-400 hover:text-green-600 px-1.5 text-xs font-bold focus:outline-none">+</button>
-                                                        <div class="w-px h-4 bg-gray-200 mx-1"></div>
-                                                        <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}', qty)"
-                                                            wire:loading.attr="disabled" wire:target="selectProduct"
-                                                            class="text-green-600 hover:text-green-700 disabled:opacity-50 disabled:cursor-wait text-[10px] font-bold uppercase tracking-wide px-1">
-                                                            ADD
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                </label>
                                             @elseif(isset($prod['index']))
+                                                {{-- Category/Navigation Item --}}
                                                 <button wire:click="selectOption({{ $prod['index'] }})"
                                                     class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">
                                                     <span class="font-medium text-green-800 group-hover:text-green-900">📂
@@ -86,6 +77,14 @@
                                                 </button>
                                             @endif
                                         @endforeach
+
+                                        {{-- Batch Action Button --}}
+                                        <div class="mt-2">
+                                            <button wire:click="addSelected" wire:loading.attr="disabled"
+                                                class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded-lg text-xs shadow-md transition flex justify-center items-center gap-2">
+                                                <span>Agregar seleccionados</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 @endif
 
@@ -93,14 +92,29 @@
                                 @if($msg['type'] === 'suggestion' && !empty($msg['payload']))
                                     <div class="mt-3 flex flex-col gap-2">
                                         @foreach($msg['payload'] as $prod)
-                                            <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}')"
-                                                class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">
-                                                <span class="font-medium text-green-800 group-hover:text-green-900">☀️
-                                                    {{ $prod['name'] }}</span>
-                                                <span
-                                                    class="text-gray-600 font-mono text-[10px] bg-gray-100 px-1 rounded">${{ number_format($prod['price']) }}</span>
-                                            </button>
+                                            <label
+                                                class="w-full bg-yellow-50 border border-yellow-200 rounded-lg shadow-sm p-2 flex justify-between items-center hover:bg-yellow-100 transition cursor-pointer">
+                                                <div class="flex items-center gap-3">
+                                                    <input type="checkbox" wire:model="selected_products.{{ $prod['id'] }}"
+                                                        class="w-4 h-4 text-yellow-600 rounded border-yellow-300 focus:ring-yellow-500">
+                                                    <div class="flex flex-col">
+                                                        <span class="font-medium text-yellow-900 text-xs flex items-center gap-1">
+                                                            ☀️ {{ $prod['name'] }}
+                                                        </span>
+                                                        <span
+                                                            class="text-yellow-700 text-[10px]">${{ number_format($prod['price']) }}</span>
+                                                    </div>
+                                                </div>
+                                            </label>
                                         @endforeach
+
+                                        {{-- Batch Action Button --}}
+                                        <div class="mt-2">
+                                            <button wire:click="addSelected" wire:loading.attr="disabled"
+                                                class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-bold py-2 rounded-lg text-xs shadow-md transition flex justify-center items-center gap-2">
+                                                <span>Agregar seleccionados</span>
+                                            </button>
+                                        </div>
                                     </div>
                                 @endif
 
