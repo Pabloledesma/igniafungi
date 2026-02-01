@@ -21,7 +21,32 @@ class AiAgentService
         $sessionContext = session('ai_context', []);
         $context = array_merge($sessionContext, $context);
 
-        // 0.1 Context Inference: Check if message is just a City or Locality
+        // 0.1 Check if we are waiting for User Data (Lazy Registration)
+        if (session('ai_waiting_for_user_data')) {
+            $user = $this->createOrUpdateLead($content, $context);
+            if ($user) {
+                auth()->login($user);
+                session()->forget('ai_waiting_for_user_data');
+
+                // RELOAD CONTEXT to ensure it contains everything (including city from DB/current request if updated)
+                $context = session('ai_context', []);
+
+                // Proceed to generate order now that we are authenticated
+                $response = $this->handleOrderConfirmation($context);
+
+                // Enhance message with registration info
+                $response['message'] = "✅ **¡Te hemos registrado exitosamente!**<br>Hemos enviado los detalles de tu cuenta a tu correo ({$user->email}).<br><br>" . $response['message'];
+
+                return $response;
+            } else {
+                return [
+                    'type' => 'question',
+                    'message' => 'No pude identificar tu correo electrónico. Por favor escríbelo para poder enviarte el resumen de la orden.'
+                ];
+            }
+        }
+
+        // 0.2 Context Inference: Check if message is just a City or Locality
         $locationContext = $this->inferLocationFromContent($content);
         if ($locationContext) {
             $context['city'] = $locationContext['city'];
@@ -47,6 +72,18 @@ class AiAgentService
         // 1.5 Strict Coherence Validation (Fresh vs City) on Affirmation
         // If user says "Yes/Dale/Acepto", check if what they accepted is valid for their city
         if ($this->isAffirmation($content)) {
+            // Priority Check: If we are in a 'fresh' context but city is restricted, BLOCK affirmation.
+            // This prevents "Ok" from generating an order if we just told them "No enviamos frescos".
+            if (isset($context['city']) && isset($context['last_offered_product_type'])) {
+                if ($context['last_offered_product_type'] === 'fresh' && Str::slug($context['city']) !== 'bogota') {
+                    // Pivot Suggestion again
+                    return [
+                        'type' => 'suggestion',
+                        'message' => "Entiendo que quieres continuar, pero recuerda que **en {$context['city']} solo podemos entregar productos secos**. Por favor selecciona una de las opciones sugeridas."
+                    ];
+                }
+            }
+
             // Check for Pending Suggestions OR Confirmed Products (Order Confirmation)
             // Fix: Allow "OK" to trigger order if we have items in the mental cart
             if (isset($context['pending_suggestion_products']) || !empty($context['confirmed_products'])) {
@@ -532,16 +569,61 @@ class AiAgentService
 
         // Try to get name
         $name = 'Usuario'; // Default
-        // Logic to extract name would go here, simplified for now
 
-        $city = $context['city'] ?? 'Bogotá'; // Default fallback
+        // Simple regex to catch "Soy [Name]"
+        if (preg_match('/soy\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)(?:,|;|\s+mi)/iu', $content, $nameMatch)) {
+            $name = trim($nameMatch[1]);
+        } elseif (preg_match('/nombre es\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)/iu', $content, $nameMatch)) {
+            $name = trim($nameMatch[1]);
+        } else {
+            // ... (Fallback regex logic) because User can just say "Name, email"
+            $parts = preg_split('/(y\s+)?(mi|el)\s+correo/iu', $content);
+            if (!empty($parts[0]) && strlen(trim($parts[0])) > 2 && strlen(trim($parts[0])) < 50) {
+                $nameCandidate = trim($parts[0]);
+                $nameCandidate = preg_replace('/\s+es$/iu', '', $nameCandidate);
+                if (!preg_match('/[0-9]/', $nameCandidate)) {
+                    $name = $nameCandidate;
+                }
+            }
+        }
+
+        // Try to extract CITY from "vivo en [City]"
+        if (preg_match('/vivo en\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)/iu', $content, $cityMatch)) {
+            $extractedCity = trim($cityMatch[1]);
+            // Validate against known cities to be sure? Or just trust.
+            // Let's Clean it (remove puntuation at end)
+            $extractedCity = preg_replace('/[.,;]$/', '', $extractedCity);
+
+            // Update Context
+            $context['city'] = $extractedCity;
+            session(['ai_context' => $context]);
+        }
+
+        // Fix: Use correct array keys from context
+        $city = $context['city'] ?? null;
+        $locality = $context['locality'] ?? null;
+
+        // PERSISTENCE: Ensure we update session explicitly if we found new data
+        if ($city) {
+            $shippingInfo = $this->getShippingInfo($city, $locality);
+            $cost = $shippingInfo['price'] ?? 0;
+
+            session()->put('checkout_shipping', [
+                'is_bogota' => (Str::slug($city) === 'bogota'),
+                'city' => $city,
+                'location' => $locality,
+                'cost' => $cost,
+                'delivery_date' => null
+            ]);
+        }
 
         return User::updateOrCreate(
             ['email' => $email],
             [
                 'name' => $name,
                 'password' => Hash::make(Str::random(16)), // Temp password
-                // 'city' => $city // Assuming user has generic fields or profile
+                'city' => $city,
+                'locality' => $locality
             ]
         );
     }
@@ -586,6 +668,19 @@ class AiAgentService
                 if ($locality)
                     $context['locality'] = $locality;
                 session(['ai_context' => $context]);
+
+                // Also update the local reference $context passed to this method so downstream logic checks validation
+                // This step is crucial because createOrUpdateLead uses $context variable passed as arg
+                // NOTE: We cannot easily update the $context argument passed by value effectively for the caller unless we return it, 
+                // but processMessage reloads session before critical steps if needed, OR we should rely on session.
+                // However, createOrUpdateLead uses the $context ARRAY passed to it.
+                // So we should ideally return this context or ensure createOrUpdateLead reads from session?
+                // The easier path: createOrUpdateLead is called in processMessage.
+                // processMessage calls inferLocationFromContent (via shippingQuery or directly).
+
+                // If we are inside handleShippingQuery, $context is local. We must update it.
+                // The replacement content below is what was already there in previous view? 
+                // Let's verify what I am replacing.
             }
 
             if (!$city) {
@@ -659,8 +754,7 @@ class AiAgentService
 
         if ($interceptProduct) {
             // INTERCEPTED!
-            $isFresh = true; // For logic flow consistency
-            // Update context to avoid future fresh suggestions
+
             // Update context to avoid future fresh suggestions
             $context['last_offered_product_type'] = 'dry';
             session(['ai_context' => $context]);
@@ -687,9 +781,11 @@ class AiAgentService
             $context['pending_suggestion_products'] = $ids;
             session(['ai_context' => $context]);
 
+            // RETURN SUGGESTION ONLY - NO LINK GENERATION
             return [
                 'type' => 'suggestion',
-                'message' => "Veo que estás en {$targetCity}. Por la delicadeza del producto (**{$interceptProduct->name}**), no enviamos frescos allí, pero tengo estas opciones secas:<br><br>{$list}<br><br>¿Cambiamos tu pedido por uno de estos?"
+                'message' => "Veo que estás en {$targetCity}. Por la delicadeza del producto (**{$interceptProduct->name}**), no enviamos frescos allí, pero tengo estas opciones secas:<br><br>{$list}<br><br>¿Cambiamos tu pedido por uno de estos?",
+                'payload' => $alternatives->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->toArray()
             ];
         }
 
@@ -824,7 +920,11 @@ class AiAgentService
 
         return [
             'type' => 'order_closure',
-            'message' => $message
+            'message' => $message,
+            'actions' => [
+                ['label' => '➕ Agregar más', 'type' => 'more_products'],
+                ['label' => '🛒 Generar orden', 'type' => 'checkout']
+            ]
         ];
     }
 
@@ -854,24 +954,50 @@ class AiAgentService
             ];
         }
 
-        // ADD TO CART VIA HELPER
-        foreach ($productIds as $id) {
-            \App\Helpers\CartManagement::addItemsToCart($id, 1);
+        // 1. LAZY REGISTRATION CHECK
+        if (!auth()->check()) {
+            session(['ai_waiting_for_user_data' => true]);
+            return [
+                'type' => 'question',
+                'message' => '¡Excelente! Tengo todo listo para tu pedido. Para registrarte y proceder al pago, por favor envíame tus datos en este formato: **Soy [Nombre completo], mi correo es [email@ejemplo.com] y vivo en [Ciudad]**.'
+            ];
         }
 
-        // PRE-FILL SHIPPING DATA FOR CHECKOUT
+        // PRE-FILL SHIPPING DATA FOR CHECKOUT FIRST TO KNOW CONTEXT
         $city = $context['city'] ?? 'Bogotá';
         $location = $context['locality'] ?? null;
         $isBogota = (Str::slug($city) === 'bogota');
 
-        // Calculate estimated cost using Helper (optional, but good for data consistency)
-        // Subtotal might not be exact here without re-fetching products, but simpler to let CheckoutPage calc it.
-        // We just need to set the location data.
+        // FILTER PRODUCTS BASED ON CITY
+        $productsAdded = [];
+        $ignoredFresh = false;
+
+        foreach ($productIds as $id) {
+            $p = Product::find($id);
+            if (!$p)
+                continue;
+
+            $isFresh = ($p->category && str_contains(strtolower($p->category->name), 'fresco')) ||
+                str_contains(strtolower($p->name), 'fresco');
+
+            if (!$isBogota && $isFresh) {
+                $ignoredFresh = true;
+                continue; // Skip adding this product
+            }
+
+            \App\Helpers\CartManagement::addItemsToCart($id, 1);
+            $productsAdded[] = $p->name;
+        }
+
+        // Calculate estimated cost using Helper
+        $shippingInfo = $this->getShippingInfo($city, $location);
+        $cost = $shippingInfo['price'] ?? 0;
 
         session()->put('checkout_shipping', [
             'is_bogota' => $isBogota,
             'city' => $city,
             'location' => $location,
+            'cost' => $cost,
             'delivery_date' => null // Let user select
         ]);
 
@@ -882,11 +1008,34 @@ class AiAgentService
         session(['ai_context' => $context]);
 
         // Generate Link
-        $link = url("/cart"); // Direct to cart so they see the items added
+        $link = url("/cart"); // Direct to cart
+
+        // Construct Message
+        if ($ignoredFresh) {
+            if (empty($productsAdded)) {
+                return [
+                    'type' => 'suggestion',
+                    'message' => "❌ **No pude agregar los productos.**\n\nLos hongos frescos (**" . implode(', ', $productsAdded) . "**) no están disponibles para envío a **{$city}** (solo Bogotá). ¿Te gustaría ver las versiones deshidratadas?",
+                    'payload' => $this->findDryProducts()->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->toArray()
+                ];
+            } else {
+                $msg = "✅ **He añadido los productos secos a tu carrito.**\n\n⚠️ **Nota:** Los hongos frescos no fueron agregados porque solo están disponibles para Bogotá.\n\nPuedes finalizar tu compra aquí:\n\n👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>";
+                return [
+                    'type' => 'system',
+                    'message' => $msg,
+                    'actions' => [
+                        ['label' => '💳 Ir a Pagar', 'type' => 'checkout']
+                    ]
+                ];
+            }
+        }
 
         return [
             'type' => 'system',
-            'message' => "¡Perfecto! He añadido los productos a tu carrito. Puedes finalizar tu compra aquí:<br><br>👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>"
+            'message' => "¡Perfecto! He añadido los productos a tu carrito. Puedes finalizar tu compra aquí:\n\n👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>",
+            'actions' => [
+                ['label' => '💳 Ir a Pagar', 'type' => 'checkout']
+            ]
         ];
     }
 

@@ -10,6 +10,29 @@ class CartManagement
     public const FREE_SHIPPING_THRESHOLD = 200000;
     public const DEFAULT_NATIONAL_SHIPPING = 45000;
 
+    public const LOCALIDAD_PRECIOS = [
+        'Usaquén' => 9000,
+        'Chapinero' => 9000,
+        'Santa Fe' => 9000,
+        'San Cristóbal' => 9000,
+        'Usme' => 9000,
+        'Tunjuelito' => 9000,
+        'Bosa' => 9000,
+        'Kennedy' => 9000,
+        'Fontibón' => 9000,
+        'Engativá' => 9000,
+        'Suba' => 9000,
+        'Barrios Unidos' => 9000,
+        'Teusaquillo' => 9000,
+        'Los Mártires' => 9000,
+        'Antonio Nariño' => 9000,
+        'Puente Aranda' => 9000,
+        'La Candelaria' => 9000,
+        'Rafael Uribe Uribe' => 9000,
+        'Ciudad Bolívar' => 9000,
+        'Sumapaz' => 9000,
+    ];
+
     /**
      * Centraliza la lógica de cobro de envío.
      */

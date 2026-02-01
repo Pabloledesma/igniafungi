@@ -50,8 +50,40 @@ class CartPage extends Component
             // o puedes consultar el modelo Product si es necesario.
             $product = Product::find($item['product_id']);
 
-            if ($product && $product->category && $product->category->slug === 'hongos-gourmet') {
-                return true;
+            if ($product) {
+                // Check for generic 'fresh' definition requested by user: "Hongos Gourmet" or "Medicina Ancestral"
+                // Using slug or name match. Assuming slugs for robustness but fallback to name match if needed.
+                // Assuming standard slugs: 'hongos-gourmet', 'medicina-ancestral'
+                // Or checking category name directly as requested.
+
+                $categoryName = $product->category ? strtolower($product->category->name) : '';
+
+                // Also support the generic 'fresco' check just in case, or solely rely on categories?
+                // User said: "Si tiene una de esas 2 categorias entonces se trata de un hongo fresco"
+                // This implies strict category check.
+
+                $isFresh = false;
+                if ($product->category) {
+                    $slug = $product->category->slug;
+                    // Check slugs or names
+                    if (
+                        in_array($slug, ['hongos-gourmet', 'medicina-ancestral']) ||
+                        str_contains($categoryName, 'hongos gurmet') || // User used typo "gurmet" in prompt, handle it?
+                        str_contains($categoryName, 'gourmet') ||
+                        str_contains($categoryName, 'medicina ancestral')
+                    ) {
+                        $isFresh = true;
+                    }
+                }
+
+                // Fallback: Name still contains 'fresco'?
+                if (!$isFresh && str_contains(strtolower($product->name), 'fresco')) {
+                    $isFresh = true;
+                }
+
+                if ($isFresh) {
+                    return true;
+                }
             }
         }
         return false;

@@ -40,7 +40,7 @@
             @foreach($messages as $msg)
                     <div class="flex {{ $msg['role'] === 'user' ? 'justify-end' : 'justify-start' }}">
                         <div class="max-w-[85%] rounded-lg px-4 py-2 text-sm shadow-sm break-words
-                                                {{ $msg['role'] === 'user'
+                                                        {{ $msg['role'] === 'user'
                 ? 'bg-green-100 text-green-900 rounded-br-none'
                 : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none' }}">
                             {!! $msg['content'] !!}
@@ -74,8 +74,18 @@
                                     </div>
                                 @endif
 
-                                {{-- 3. Closure Actions --}}
-                                @if($msg['type'] === 'order_closure')
+                                {{-- 3. Dynamic Actions --}}
+                                @if(isset($msg['actions']) && !empty($msg['actions']))
+                                    <div class="mt-3 flex flex-wrap gap-2">
+                                        @foreach($msg['actions'] as $action)
+                                            <button wire:click="triggerAction('{{ $action['type'] }}')"
+                                                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg text-xs shadow-md transition flex items-center gap-1">
+                                                {{ $action['label'] }}
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @elseif($msg['type'] === 'order_closure')
+                                    {{-- Fallback for legacy messages if any --}}
                                     <div class="mt-3 grid grid-cols-2 gap-2">
                                         <button wire:click="triggerAction('add_more')"
                                             class="bg-gray-50 hover:bg-gray-100 text-gray-700 font-semibold py-2 px-2 rounded-lg text-xs border border-gray-200 transition flex justify-center items-center gap-1">

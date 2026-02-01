@@ -24,12 +24,35 @@ class AiChat extends Component
     public function mount()
     {
         $this->sessionId = session()->getId();
+
+        // Load Context from Session
+        $context = session('ai_context', []);
+        $this->city = $context['city'] ?? session('checkout_shipping')['city'] ?? '';
+        $this->locality = $context['locality'] ?? session('checkout_shipping')['location'] ?? '';
+
         $this->messages = [
             [
                 'role' => 'assistant',
-                'content' => '¡Hola! Soy el asistente virtual de Ignia Fungi. ¿En qué puedo ayudarte hoy? (Envíos, productos, cultivo...)'
+                'content' => '¡Hola! Soy el asistente virtual de Ignia Fungi. ¿En qué puedo ayudarte hoy? (Envíos, productos, reservar cosechas)'
             ]
         ];
+    }
+
+    public function updatedCity($value)
+    {
+        $this->updateSessionContext('city', $value);
+    }
+
+    public function updatedLocality($value)
+    {
+        $this->updateSessionContext('locality', $value);
+    }
+
+    protected function updateSessionContext($key, $value)
+    {
+        $context = session('ai_context', []);
+        $context[$key] = $value;
+        session(['ai_context' => $context]);
     }
 
     public function toggleChat()
@@ -82,12 +105,14 @@ class AiChat extends Component
         $this->sendMessage(app(AiAgentService::class));
     }
 
-    public function triggerAction($action)
+    public function triggerAction($action, $payload = null)
     {
-        if ($action === 'generate_order') {
+        if ($action === 'checkout' || $action === 'generate_order') {
             $this->userInput = "Generar orden";
-        } elseif ($action === 'add_more') {
+        } elseif ($action === 'more_products' || $action === 'add_more') {
             $this->userInput = "Quiero agregar más productos";
+        } else {
+            $this->userInput = "Opción: " . $action;
         }
         $this->sendMessage(app(AiAgentService::class));
     }
