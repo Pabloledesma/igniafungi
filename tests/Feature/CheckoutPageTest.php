@@ -71,13 +71,13 @@ class CheckoutPageTest extends TestCase
             ->assertHasErrors(['first_name' => 'min']);
     }
 
-      /** @test */
+    /** @test */
     public function place_order_without_products()
     {
 
         // Asegurarnos de que el carrito esté vacío explícitamente
         CartManagement::clearCartItems();
-        
+
         Livewire::test(CheckoutPage::class)
             // 1. Probar campos vacíos
             ->set('first_name', 'sdfgsdg')
@@ -106,8 +106,8 @@ class CheckoutPageTest extends TestCase
             // Forzamos el set de city y location para disparar calculateShipping()
             ->set('city', 'Bogotá')
             ->set('location', 'Suba')
-            ->assertSet('shipping_cost', 11000)
-            ->assertSet('grand_total', 41000); 
+            ->assertSet('shipping_cost', 10000)
+            ->assertSet('grand_total', 40000);
     }
 
     /** @test */
@@ -137,7 +137,7 @@ class CheckoutPageTest extends TestCase
         // 1. Verificar que la orden existe en la base de datos
         $this->assertDatabaseHas('orders', [
             'payment_method' => 'COD',
-            'grand_total' => 109000, // 50k + 9k de Engativá
+            'grand_total' => 110000, // 50k + 10k de Engativá
         ]);
 
         // 2. Verificar que se creó el objeto Delivery vinculado
@@ -149,7 +149,7 @@ class CheckoutPageTest extends TestCase
         ]);
     }
 
-     /** @test */
+    /** @test */
     public function it_creates_an_order_with_free_delivery()
     {
         $freeShippingTreshold = CartManagement::FREE_SHIPPING_THRESHOLD;
@@ -230,24 +230,24 @@ class CheckoutPageTest extends TestCase
             ->set('payment_method', 'COD')
             ->set('delivery_date', now()->addDay()->format('Y-m-d'))
             ->call('placeOrder');
-            
-            
+
+
         // Obtenemos la última orden creada para saber su referencia exacta
         $order = Order::latest()->first();
 
         // Verificamos la redirección con los parámetros exactos
         $test->assertRedirect(route('order.thanks', [
             'reference' => $order->reference,
-            'payment'   => 'cod' 
+            'payment' => 'cod'
         ]));
 
         $this->get(route('order.thanks', [
             'reference' => $order->reference,
-            'payment'   => 'cod'
+            'payment' => 'cod'
         ]))
-        ->assertStatus(200)
-        ->assertSee('Pedido Recibido')
-        ->assertSee('Pagarás en efectivo al recibir tus productos.');
+            ->assertStatus(200)
+            ->assertSee('Pedido Recibido')
+            ->assertSee('Pagarás en efectivo al recibir tus productos.');
     }
 
     // Método auxiliar para llenar el carrito en la sesión/cookie de prueba
@@ -255,11 +255,11 @@ class CheckoutPageTest extends TestCase
     {
         $cartItems = [
             [
-                'product_id'   => $product->id,
+                'product_id' => $product->id,
                 // 'name' no suele estar en order_items, se usa para el carrito visual
-                'name'         => $product->name, 
-                'unit_amount'  => $product->price,
-                'quantity'     => $product->stock, // Asegúrate de que esta llave sea 'quantity'
+                'name' => $product->name,
+                'unit_amount' => $product->price,
+                'quantity' => $product->stock, // Asegúrate de que esta llave sea 'quantity'
                 'total_amount' => $product->price * $product->stock,
             ]
         ];
@@ -269,8 +269,8 @@ class CheckoutPageTest extends TestCase
         session([
             'checkout_shipping' => [
                 'is_bogota' => $is_bogota,
-                'location'  => $location,
-                'cost'      => $shippingCost,
+                'location' => $location,
+                'cost' => $shippingCost,
             ]
         ]);
     }

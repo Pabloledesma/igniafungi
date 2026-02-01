@@ -25,8 +25,12 @@ class AiAgentRefinementsTest extends TestCase
         $this->aiService = app(AiAgentService::class);
 
         // Setup Products
+        // Create explicit category to avoid factory collision
+        $catFresh = Category::factory()->create(['slug' => 'cat-fresh-' . uniqid()]);
+
         $this->freshProduct = Product::factory()->create([
             'name' => 'Pioppino Fresco',
+            'category_id' => $catFresh->id,
             'description' => 'El pioppino es un hongo de sabor intenso y textura firme.',
             'stock' => 10,
             'is_active' => true,
@@ -35,8 +39,12 @@ class AiAgentRefinementsTest extends TestCase
 
         // Mock specific category for coherence check if needed, but name check relies on 'fresco' string
 
+        // Create explicit category to avoid factory collision
+        $catDry = Category::factory()->create(['slug' => 'cat-dry-' . uniqid()]);
+
         $this->dryProduct = Product::factory()->create([
             'name' => 'Melena de León Seca',
+            'category_id' => $catDry->id,
             'description' => 'Ideal para la memoria y concentración.',
             'stock' => 10,
             'is_active' => true,

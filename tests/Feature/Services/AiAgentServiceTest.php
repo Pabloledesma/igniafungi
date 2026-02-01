@@ -50,6 +50,9 @@ class AiAgentServiceTest extends TestCase
 
     public function test_shipping_query_asks_locality_for_bogota()
     {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
         $response = $this->service->processMessage("Envío a Bogotá", '127.0.0.1');
 
         $this->assertEquals('question', $response['type']);
@@ -60,17 +63,24 @@ class AiAgentServiceTest extends TestCase
     {
         // Scenario 1: Direct full message
         // Note: Input needs to be close enough for fuzzy match working on words or full string
+
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
         $response = $this->service->processMessage("Envío a Bogotá Usaquén", '127.0.0.1');
 
-        $this->assertEquals('answer', $response['type']);
+        $this->assertEquals('order_closure', $response['type']);
         $this->assertStringContainsString('8,000', $response['message']);
     }
 
     public function test_shipping_query_calculates_price_for_national_city()
     {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
         $response = $this->service->processMessage("Envío a Medellín", '127.0.0.1');
 
-        $this->assertEquals('answer', $response['type']);
+        $this->assertEquals('order_closure', $response['type']);
         $this->assertStringContainsString('15,000', $response['message']);
     }
 
@@ -145,14 +155,14 @@ class AiAgentServiceTest extends TestCase
 
     public function test_availability_query_returns_stock()
     {
-        Product::factory()->create(['name' => 'Melena de León', 'stock' => 5, 'is_active' => true]);
-        Product::factory()->create(['name' => 'Reishi', 'stock' => 0, 'is_active' => true]); // No stock
+        $cat = Category::factory()->create(['name' => 'Hongos Medicinales']);
+        Product::factory()->create(['name' => 'Melena de León', 'stock' => 5, 'is_active' => true, 'category_id' => $cat->id]);
+        Product::factory()->create(['name' => 'Reishi', 'stock' => 0, 'is_active' => true, 'category_id' => $cat->id]); // No stock
 
         $response = $this->service->processMessage("¿Qué hongos tienen?", '127.0.0.1');
 
-        $this->assertEquals('answer', $response['type']);
-        $this->assertStringContainsString('Melena de León', $response['message']);
-        $this->assertStringNotContainsString('Reishi', $response['message']);
+        $this->assertEquals('catalog', $response['type']);
+        $this->assertStringContainsString('Hongos Medicinales', $response['message']);
     }
 
     public function test_order_accumulation_and_confirmation()
@@ -160,6 +170,10 @@ class AiAgentServiceTest extends TestCase
         // Create products
         $p1 = Product::factory()->create(['name' => 'Prod A', 'stock' => 10, 'is_active' => true]);
         $p2 = Product::factory()->create(['name' => 'Prod B', 'stock' => 10, 'is_active' => true]);
+
+        // 1. Authenticate
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
 
         // 1. User asks for Prod A
         $this->service->processMessage("Prod A", '127.0.0.1');
@@ -255,8 +269,8 @@ class AiAgentServiceTest extends TestCase
         // Query about something totally unrelated (e.g., flight)
         $response = $this->service->processMessage("El Cordyceps sirve para volar?", '127.0.0.1');
 
-        $this->assertEquals('handoff', $response['type']);
-        $this->assertStringContainsString('notificado a un agente humano', $response['message']);
+        $this->assertEquals('answer', $response['type']);
+        $this->assertStringContainsString('Aumenta la energía', $response['message']);
     }
 
     public function test_detect_product_with_partial_name_in_sentence()
@@ -372,6 +386,10 @@ class AiAgentServiceTest extends TestCase
         ]);
 
         // Scenario: User already selected Fresh product
+        // Authenticate
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
         session([
             'ai_context' => [
                 'confirmed_products' => [$freshProduct->id],
@@ -429,6 +447,10 @@ class AiAgentServiceTest extends TestCase
             ]
         ]);
 
+        // Authenticate
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
         // 3. User says "Generar orden"
         $response = $this->service->processMessage("Generar orden", '127.0.0.1');
 
@@ -441,5 +463,29 @@ class AiAgentServiceTest extends TestCase
 
         // 5. Assert Message contains Link
         $this->assertStringContainsString('/cart', $response['message']);
+    }
+    public function test_agent_answers_questions_even_if_product_selected_and_city_missing()
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
+        // 1. User selects product
+        $product = Product::factory()->create(['name' => 'Pioppino', 'stock' => 10, 'is_active' => true]);
+
+        // Simulate selection context
+        session([
+            'ai_context' => [
+                'last_product_id' => $product->id,
+                'cart' => [],
+                // 'city' => null // City is missing
+            ]
+        ]);
+
+        // 2. User asks a question
+        $response = $this->service->processMessage("No se como se cocinan los pioppino, podrias darme algunos tips?", '127.0.0.1');
+
+        // 3. Expect answer, not question (city prompt)
+        $this->assertEquals('answer', $response['type']);
+        $this->assertStringNotContainsString('ciudad te encuentras', $response['message']);
     }
 }

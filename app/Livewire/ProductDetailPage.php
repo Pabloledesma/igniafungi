@@ -79,9 +79,39 @@ class ProductDetailPage extends Component
         $product = Product::where('slug', $this->slug)->firstOrFail();
         $preorderBatch = app(\App\Services\InventoryService::class)->getPreorderBatch($product);
 
+        $images = [];
+        if (!empty($product->images)) {
+            foreach ($product->images as $image) {
+                $images[] = asset('storage/' . $image);
+            }
+        } else {
+            $images[] = asset('images/og-default.jpg');
+        }
+
+        $schema = [
+            "@context" => "https://schema.org/",
+            "@type" => "Product",
+            "name" => $product->name,
+            "image" => $images,
+            "description" => \Illuminate\Support\Str::limit(strip_tags($product->description), 160),
+            "brand" => [
+                "@type" => "Brand",
+                "name" => "Ignia Fungi"
+            ],
+            "offers" => [
+                "@type" => "Offer",
+                "url" => request()->url(),
+                "priceCurrency" => "COP",
+                "price" => (!$product->in_stock && isset($preorderBatch) && $preorderBatch) ? $product->price * 0.9 : $product->price,
+                "availability" => $product->in_stock ? 'https://schema.org/InStock' : (($preorderBatch) ? 'https://schema.org/PreOrder' : 'https://schema.org/OutOfStock'),
+                "itemCondition" => "https://schema.org/NewCondition"
+            ]
+        ];
+
         return view('livewire.product-detail-page', [
             'product' => $product,
-            'preorderBatch' => $preorderBatch
+            'preorderBatch' => $preorderBatch,
+            'schemaJson' => json_encode($schema, JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT)
         ]);
     }
 }

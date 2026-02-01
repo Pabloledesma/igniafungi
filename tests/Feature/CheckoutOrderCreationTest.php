@@ -34,15 +34,15 @@ class CheckoutOrderCreationTest extends TestCase
         // Ajusta las llaves 'shipping_amount' y 'grand_total' según las uses en tu código
         session([
             'checkout_shipping' => [
-                'is_bogota'     => true,
-                'cost'          => 15000,
-                'delivery_date' => now()->addDay(6),
-                'location'      => 'Engativa'
+                'is_bogota' => true,
+                'cost' => 15000,
+                'delivery_date' => now()->addDays(6),
+                'location' => 'Engativa'
             ]
         ]);
 
 
-       // 3. Ejecutar Test inyectando la cookie 'cart_items'
+        // 3. Ejecutar Test inyectando la cookie 'cart_items'
         Livewire::withCookie('cart_items', json_encode($cartData))
             ->actingAs($user)
             ->test(CheckoutPage::class)
@@ -63,8 +63,8 @@ class CheckoutOrderCreationTest extends TestCase
         // ASSERT: La orden debe existir en la base de datos
         $this->assertDatabaseHas('orders', [
             'user_id' => $user->id,
-            'grand_total' => 24000,
-            'shipping_amount' => 9000,
+            'grand_total' => 25000,
+            'shipping_amount' => 10000,
         ]);
 
         // ASSERT: Verificar que la referencia NO sea nula

@@ -8,7 +8,7 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class AiAgentService
 {
@@ -17,15 +17,96 @@ class AiAgentService
      */
     public function processMessage(string $content, string $ip, ?array $context = []): array
     {
+        Log::info("ProcessMessage Start: '{$content}'");
+
+        // 0. GLOBAL INTERCEPTOR: Handoff Request (High Priority)
+        // If user explicitly asks for human/agent, we stop everything and trigger handoff.
+        if ($this->isHandoffRequest($content)) {
+            // We need to load context just for the notification payload
+            $sessionContext = session('ai_context', []);
+            // Merge but don't save yet, just for reading
+            $tempContext = array_merge($sessionContext, $context);
+
+            // Ensure session matches for callLlm to pick it up (it reads from session)
+            session(['ai_context' => $tempContext]);
+
+            Log::info("Returning Handoff");
+            return $this->callLlm($content);
+        }
+
         // 0. Load Context from Session (Persistence)
         $sessionContext = session('ai_context', []);
         $context = array_merge($sessionContext, $context);
 
-        // 0.1 Check if we are waiting for User Data (Lazy Registration)
-        if (session('ai_waiting_for_user_data')) {
-            $user = $this->createOrUpdateLead($content, $context);
-            if ($user) {
-                auth()->login($user);
+        // 0.1 PRE-EMPTIVE INFORMATIONAL CHECK (Priority over Registration/City)
+        // Check if user is asking a question about a product ("Como se cocina?", "Que es?")
+        $infoProduct = $this->detectProduct($content);
+        if (!$infoProduct && !empty($context['last_product_id'])) {
+            $infoProduct = Product::find($context['last_product_id']);
+        }
+
+        if ($infoProduct && $this->isInformationalQuery($content)) {
+            // RELOAD CONTEXT because detectProduct might have modified it
+            $context = session('ai_context', []);
+
+            // 6. Check for Informational Questions (Description, Usage, etc.)
+            $normalizedContent = Str::lower(preg_replace('/[^\p{L}\p{N}\s]/u', '', $content));
+            $descriptionTerms = ['que es', 'qué es', 'para que sirve', 'para qué sirve', 'sirve para', 'descripción', 'descripcion', 'beneficios', 'propiedades', 'informacion', 'información', 'detalle', 'cuentame'];
+            $usageTerms = ['como se usa', 'cómo se usa', 'como consumir', 'dosis', 'preparación', 'preparacion', 'receta', 'cocinar', 'comer', 'prepara', 'usarla', 'cocina', 'usar', 'preparar', 'uso'];
+            $keywords = array_merge($descriptionTerms, $usageTerms);
+
+            $isInfoQuery = false;
+            $isUsageQuery = false;
+            foreach ($keywords as $kw) {
+                if (str_contains($normalizedContent, $kw)) {
+                    $isInfoQuery = true;
+                    if (in_array($kw, $usageTerms)) {
+                        $isUsageQuery = true;
+                    }
+                    break;
+                }
+            }
+
+            if ($isInfoQuery) {
+                $searchKeywords = $isUsageQuery ? array_unique(array_merge($keywords, $usageTerms)) : $keywords;
+
+                // Search Posts
+                $posts = \App\Models\Post::where('product_id', $infoProduct->id)
+                    ->where('is_published', true)
+                    ->where(function ($q) use ($searchKeywords) {
+                        if (!empty($searchKeywords)) {
+                            foreach ($searchKeywords as $kw) {
+                                $q->orWhere('content', 'like', "%{$kw}%")
+                                    ->orWhere('title', 'like', "%{$kw}%")
+                                    ->orWhere('summary', 'like', "%{$kw}%");
+                            }
+                        }
+                    })->limit(3)->get();
+
+                $extraInfo = "";
+                if ($posts->isNotEmpty()) {
+                    foreach ($posts as $post) {
+                        $extraInfo .= "<br>🔹 **{$post->title}:** {$post->summary}";
+                    }
+                }
+
+                $description = $infoProduct->description ?? "Un hongo de excelente calidad.";
+
+                Log::info("Returning Info Query (0.1)");
+                return [
+                    'type' => 'answer',
+                    'message' => "ℹ️ **Sobre {$infoProduct->name}**:<br>{$description}" . ($extraInfo ? "<br><br>💡 **Información Adicional (Blog):**{$extraInfo}" : "")
+                ];
+            }
+        }
+
+        // 0.2 Check if we are waiting for User Data (Lazy Registration)
+        // BUT: If user asks a question about product (Informational), we should answer it first.
+        if (session('ai_waiting_for_user_data') && !$this->isInformationalQuery($content)) {
+            $result = $this->createOrUpdateLead($content, $context);
+
+            if ($result instanceof User) {
+                auth()->login($result);
                 session()->forget('ai_waiting_for_user_data');
 
                 // RELOAD CONTEXT to ensure it contains everything (including city from DB/current request if updated)
@@ -35,10 +116,23 @@ class AiAgentService
                 $response = $this->handleOrderConfirmation($context);
 
                 // Enhance message with registration info
-                $response['message'] = "✅ **¡Te hemos registrado exitosamente!**<br>Hemos enviado los detalles de tu cuenta a tu correo ({$user->email}).<br><br>" . $response['message'];
+                $response['message'] = "✅ **¡Te hemos registrado exitosamente!**<br>Hemos enviado los detalles de tu cuenta a tu correo ({$result->email}).<br><br>" . $response['message'];
 
+                Log::info("Returning Waiting for User Data (0.2)");
                 return $response;
+            } elseif (is_array($result) && isset($result['missing']) && $result['missing'] === 'email') {
+                // PARTIAL DATA: Found Name, missing Email
+                if (!empty($result['name'])) {
+                    $context['partial_name'] = $result['name'];
+                    session(['ai_context' => $context]);
+                }
+                Log::info("Returning Waiting for User Data (0.2)");
+                return [
+                    'type' => 'question',
+                    'message' => "Gracias " . ($result['name'] ?? '') . ", ahora por favor indicame tu **correo electrónico** para enviarte el resumen de la orden."
+                ];
             } else {
+                Log::info("Returning Waiting for User Data (0.2)");
                 return [
                     'type' => 'question',
                     'message' => 'No pude identificar tu correo electrónico. Por favor escríbelo para poder enviarte el resumen de la orden.'
@@ -53,20 +147,68 @@ class AiAgentService
             if (isset($locationContext['locality'])) {
                 $context['locality'] = $locationContext['locality'];
             }
-            // Update Session
+            // Update Session IMMEDIATELY
             session(['ai_context' => $context]);
 
-            // If user implies "Agregar más" context change or just location update?
-            // If they just say "Medellin", likely shipping query response.
-            // If they say "Agregar más productos para Medellin" (handled by location inference + availability query?)
+            // CONTINUITY LOGIC:
+            // 1. If Guest: Trigger Lazy Registration Protocol
+            if (!auth()->check()) {
+                // Check if we have a product in "Mental Cart"
+                $productName = "tu pedido";
+                if (!empty($context['last_product_id'])) {
+                    $p = Product::find($context['last_product_id']);
+                    if ($p)
+                        $productName = $p->name;
+                } elseif (!empty($context['confirmed_products'])) {
+                    $productName = "tus productos";
+                }
 
+                $city = $context['city'];
+
+                // CRITICAL FIX: Set session flag so we know we are waiting for data
+                session(['ai_waiting_for_user_data' => true]);
+
+                Log::info("Returning Location Context (0.2 Inference)");
+                return [
+                    'type' => 'question',
+                    'message' => "¡Perfecto! Para poder generar tu orden de **{$productName}** en **{$city}**, por favor dime tu nombre y correo electrónico con este formato: *Soy [Nombre], mi correo es [email]*"
+                ];
+            }
+
+            // 2. If Auth: Proceed to Shipping/Availability
             // If explicit shipping query OR implicit context flow (User providing city after product selection)
             $hasProducts = !empty($context['confirmed_products'])
                 || !empty($context['last_product_id'])
                 || !empty($context['pending_suggestion_products']);
 
-            if ($this->isShippingQuery($content) || $hasProducts) {
+            // Always handle shipping query if we have products and location now
+            if ($hasProducts) {
+                Log::info("Returning Location Context (0.2 Inference)");
                 return $this->handleShippingQuery($content, $context);
+            }
+        }
+
+        // 0.3 Check if we are waiting for user data (Lazy Registration Follow-up)
+        if (session('ai_waiting_for_user_data')) {
+            // Force check for registration data even if intent detection fails
+            $leadResult = $this->createOrUpdateLead($content, $context);
+            if (is_array($leadResult) && isset($leadResult['missing']) && $leadResult['missing'] === 'email') {
+                // Save name if found
+                if (!empty($leadResult['name'])) {
+                    $context['partial_name'] = $leadResult['name'];
+                    session(['ai_context' => $context]);
+                }
+                return [
+                    'type' => 'question',
+                    'message' => "Gracias " . ($leadResult['name'] ?? '') . ", ahora por favor indicame tu **correo electrónico** para enviarte el resumen de la orden."
+                ];
+            }
+            if ($leadResult instanceof User) {
+                session()->forget('ai_waiting_for_user_data');
+                // Proceed to success flow below (auth check will pass now ideally, but we need to login the user or return success message)
+                // Actually `createOrUpdateLead` logs them in.
+                // So we can let the flow continue to "Affirmation" or just return the order link immediately.
+                return $this->handleOrderConfirmation($context);
             }
         }
 
@@ -155,57 +297,6 @@ class AiAgentService
         if ($product) {
             // RELOAD CONTEXT because detectProduct modified it
             $context = session('ai_context', []);
-
-            // 6.0 INFORMATIONAL QUERY CHECK (PRIORITY OVER RESTRICTION)
-            if ($this->isInformationalQuery($content)) {
-                $description = $product->description ?? $product->short_description ?? "Es un excelente producto de Ignia Fungi.";
-
-                // Extract keywords to see if specific info is requested
-                $nameParts = explode(' ', strtolower($product->name));
-                $stopWords = array_merge($this->stopWords, $nameParts);
-
-                $words = explode(' ', mb_strtolower(preg_replace('/[^\p{L}\p{N}\s]/u', '', $content)));
-                $keywords = array_filter($words, fn($w) => mb_strlen($w) > 3 && !in_array($w, $stopWords));
-
-                // Expand keywords for Usage/Preparation context
-                $usageTerms = ['usar', 'uso', 'consumir', 'consumo', 'preparar', 'prepara', 'cocina', 'receta', 'dosis', 'tomar', 'comer'];
-                $isUsageQuery = false;
-                foreach ($keywords as $kw) {
-                    foreach ($usageTerms as $term) {
-                        if (str_contains($kw, $term)) {
-                            $isUsageQuery = true;
-                            break 2;
-                        }
-                    }
-                }
-
-                $searchKeywords = $isUsageQuery ? array_unique(array_merge($keywords, $usageTerms)) : $keywords;
-
-                // Search Posts
-                $posts = \App\Models\Post::where('product_id', $product->id)
-                    ->where('is_published', true)
-                    ->where(function ($q) use ($searchKeywords) {
-                        if (!empty($searchKeywords)) {
-                            foreach ($searchKeywords as $kw) {
-                                $q->orWhere('content', 'like', "%{$kw}%")
-                                    ->orWhere('title', 'like', "%{$kw}%")
-                                    ->orWhere('summary', 'like', "%{$kw}%");
-                            }
-                        }
-                    })->limit(3)->get();
-
-                $extraInfo = "";
-                if ($posts->isNotEmpty()) {
-                    foreach ($posts as $post) {
-                        $extraInfo .= "<br>🔹 **{$post->title}:** {$post->summary}";
-                    }
-                }
-
-                return [
-                    'type' => 'answer',
-                    'message' => "ℹ️ **Sobre {$product->name}**:<br>{$description}" . ($extraInfo ? "<br><br>💡 **Información Adicional (Blog):**{$extraInfo}" : "")
-                ];
-            }
 
             // 6.1 Check coherence BEFORE handling SALES INTENT
             if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
@@ -580,7 +671,7 @@ class AiAgentService
             stripos($content, 'quiero comprar') !== false;
     }
 
-    protected function createOrUpdateLead(string $content, array $context): ?User
+    protected function createOrUpdateLead(string $content, array $context): User|array|null
     {
         // Esta es una implementación simplificada para extraer datos
         // En un caso real, el LLM haría esta extracción estructurada
@@ -590,8 +681,19 @@ class AiAgentService
         preg_match('/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}/i', $content, $matches);
         $email = $matches[0] ?? null;
 
-        if (!$email)
+        if (!$email) {
+            // Check if we found a name at least
+            $nameCandidate = null;
+            if (preg_match('/soy\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)/iu', $content, $nameMatch)) {
+                $nameCandidate = trim($nameMatch[1]);
+            }
+
+            // If we are in "waiting for data" mode, we should assume the user is trying to answer
+            if (session('ai_waiting_for_user_data')) {
+                return ['missing' => 'email', 'name' => $nameCandidate];
+            }
             return null;
+        }
 
         // Try to get name
         $name = 'Usuario'; // Default
@@ -656,7 +758,7 @@ class AiAgentService
 
     protected function isShippingQuery(string $content): bool
     {
-        $content = strtolower($content);
+        $content = Str::ascii(Str::lower($content));
         return str_contains($content, 'envi') || // envio, enviar, enviame
             str_contains($content, 'domicilio') ||
             str_contains($content, 'costo') ||
@@ -1237,15 +1339,36 @@ class AiAgentService
 
     protected function callLlm(string $content): array
     {
-        // 1. Notify Slack Channel
-        $token = config('services.slack.notifications.bot_user_oauth_token');
-        $channel = config('services.slack.notifications.channel');
+        // 1. Notify via Slack Channel (Using Notification Facade)
+        // Build rich payload
+        $context = session('ai_context', []);
+        $city = $context['city'] ?? 'No detectada';
 
-        if ($token && $channel) {
-            Http::withToken($token)->post('https://slack.com/api/chat.postMessage', [
-                'channel' => $channel,
-                'text' => "🚨 *Atención Humana Requerida* \n\n*Usuario:* Guest\n*Mensaje:* {$content}\n*Contexto:* Fallback de Agente IA"
-            ]);
+        $cartItems = [];
+        if (!empty($context['confirmed_products'])) {
+            foreach ($context['confirmed_products'] as $pid) {
+                $p = Product::find($pid);
+                if ($p)
+                    $cartItems[] = $p->name;
+            }
+        }
+        if (empty($cartItems) && !empty($context['last_product_id'])) {
+            $p = Product::find($context['last_product_id']);
+            if ($p)
+                $cartItems[] = $p->name . " (Interés)";
+        }
+        $cartString = empty($cartItems) ? 'Vacío' : implode(', ', $cartItems);
+        $userString = auth()->check() ? auth()->user()->email : 'Guest';
+
+        try {
+            \Illuminate\Support\Facades\Notification::route('slack', config('services.slack.notifications.channel'))
+                ->notify(new \App\Notifications\AiAgentHandoffNotification($content, [
+                    'city' => $city,
+                    'user' => $userString,
+                    'cart' => $cartString
+                ]));
+        } catch (\Exception $e) {
+            Log::error("Failed to send Slack notification: " . $e->getMessage());
         }
 
         return [
@@ -1336,5 +1459,29 @@ class AiAgentService
         }
 
         return null;
+    }
+
+    protected function isHandoffRequest(string $content): bool
+    {
+        $content = strtolower($content);
+        $keywords = [
+            'humano',
+            'persona',
+            'asesor',
+            'alguien real',
+            'hablar con alguien',
+            'atencion al cliente',
+            'soporte',
+            'ayuda humana',
+            'comunicame',
+            'contactar'
+        ];
+
+        foreach ($keywords as $kw) {
+            if (str_contains($content, $kw)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -97,6 +97,9 @@ class AiChatInteractionTest extends TestCase
     public function it_includes_actions_in_shipping_query_response()
     {
         // Arrange
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
         $context = ['city' => 'Medellín'];
 
         // Act
@@ -192,8 +195,11 @@ class AiChatInteractionTest extends TestCase
             'city' => 'Medellín',
             'last_product_id' => 999
         ];
-
         session(['ai_context' => $context]);
+
+        // Authenticate User to pass validation
+        $user = User::factory()->create();
+        $this->actingAs($user);
 
         $userInput = "Cuanto el envio a Medellín";
         $response = $this->service->processMessage($userInput, '127.0.0.1', $context);
