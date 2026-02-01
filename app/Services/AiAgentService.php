@@ -377,7 +377,15 @@ class AiAgentService
         // 2. Conditional Product Detection
         // Only run detectProduct if we are NOT handling a location response and NOT making an affirmation
         // This prevents double counting when user says "Bogota" or "Si"
-        $locationContext = $this->inferLocationFromContent($content); // We ran this earlier, but checking availability/product is orthogonal. Wait, processMessage logic calls inferLocation earlier.
+        $locationContext = $this->inferLocationFromContent($content);
+
+        // PERSIST INFERRED LOCATION IMMEDIATELY
+        if (!empty($locationContext)) {
+            $context = array_merge($context, $locationContext);
+            session(['ai_context' => $context]);
+        }
+
+        // Actually, logic flow:
 
         // Actually, logic flow:
         // 0.2 inferLocation -> Update Context.
@@ -389,7 +397,7 @@ class AiAgentService
         $looksLikeLocation = !empty($locationContext);
 
         $product = null;
-        if (!$looksLikeLocation && !$isAffirmation) {
+        if (!$looksLikeLocation) {
             $product = $this->detectProduct($content);
         }
 
@@ -406,10 +414,10 @@ class AiAgentService
             if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
                 $isFresh = false;
                 if ($product->category) {
-                     $slug = $product->category->slug;
-                     if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
-                         $isFresh = true;
-                     }
+                    $slug = $product->category->slug;
+                    if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
+                        $isFresh = true;
+                    }
                 }
                 if (!$isFresh && str_contains(strtolower($product->name), 'fresco')) {
                     $isFresh = true;
@@ -1387,22 +1395,67 @@ class AiAgentService
                     'payload' => $this->findDryProducts()->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->toArray()
                 ];
             } else {
-                $msg = "✅ **He añadido los productos secos a tu carrito.**\n\nPuedes finalizar tu compra aquí:\n\n👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>";
+                // GENERATE CHECKOUT LINK
+                $cartUrl = route('cart');
+
+                // PERSISTENCE PRE-CHECKOUT (CRITICAL)
+                // Ensure checkout_shipping has the final location data before generating link
+                $finalCity = session('ai_context.city') ?? $context['city'] ?? 'Bogotá';
+                $finalLocality = session('ai_context.locality') ?? $context['locality'] ?? null;
+                $shippingInfo = $this->getShippingInfo($finalCity, $finalLocality);
+
+                session()->put('checkout_shipping', [
+                    'is_bogota' => (Str::slug($finalCity) === 'bogota'),
+                    'city' => $finalCity,
+                    'location' => $finalLocality,
+                    'cost' => $shippingInfo['price'] ?? 0,
+                    'delivery_date' => null
+                ]);
+
+                // Cleanup processed context
+                unset($context['confirmed_products']);
+                unset($context['pending_suggestion_products']); // Clean suggestions too
+
+                session(['ai_context' => $context]);
+
                 return [
                     'type' => 'system',
-                    'message' => $msg,
+                    'message' => "¡Listo! He añadido los productos a tu carrito. 🛒<br><br>Hemos configurado el envío para <strong>{$finalCity}" . ($finalLocality ? " ({$finalLocality})" : "") . "</strong>.<br><br>👉 <a href='{$cartUrl}' class='text-green-600 font-bold underline'>Haz clic aquí para finalizar tu compra</a>",
                     'actions' => [
-                        ['label' => '💳 Ir a Pagar', 'type' => 'link', 'url' => $link]
+                        ['label' => '💳 Ir a Pagar', 'type' => 'link', 'url' => $cartUrl]
                     ]
                 ];
             }
         }
 
+        // GENERATE CHECKOUT LINK
+        $cartUrl = route('cart');
+
+        // PERSISTENCE PRE-CHECKOUT (CRITICAL)
+        // Ensure checkout_shipping has the final location data before generating link
+        $finalCity = session('ai_context.city') ?? $context['city'] ?? 'Bogotá';
+        $finalLocality = session('ai_context.locality') ?? $context['locality'] ?? null;
+        $shippingInfo = $this->getShippingInfo($finalCity, $finalLocality);
+
+        session()->put('checkout_shipping', [
+            'is_bogota' => (Str::slug($finalCity) === 'bogota'),
+            'city' => $finalCity,
+            'location' => $finalLocality,
+            'cost' => $shippingInfo['price'] ?? 0,
+            'delivery_date' => null
+        ]);
+
+        // Cleanup processed context
+        unset($context['confirmed_products']);
+        unset($context['pending_suggestion_products']); // Clean suggestions too
+
+        session(['ai_context' => $context]);
+
         return [
             'type' => 'system',
-            'message' => "¡Perfecto! He añadido los productos a tu carrito. Puedes finalizar tu compra aquí:\n\n👉 <a href='{$link}' target='_blank'>Ir a Pagar</a>",
+            'message' => "¡Listo! He añadido los productos a tu carrito. 🛒<br><br>Hemos configurado el envío para <strong>{$finalCity}" . ($finalLocality ? " ({$finalLocality})" : "") . "</strong>.<br><br>👉 <a href='{$cartUrl}' class='text-green-600 font-bold underline'>Haz clic aquí para finalizar tu compra</a>",
             'actions' => [
-                ['label' => '💳 Ir a Pagar', 'type' => 'link', 'url' => $link]
+                ['label' => '💳 Ir a Pagar', 'type' => 'link', 'url' => $cartUrl]
             ]
         ];
     }

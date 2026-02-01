@@ -21,7 +21,7 @@ class CategorySelectionTest extends TestCase
         parent::setUp();
         $this->aiService = app(AiAgentService::class);
 
-        $this->category1 = Category::create(['name' => 'Hongos Frescos', 'is_active' => true, 'slug' => 'hongos-frescos']);
+        $this->category1 = Category::create(['name' => 'Hongos Frescos', 'is_active' => true, 'slug' => 'hongos-gourmet']);
         $this->category2 = Category::create(['name' => 'Kits de Cultivo', 'is_active' => true, 'slug' => 'kits-cultivo']);
 
         Product::factory()->create([
@@ -47,7 +47,7 @@ class CategorySelectionTest extends TestCase
         $response = $this->aiService->processMessage("que productos tienen?", '127.0.0.1', []);
 
         $this->assertEquals('catalog', $response['type']);
-        $this->assertStringContainsString('Hongos Gourmet (Frescos)', $response['message']);
+        $this->assertStringContainsString('Hongos Frescos (Gourmet y Medicina)', $response['message']);
         $this->assertStringContainsString('Kits de Cultivo', $response['message']);
         $this->assertStringNotContainsString('Pioppino', $response['message']); // Should NOT list products yet
 

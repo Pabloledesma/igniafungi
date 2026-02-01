@@ -125,7 +125,7 @@ class AiAgentServiceTest extends TestCase
         // Should Suggest Dry
         $this->assertEquals('suggestion', $response['type']);
         // Note: The actual message contains "enviarte" instead of "enviar" in one path
-        $this->assertStringContainsString('solo podemos enviar', strtolower($response['message']));
+        $this->assertStringContainsString('no enviamos frescos allí', strtolower($response['message']));
     }
 
     public function test_fresh_product_allowed_in_bogota()
@@ -143,10 +143,10 @@ class AiAgentServiceTest extends TestCase
 
         $response = $this->service->processMessage("Orellana Fresca", '127.0.0.1');
 
-        // Should return question (confirming locality or asking for next step)
-        $this->assertEquals('question', $response['type']);
-        // The service asks for confirmation/locality even if set in context (current behavior)
-        $this->assertStringContainsString('confirmar tu localidad', $response['message']);
+        // Should return order_closure as we have city + locality
+        $this->assertEquals('order_closure', $response['type']);
+        // The service should calculate price directly
+        $this->assertStringContainsString('costo de envío', $response['message']);
 
         // Assert product is in session confirmed list
         $context = session('ai_context');

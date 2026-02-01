@@ -136,10 +136,10 @@ class AiAgentRefinementsTest extends TestCase
         ]);
 
         // 2. Create Categories with products
-        $catFresh = \App\Models\Category::factory()->create(['name' => 'Hongos Frescos']);
+        $catFresh = \App\Models\Category::factory()->create(['name' => 'Hongos Frescos', 'slug' => 'hongos-gourmet']);
         Product::factory()->create(['category_id' => $catFresh->id, 'name' => 'Orellana', 'is_active' => true, 'stock' => 10]);
 
-        $catDry = \App\Models\Category::factory()->create(['name' => 'Hongos Secos']);
+        $catDry = \App\Models\Category::factory()->create(['name' => 'Hongos Secos', 'slug' => 'deshidratados']);
         Product::factory()->create(['category_id' => $catDry->id, 'name' => 'Reishi', 'is_active' => true, 'stock' => 10]);
 
         // 3. Act: "que hongos tienen?"
@@ -149,7 +149,7 @@ class AiAgentRefinementsTest extends TestCase
         $this->assertEquals('catalog', $response['type'], "Failed: Assumed product instead of showing catalog. Msg: " . $response['message']);
         $this->assertStringContainsString('tipos de hongos', $response['message']);
         // Verify we see categories
-        $this->assertStringContainsString('Hongos Gourmet', $response['message']);
+        $this->assertStringContainsString('Hongos Frescos (Gourmet y Medicina)', $response['message']);
         $this->assertStringContainsString('Hongos Deshidratados', $response['message']);
     }
 }
