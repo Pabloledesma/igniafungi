@@ -40,7 +40,7 @@
             @foreach($messages as $msg)
                     <div class="flex {{ $msg['role'] === 'user' ? 'justify-end' : 'justify-start' }}">
                         <div class="max-w-[85%] rounded-lg px-4 py-2 text-sm shadow-sm break-words
-                                                                {{ $msg['role'] === 'user'
+                                                                        {{ $msg['role'] === 'user'
                 ? 'bg-green-100 text-green-900 rounded-br-none'
                 : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none' }}">
                             {!! $msg['content'] !!}
@@ -87,10 +87,17 @@
                                 @if(isset($msg['actions']) && !empty($msg['actions']))
                                     <div class="mt-3 flex flex-wrap gap-2">
                                         @foreach($msg['actions'] as $action)
-                                            <button wire:click="triggerAction('{{ $action['type'] }}')"
-                                                class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg text-xs shadow-md transition flex items-center gap-1">
-                                                {{ $action['label'] }}
-                                            </button>
+                                            @if(isset($action['type']) && $action['type'] === 'link')
+                                                <a href="{{ $action['url'] }}" target="_blank"
+                                                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg text-xs shadow-md transition flex items-center gap-1">
+                                                    {{ $action['label'] }}
+                                                </a>
+                                            @else
+                                                <button wire:click="triggerAction('{{ $action['type'] }}')"
+                                                    class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg text-xs shadow-md transition flex items-center gap-1">
+                                                    {{ $action['label'] }}
+                                                </button>
+                                            @endif
                                         @endforeach
                                     </div>
                                 @elseif($msg['type'] === 'order_closure')
