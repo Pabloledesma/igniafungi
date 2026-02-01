@@ -1187,14 +1187,10 @@ class AiAgentService
             ];
         }
 
-        // 1. LAZY REGISTRATION CHECK
-        if (!auth()->check()) {
-            session(['ai_waiting_for_user_data' => true]);
-            return [
-                'type' => 'question',
-                'message' => '¡Excelente! Tengo todo listo para tu pedido. Para registrarte y proceder al pago, por favor envíame tus datos en este formato: **Soy [Nombre completo], mi correo es [email@ejemplo.com]**.'
-            ];
-        }
+        // 1. LAZY REGISTRATION REMOVED - DEFER TO CHECKOUT PAGE
+        // We no longer block here. We let CartManagement handle the session cart
+        // and let the Checkout page handle the User creation/Login logic.
+
 
         // PRE-FILL SHIPPING DATA FOR CHECKOUT FIRST TO KNOW CONTEXT
         $city = $context['city'] ?? 'Bogotá';

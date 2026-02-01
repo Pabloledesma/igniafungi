@@ -41,26 +41,28 @@ class AiChatInteractionTest extends TestCase
     }
 
     /** @test */
-    public function it_prompts_for_user_details_if_generating_order_unauthenticated()
+    /** @test */
+    public function test_generates_link_directly_for_guests_deferring_registration()
     {
         // Arrange
         $context = [
             'confirmed_products' => [1, 2],
             'city' => 'Bogotá',
-            'cart_total' => 50000
         ];
         session(['ai_context' => $context]);
+        // No Auth::login
 
         // Act
-        // We simulate calling handleOrderConfirmation directly or via processMessage
-        // Let's assume processMessage routes to it when intent is clear
         $response = $this->service->processMessage('Generar orden', '127.0.0.1', $context);
 
         // Assert
-        $this->assertEquals('question', $response['type']);
-        $this->assertStringContainsString('registrarte y proceder al pago', strtolower($response['message']));
-        $this->assertTrue(session()->has('ai_waiting_for_user_data'));
+        // Should NOT ask for registration (type != question about data)
+        // Should return SYSTEM message with LINK
+        $this->assertEquals('system', $response['type']);
+        $this->assertStringContainsString('href=', $response['message']);
+        $this->assertTrue(collect($response['actions'])->contains('type', 'link'));
     }
+
 
     /** @test */
     public function it_creates_user_and_logs_in_after_receiving_details()
