@@ -1066,7 +1066,12 @@ class AiAgentService
                     return [
                         'type' => 'suggestion',
                         'message' => "Veo que estás en {$targetCity}. Por seguridad, no enviamos productos frescos allí, pero tengo disponibles estas opciones deshidratadas de **{$strainName}**:<br><br>{$list}<br><br>¿Te gustaría cambiar tu pedido a alguna de estas opciones?",
-                        'payload' => $alternatives->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->toArray()
+                        'payload' => $alternatives->map(fn($p) => [
+                            'id' => $p->id,
+                            'name' => $p->name,
+                            'price' => $p->price,
+                            'image' => asset($p->first_image)
+                        ])->values()->toArray()
                     ];
                 }
             }
@@ -1101,7 +1106,12 @@ class AiAgentService
                 return [
                     'type' => 'suggestion',
                     'message' => "El costo de envío a {$targetCity} es de ${price} COP.<br><br>⚠️ <strong>Importante:</strong> En {$targetCity} no podemos entregar productos frescos (solo en Bogotá), pero tenemos disponibles estos productos secos para ti:<br>{$list}",
-                    'payload' => $dryProducts->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->values()->toArray()
+                    'payload' => $dryProducts->map(fn($p) => [
+                        'id' => $p->id,
+                        'name' => $p->name,
+                        'price' => $p->price,
+                        'image' => asset($p->first_image)
+                    ])->values()->toArray()
                 ];
             }
         }
