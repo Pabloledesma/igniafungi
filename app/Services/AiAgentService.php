@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\ShippingZone;
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
@@ -106,8 +107,9 @@ class AiAgentService
             $result = $this->createOrUpdateLead($content, $context);
 
             if ($result instanceof User) {
-                auth()->login($result);
+                Auth::login($result);
                 session()->forget('ai_waiting_for_user_data');
+                session()->forget('ai_registration_data'); // Clear temp data
 
                 // RELOAD CONTEXT to ensure it contains everything (including city from DB/current request if updated)
                 $context = session('ai_context', []);
@@ -120,24 +122,37 @@ class AiAgentService
 
                 Log::info("Returning Waiting for User Data (0.2)");
                 return $response;
-            } elseif (is_array($result) && isset($result['missing']) && $result['missing'] === 'email') {
-                // PARTIAL DATA: Found Name, missing Email
-                if (!empty($result['name'])) {
-                    $context['partial_name'] = $result['name'];
-                    session(['ai_context' => $context]);
+            } elseif (is_array($result) && isset($result['status']) && $result['status'] === 'partial') {
+                // PARTIAL DATA: Determine what to ask next
+                $missing = $result['missing'];
+                $data = $result['data'];
+
+                // Prioritize Name -> City -> Email logic or whatever flows best.
+                // If Name is missing:
+                if (in_array('name', $missing)) {
+                    $msg = (isset($data['email']) ? "Gracias, ya tengo tu correo." : "") .
+                        " Me falta un dato importante: **¿Cuál es tu nombre?**";
+                    return ['type' => 'question', 'message' => $msg];
                 }
-                Log::info("Returning Waiting for User Data (0.2)");
-                return [
-                    'type' => 'question',
-                    'message' => "Gracias " . ($result['name'] ?? '') . ", ahora por favor indicame tu **correo electrónico** para enviarte el resumen de la orden."
-                ];
-            } else {
-                Log::info("Returning Waiting for User Data (0.2)");
-                return [
-                    'type' => 'question',
-                    'message' => 'No pude identificar tu correo electrónico. Por favor escríbelo para poder enviarte el resumen de la orden.'
-                ];
+
+                // If City is missing:
+                if (in_array('city', $missing)) {
+                    $msg = "Gracias " . ($data['name'] ?? '') . ". Para calcular el envío y generar la orden, necesito saber: **¿Desde qué ciudad nos escribes?**";
+                    return ['type' => 'question', 'message' => $msg];
+                }
+
+                // If Email is missing:
+                if (in_array('email', $missing)) {
+                    $msg = "Gracias " . ($data['name'] ?? '') . ", ahora por favor indícame tu **correo electrónico** para enviarte el resumen de la orden.";
+                    return ['type' => 'question', 'message' => $msg];
+                }
             }
+
+            // Fallback if structure mismatches (shouldnt happen)
+            return [
+                'type' => 'question',
+                'message' => 'Por favor, indícame tu nombre, correo y ciudad para generar la orden.'
+            ];
         }
 
         // 0.2 Context Inference: Check if message is just a City or Locality
@@ -188,29 +203,7 @@ class AiAgentService
             }
         }
 
-        // 0.3 Check if we are waiting for user data (Lazy Registration Follow-up)
-        if (session('ai_waiting_for_user_data')) {
-            // Force check for registration data even if intent detection fails
-            $leadResult = $this->createOrUpdateLead($content, $context);
-            if (is_array($leadResult) && isset($leadResult['missing']) && $leadResult['missing'] === 'email') {
-                // Save name if found
-                if (!empty($leadResult['name'])) {
-                    $context['partial_name'] = $leadResult['name'];
-                    session(['ai_context' => $context]);
-                }
-                return [
-                    'type' => 'question',
-                    'message' => "Gracias " . ($leadResult['name'] ?? '') . ", ahora por favor indicame tu **correo electrónico** para enviarte el resumen de la orden."
-                ];
-            }
-            if ($leadResult instanceof User) {
-                session()->forget('ai_waiting_for_user_data');
-                // Proceed to success flow below (auth check will pass now ideally, but we need to login the user or return success message)
-                // Actually `createOrUpdateLead` logs them in.
-                // So we can let the flow continue to "Affirmation" or just return the order link immediately.
-                return $this->handleOrderConfirmation($context);
-            }
-        }
+
 
         // 1. Rate Limiting (Keep existing)
         $key = 'ai_chat:' . $ip;
@@ -673,65 +666,93 @@ class AiAgentService
 
     protected function createOrUpdateLead(string $content, array $context): User|array|null
     {
-        // Esta es una implementación simplificada para extraer datos
-        // En un caso real, el LLM haría esta extracción estructurada
-        // Formato esperado: "soy Nombre, email@test.com, Ciudad"
+        // 1. Recover accumulated data from session
+        $accumulated = session('ai_registration_data', []);
 
-        // Simple regex extraction for email
+        // 2. Extract NEW data from content
+
+        // Extract Email
         preg_match('/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}/i', $content, $matches);
-        $email = $matches[0] ?? null;
-
-        if (!$email) {
-            // Check if we found a name at least
-            $nameCandidate = null;
-            if (preg_match('/soy\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)/iu', $content, $nameMatch)) {
-                $nameCandidate = trim($nameMatch[1]);
-            }
-
-            // If we are in "waiting for data" mode, we should assume the user is trying to answer
-            if (session('ai_waiting_for_user_data')) {
-                return ['missing' => 'email', 'name' => $nameCandidate];
-            }
-            return null;
+        if (isset($matches[0])) {
+            $accumulated['email'] = $matches[0];
         }
 
-        // Try to get name
-        $name = 'Usuario'; // Default
-
-        // Simple regex to catch "Soy [Name]"
-        if (preg_match('/soy\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)(?:,|;|\s+mi)/iu', $content, $nameMatch)) {
-            $name = trim($nameMatch[1]);
-        } elseif (preg_match('/nombre es\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)/iu', $content, $nameMatch)) {
-            $name = trim($nameMatch[1]);
-        } else {
-            // ... (Fallback regex logic) because User can just say "Name, email"
+        // Extract Name (Improved regex)
+        // Matches: "Soy [Name]", "Me llamo [Name]", "Mi nombre es [Name]"
+        if (preg_match('/(soy|me llamo|mi nombre es)\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)/iu', $content, $nameMatch)) {
+            $candidate = trim($nameMatch[2]);
+            // Filter out common trailing words if user says "Soy Pablo y busco..." or "Soy Pablo y mi correo..."
+            $candidate = preg_split('/(y\s+busco|y\s+quiero|pero|y\s+vivo|donde|y\s+mi|y\s+el|y\s+la|y\s+correo)/iu', $candidate)[0];
+            $accumulated['name'] = trim($candidate);
+        } elseif (preg_match('/(mi|el)\s+correo/iu', $content)) {
+            // Implicit: "Juan Perez y mi correo es..."
+            // Split to separated Name from Email introduction
             $parts = preg_split('/(y\s+)?(mi|el)\s+correo/iu', $content);
-            if (!empty($parts[0]) && strlen(trim($parts[0])) > 2 && strlen(trim($parts[0])) < 50) {
-                $nameCandidate = trim($parts[0]);
-                $nameCandidate = preg_replace('/\s+es$/iu', '', $nameCandidate);
-                if (!preg_match('/[0-9]/', $nameCandidate)) {
-                    $name = $nameCandidate;
+            if (!empty($parts[0]) && strlen(trim($parts[0])) > 2) {
+                $accumulated['name'] = trim($parts[0]);
+            }
+        } elseif (isset($accumulated['email']) && !isset($accumulated['name'])) {
+            // If email was just provided, maybe the rest of the string is the name?
+            // User: "pepe@test.com" -> No name.
+            // User: "Soy Pepe, pepe@test.com" -> Handled by logic above.
+            // User: "Pepe Perez" (Just name answer) -> Hard to distinguish from random text.
+            // We rely on "Waiting for user data" state.
+            if (session('ai_waiting_for_user_data')) {
+                // Heuristic: If content is short and not an email, assume it's the requested data (Name?)
+                $cleanContent = trim(preg_replace('/[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,4}/i', '', $content));
+                $cleanContent = trim(preg_replace('/(soy|mi correo es|email|correo)/iu', '', $cleanContent));
+                if (strlen($cleanContent) > 2 && strlen($cleanContent) < 40) {
+                    // Only assign if we were asking for name?? Or just assume generic update?
+                    // Let's rely on specific prompts. For now, only explicit "Soy" or explicit extraction logic.
+                    // But if we already have email and are waiting, maybe this IS the name.
+                    if (!isset($accumulated['name']) && !str_contains($cleanContent, ' ')) {
+                        // $accumulated['name'] = $cleanContent; // Risky. Let's stick to explicit or simple prompts.
+                    }
+                    // Actually, usually the prompt is "Dime tu nombre". So the answer is "Pepe".
+                    // If we are missing name, treat input as name.
+                    if (!isset($accumulated['name'])) {
+                        $accumulated['name'] = $cleanContent; // Trust input as name if valid length
+                    }
                 }
             }
         }
 
-        // Try to extract CITY from "vivo en [City]"
-        if (preg_match('/vivo en\s+([a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+)/iu', $content, $cityMatch)) {
-            $extractedCity = trim($cityMatch[1]);
-            // Validate against known cities to be sure? Or just trust.
-            // Let's Clean it (remove puntuation at end)
-            $extractedCity = preg_replace('/[.,;]$/', '', $extractedCity);
-
-            // Update Context
-            $context['city'] = $extractedCity;
-            session(['ai_context' => $context]);
+        // Extract City (explicit or from context)
+        // If context has city (from inferLocation logic), pull it in.
+        $contextCity = $context['city'] ?? null;
+        if ($contextCity) {
+            $accumulated['city'] = $contextCity;
+        } else {
+            // Try to infer from content again if not in context
+            $inferred = $this->inferLocationFromContent($content);
+            if ($inferred) {
+                $accumulated['city'] = $inferred['city'];
+                if (isset($inferred['locality']))
+                    $accumulated['locality'] = $inferred['locality'];
+            }
         }
 
-        // Fix: Use correct array keys from context
-        $city = $context['city'] ?? null;
-        $locality = $context['locality'] ?? null;
+        // Update Session with new accumulated data
+        session(['ai_registration_data' => $accumulated]);
 
-        // PERSISTENCE: Ensure we update session explicitly if we found new data
+        // 3. Validation
+        $missing = [];
+        if (empty($accumulated['name']))
+            $missing[] = 'name';
+        if (empty($accumulated['email']))
+            $missing[] = 'email';
+        if (empty($accumulated['city']))
+            $missing[] = 'city';
+
+        if (!empty($missing)) {
+            return ['status' => 'partial', 'missing' => $missing, 'data' => $accumulated];
+        }
+
+        // 4. Create User (All data present)
+        $city = $accumulated['city'];
+        $locality = $accumulated['locality'] ?? ($context['locality'] ?? null);
+
+        // Persist DB logic
         if ($city) {
             $shippingInfo = $this->getShippingInfo($city, $locality);
             $cost = $shippingInfo['price'] ?? 0;
@@ -746,10 +767,10 @@ class AiAgentService
         }
 
         return User::updateOrCreate(
-            ['email' => $email],
+            ['email' => $accumulated['email']],
             [
-                'name' => $name,
-                'password' => Hash::make(Str::random(16)), // Temp password
+                'name' => $accumulated['name'],
+                'password' => Hash::make(Str::random(16)),
                 'city' => $city,
                 'locality' => $locality
             ]
@@ -1426,44 +1447,78 @@ class AiAgentService
             }
         }
 
-        // 2. Check for Cities
+        // 2. Check for Cities (Fuzzy Match)
+        // Optimization: Cache cities or query efficiently.
         $dbCities = ShippingZone::select('city')->distinct()->pluck('city');
 
+        $shortestCityDistance = -1;
+        $bestCityMatch = null;
+
+        // Flatten words array to string for multi-word city check? 
+        // Or check word by word? "San Andres" is 2 words.
+        // Let's first check word-by-word for single-word cities, then full string logic.
+
+        // Manual Map for common colloquialisms
+        $cityAliases = [
+            'villao' => 'Villavicencio',
+            'medallo' => 'Medellín',
+            'quilla' => 'Barranquilla',
+            'cartacho' => 'Cartagena',
+            'bogo' => 'Bogotá',
+            'bog' => 'Bogotá'
+        ];
+
         foreach ($words as $word) {
-            if (strlen($word) < 3)
-                continue; // "Cali" is 4, but let's be safe with 3 for short names if any (e.g. Ica?) No, shortest is usually 4.
+            $wordLower = strtolower($word);
 
-            // Avoid matching common words "para", "pero", "donde" that might fuzzy match
-            $commonWords = ['para', 'pero', 'como', 'donde', 'envio', 'valor', 'costo', 'tienen', 'hongo', 'luego', 'puedo', 'quiero', 'dale', 'bien', 'bueno', 'gracias'];
-            if (in_array(strtolower($word), $commonWords))
-                continue;
-
-            // Stricter checking for short words
-            $options = $dbCities;
-            $bestMatch = null;
-            $shortestDistance = -1;
-
-            foreach ($options as $option) {
-                $dist = levenshtein(strtolower($word), strtolower(Str::ascii($option)));
-
-                // If short word (<= 4 chars), allow max 1 mistake. Else 2.
-                $maxDist = strlen($word) <= 4 ? 1 : 2;
-
-                if ($dist <= $maxDist && ($shortestDistance === -1 || $dist < $shortestDistance)) {
-                    $bestMatch = $option;
-                    $shortestDistance = $dist;
-                }
+            // Check Aliases first
+            if (isset($cityAliases[$wordLower])) {
+                return ['city' => $cityAliases[$wordLower]];
             }
 
-            if ($bestMatch) {
-                return ['city' => $bestMatch];
+            if (strlen($word) < 3)
+                continue;
+
+            $commonWords = ['para', 'pero', 'como', 'donde', 'envio', 'valor', 'costo', 'tienen', 'hongo', 'luego', 'puedo', 'quiero', 'dale', 'bien', 'bueno', 'gracias', 'estoy', 'vivo', 'ciudad'];
+            if (in_array($wordLower, $commonWords))
+                continue;
+
+            foreach ($dbCities as $option) {
+                // Remove accents for comparison
+                $optionAscii = Str::ascii(strtolower($option));
+                $wordAscii = Str::ascii($wordLower);
+
+                // Exact match (ascii)
+                if ($optionAscii === $wordAscii) {
+                    return ['city' => $option];
+                }
+
+                $dist = levenshtein($wordAscii, $optionAscii);
+
+                // Adaptive tolerance: 
+                // <= 4 chars -> 0 or 1 error (but 1 on 3 chars is risky, e.g. Cali vs Cali?)
+                // > 4 chars -> 2 errors
+                $maxDist = strlen($word) <= 4 ? 1 : 2;
+
+                if ($dist <= $maxDist) {
+                    // Store best match but keep searching?
+                    if ($shortestCityDistance === -1 || $dist < $shortestCityDistance) {
+                        $bestCityMatch = $option;
+                        $shortestCityDistance = $dist;
+                    }
+                }
             }
         }
 
-        // Fallback: Check multi-word cities (e.g. San Andres) using ascii stripos
+        if ($bestCityMatch) {
+            return ['city' => $bestCityMatch];
+        }
+
+        // Fallback: Check multi-word cities (e.g. San Andres) using ascii stripos on FULL CONTENT
         // This covers cases where the user types "San Andres" and fuzzy match on "San" or "Andres" alone might be ambiguous or weak
+        $contentAscii = Str::ascii(strtolower($content));
         foreach ($dbCities as $dbCity) {
-            if (str_contains(Str::ascii(strtolower($content)), Str::ascii(strtolower($dbCity)))) {
+            if (str_contains($contentAscii, Str::ascii(strtolower($dbCity)))) {
                 return ['city' => $dbCity];
             }
         }
