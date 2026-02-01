@@ -499,7 +499,7 @@ class AiAgentService
 
         return [
             'type' => 'catalog',
-            'message' => "¡Claro! Estos son los hongos que tenemos disponibles para ti hoy:<br><br>" . $list,
+            'message' => "¡Hola! Estos son los hongos que tenemos disponibles para ti hoy:<br><br>" . $list,
             'payload' => $products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])->toArray()
         ];
     }
@@ -959,7 +959,7 @@ class AiAgentService
             session(['ai_waiting_for_user_data' => true]);
             return [
                 'type' => 'question',
-                'message' => '¡Excelente! Tengo todo listo para tu pedido. Para registrarte y proceder al pago, por favor envíame tus datos en este formato: **Soy [Nombre completo], mi correo es [email@ejemplo.com] y vivo en [Ciudad]**.'
+                'message' => '¡Excelente! Tengo todo listo para tu pedido. Para registrarte y proceder al pago, por favor envíame tus datos en este formato: **Soy [Nombre completo], mi correo es [email@ejemplo.com]**.'
             ];
         }
 
