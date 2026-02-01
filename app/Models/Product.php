@@ -73,4 +73,21 @@ class Product extends Model
 
         return $this->images[0];
     }
+
+    public function getIsFreshAttribute(): bool
+    {
+        if ($this->category) {
+            $slug = strtolower($this->category->slug);
+            if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
+                return true;
+            }
+        }
+
+        // Fallback: Check name just in case product has no category loaded
+        if (str_contains(strtolower($this->name), 'fresco')) {
+            return true;
+        }
+
+        return false;
+    }
 }

@@ -113,6 +113,54 @@ class AiAgentService
 
                 // RELOAD CONTEXT to ensure it contains everything (including city from DB/current request if updated)
                 $context = session('ai_context', []);
+                $context['city'] = $result->city;
+                $context['locality'] = $result->locality;
+                session(['ai_context' => $context]);
+
+                // FORCE UPDATE CHECKOUT SESSION
+                $shippingInfo = $this->getShippingInfo($result->city, $result->locality);
+                session()->put('checkout_shipping', [
+                    'is_bogota' => (Str::slug($result->city) === 'bogota'),
+                    'city' => $result->city,
+                    'location' => $result->locality,
+                    'cost' => $shippingInfo['price'] ?? 0,
+                    'delivery_date' => null
+                ]);
+
+                // RESTRICTION CHECK (Fresh products outside Bogota)
+                $hasFresh = false;
+                $cartProducts = Product::whereIn('id', $context['confirmed_products'] ?? [])->get();
+                foreach ($cartProducts as $p) {
+                    if ($p->is_fresh) {
+                        $hasFresh = true;
+                        break;
+                    }
+                }
+
+                if ($hasFresh && Str::slug($result->city) !== 'bogota') {
+                    // Load Pivot Options (Dry products)
+                    $alternatives = Product::where('is_active', true)
+                        ->where('stock', '>', 0)
+                        ->where('category_id', '!=', 1) // Assuming 1 is Fresh? Better: search by name/category
+                        ->where(function ($q) {
+                            $q->where('name', 'like', '%seco%')
+                                ->orWhere('name', 'like', '%deshidratado%')
+                                ->orWhereHas('category', fn($q) => $q->where('name', 'like', '%seco%'));
+                        })
+                        ->limit(3)
+                        ->get();
+
+                    return [
+                        'type' => 'suggestion',
+                        'message' => "He registrado tus datos para **{$result->city}**. ⚠️ Sin embargo, noté que seleccionaste hongos frescos. Por calidad y transporte, **solo enviamos frescos a Bogotá**.<br><br>Para envíos nacionales te recomiendo nuestros hongos deshidratados (misma calidad, mayor duración):",
+                        'payload' => $alternatives->map(fn($p) => [
+                            'id' => $p->id,
+                            'name' => $p->name,
+                            'price' => $p->price,
+                            'image' => asset($p->first_image)
+                        ])->toArray()
+                    ];
+                }
 
                 // Proceed to generate order now that we are authenticated
                 $response = $this->handleOrderConfirmation($context);
@@ -945,19 +993,13 @@ class AiAgentService
         $isFreshRequest = false;
 
         if ($product) {
-            if (
-                ($product->category && str_contains(strtolower($product->category->name), 'fresco')) ||
-                str_contains(strtolower($product->name), 'fresco')
-            ) {
+            if ($product->is_fresh) {
                 $isFreshRequest = true;
             }
         } elseif ($lastProduct = $this->getLastProductConsulted()) {
             // Fallback to memory
             $product = $lastProduct; // Weak binding, might need confirmation if msg didn't mention it
-            if (
-                ($lastProduct->category && str_contains(strtolower($lastProduct->category->name), 'fresco')) ||
-                str_contains(strtolower($lastProduct->name), 'fresco')
-            ) {
+            if ($lastProduct->is_fresh) {
                 $isFreshRequest = true;
             }
         }
@@ -1126,8 +1168,7 @@ class AiAgentService
             if (!$p)
                 continue;
 
-            $isFresh = ($p->category && str_contains(strtolower($p->category->name), 'fresco')) ||
-                str_contains(strtolower($p->name), 'fresco');
+            $isFresh = $p->is_fresh;
 
             if (!$isBogota && $isFresh) {
                 $ignoredFresh = true;
@@ -1314,13 +1355,7 @@ class AiAgentService
     {
         $city = $context['city'] ?? '';
 
-        $isFresh = false;
-        if ($product->category && str_contains(strtolower($product->category->name), 'fresco'))
-            $isFresh = true;
-        if (str_contains(strtolower($product->name), 'fresco'))
-            $isFresh = true;
-
-        if ($isFresh) {
+        if ($product->is_fresh) {
             if ($city && strtolower($city) !== 'bogotá' && strtolower($city) !== 'bogota') {
                 // Suggest Dry
                 return [

@@ -369,18 +369,31 @@ class AiAgentServiceTest extends TestCase
 
     public function test_fresh_product_restriction_on_shipping_query_with_context()
     {
-        \App\Models\ShippingZone::create(['city' => 'Popayán', 'price' => 20000]); // Seed Popayan
+        \App\Models\ShippingZone::firstOrCreate(
+            ['city' => 'Popayán'],
+            ['price' => 20000]
+        );
+
+        $catFresh = Category::firstOrCreate(
+            ['slug' => 'hongos-gourmet'],
+            ['name' => 'Hongos Gourmet', 'is_active' => true]
+        );
+
+        $catDry = Category::firstOrCreate(
+            ['slug' => 'deshidratados'],
+            ['name' => 'Hongos Deshidratados', 'is_active' => true]
+        );
 
         $freshProduct = Product::factory()->create([
-            'name' => 'Melena Fresca', // Contains 'fresc'
-            'category_id' => Category::factory()->create(['name' => 'General'])->id, // Category doesn't help
+            'name' => 'Melena Fresca',
+            'category_id' => $catFresh->id,
             'is_active' => true,
             'stock' => 5
         ]);
 
         $dryProduct = Product::factory()->create([
             'name' => 'Melena Seca',
-            'category_id' => Category::factory()->create(['name' => 'Hongos Deshidratados'])->id,
+            'category_id' => $catDry->id,
             'is_active' => true,
             'stock' => 5
         ]);
