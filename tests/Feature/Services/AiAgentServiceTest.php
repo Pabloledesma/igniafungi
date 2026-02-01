@@ -461,8 +461,10 @@ class AiAgentServiceTest extends TestCase
         $this->assertNotNull($shipping, 'Checkout shipping session not set');
         $this->assertEquals('Cali', $shipping['city']);
 
-        // 5. Assert Message contains Link
-        $this->assertStringContainsString('/cart', $response['message']);
+        // 5. Assert Message contains Link in Actions
+        $linkAction = collect($response['actions'])->firstWhere('type', 'link');
+        $this->assertNotNull($linkAction, 'Link action not found');
+        $this->assertStringContainsString('/cart', $linkAction['url']);
     }
     public function test_agent_answers_questions_even_if_product_selected_and_city_missing()
     {
