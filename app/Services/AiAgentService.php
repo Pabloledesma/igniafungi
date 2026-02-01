@@ -167,6 +167,7 @@ class AiAgentService
 
                 // Enhance message with registration info
                 $response['message'] = "✅ **¡Te hemos registrado exitosamente!**<br>Hemos enviado los detalles de tu cuenta a tu correo ({$result->email}).<br><br>" . $response['message'];
+                $response['should_reload'] = true; // Signal frontend to reload logic (CSRF/Session)
 
                 Log::info("Returning Waiting for User Data (0.2)");
                 return $response;
@@ -212,6 +213,14 @@ class AiAgentService
             }
             // Update Session IMMEDIATELY
             session(['ai_context' => $context]);
+
+            // ALSO update registration data to ensure persistence across turns
+            $regData = session('ai_registration_data', []);
+            $regData['city'] = $locationContext['city'];
+            if (isset($locationContext['locality'])) {
+                $regData['locality'] = $locationContext['locality'];
+            }
+            session(['ai_registration_data' => $regData]);
 
             // CONTINUITY LOGIC:
             // 1. If Guest: Trigger Lazy Registration Protocol
@@ -514,7 +523,6 @@ class AiAgentService
 
     protected function detectProduct(string $content): ?Product
     {
-        // ... (Keep existing numeric and exact/fuzzy/substring checks)
         // 0. Check for Numeric Selection
         if (preg_match('/^(\d+)$/', trim($content), $matches) || preg_match('/opcion (\d+)/i', $content, $matches) || preg_match('/el (\d+)/i', $content, $matches)) {
             $index = (int) end($matches);
@@ -531,11 +539,33 @@ class AiAgentService
             }
         }
 
-        // 1. Exact/Approximate & Substring
-        $allProducts = Product::where('is_active', true)
-            ->where('stock', '>', 0)
-            ->pluck('name', 'id');
+        // PRE-FILTER: Detect Qualifiers
+        $lowerContent = mb_strtolower($content);
+        $wantsDry = str_contains($lowerContent, 'seco') || str_contains($lowerContent, 'deshidratado');
+        $wantsFresh = str_contains($lowerContent, 'fresco');
 
+        $query = Product::where('is_active', true)->where('stock', '>', 0);
+
+        if ($wantsDry) {
+            $query->where(function ($q) {
+                $q->where('name', 'like', '%seco%')
+                    ->orWhere('name', 'like', '%deshidratado%')
+                    ->orWhereHas(
+                        'category',
+                        fn($c) => $c->where('slug', 'deshidratados') // Adjust slug if different
+                            ->orWhere('name', 'like', '%deshidratado%')
+                            ->orWhere('name', 'like', '%sec%')
+                    );
+            });
+        } elseif ($wantsFresh) {
+            // If user explicitly asks for Fresh, prioritize it.
+            // Note: Often Fresh products don't have "Fresco" in the name, but rely on category.
+            // But avoiding negation filters is safer.
+        }
+
+        $allProducts = $query->pluck('name', 'id');
+
+        // 1. Exact/Approximate & Substring
         $bestMatchName = $this->findBestMatch($content, $allProducts);
         if ($bestMatchName) {
             $product = Product::where('name', $bestMatchName)->first();
@@ -555,16 +585,18 @@ class AiAgentService
             }
         }
 
-        // 3. KEYWORD PARTIAL MATCH (New)
+        // 3. KEYWORD PARTIAL MATCH
         $words = explode(' ', mb_strtolower(preg_replace('/[^\p{L}\p{N}\s]/u', '', $content)));
         $potentialKeywords = array_filter($words, fn($w) => mb_strlen($w) > 3 && !in_array($w, $this->stopWords));
 
         foreach ($potentialKeywords as $word) {
-            // Find product with name containing this word
-            $product = Product::where('is_active', true)
-                ->where('stock', '>', 0)
-                ->where('name', 'like', "%{$word}%")
-                ->first();
+            // Re-apply query filter logic here too check only against filtered candidates?
+            // Actually, we can reuse $query
+            // But strict WHERE name LIKE %word% might miss if we filtered too hard.
+            // Let's use the BASE query logic.
+
+            $clonedQuery = clone $query;
+            $product = $clonedQuery->where('name', 'like', "%{$word}%")->first();
 
             if ($product) {
                 $this->updateProductContext($product);
@@ -1387,10 +1419,8 @@ class AiAgentService
         }
 
         // National with City known
-        return [
-            'type' => 'question',
-            'message' => "¡Listo! Para enviar **{$product->name}** a {$city}, ¿deseas que calcule el costo del envío ya mismo?"
-        ];
+        // Just show the price/closure directly (Delegate to Shipping Query logic)
+        return $this->handleShippingQuery('costo envio', $context);
     }
 
     protected function callLlm(string $content): array

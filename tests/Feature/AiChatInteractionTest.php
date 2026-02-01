@@ -209,4 +209,29 @@ class AiChatInteractionTest extends TestCase
         $this->assertStringContainsString('no enviamos frescos', strtolower($response['message']));
         $this->assertArrayHasKey('payload', $response); // Alternatives
     }
+    /** @test */
+    public function test_remembers_city_context_during_registration_multiturn()
+    {
+        // 1. Setup: User wants product
+        session([
+            'ai_context' => ['confirmed_products' => [101], 'last_product_id' => 101],
+            'ai_registration_data' => []
+        ]);
+
+        // 2. User says "Villao" (Inferred City)
+        $response1 = $this->service->processMessage("Villao", '127.0.0.1');
+        $this->assertStringContainsString('Villavicencio', $response1['message']);
+
+        // Verify session has city in EXTENDED context (registration_data)
+        $regData = session('ai_registration_data');
+        $this->assertEquals('Villavicencio', $regData['city']);
+
+        // 3. User gives Name/Email (No city mentioned)
+        $response2 = $this->service->processMessage("Soy Elber, mi correo es elber@test.com", '127.0.0.1');
+
+        // 4. Assert: Should NOT ask for city again.
+        $this->assertStringNotContainsString('ciudad', strtolower($response2['message']));
+        // Should confirm registration or order
+        $this->assertTrue(in_array($response2['type'], ['system', 'suggestion']));
+    }
 }

@@ -30,10 +30,17 @@ class AiChat extends Component
         $this->city = $context['city'] ?? session('checkout_shipping')['city'] ?? '';
         $this->locality = $context['locality'] ?? session('checkout_shipping')['location'] ?? '';
 
+        $greeting = '¡Hola! Soy el asistente virtual de Ignia Fungi. ¿En qué puedo ayudarte hoy? (Envíos, productos, reservar cosechas)';
+
+        if (auth()->check()) {
+            $name = explode(' ', auth()->user()->name)[0]; // First name only
+            $greeting = "¡Hola {$name}! ¡Qué gusto tenerte una vez más por acá! ¿En qué puedo ayudarte?";
+        }
+
         $this->messages = [
             [
                 'role' => 'assistant',
-                'content' => '¡Hola! Soy el asistente virtual de Ignia Fungi. ¿En qué puedo ayudarte hoy? (Envíos, productos, reservar cosechas)'
+                'content' => $greeting
             ]
         ];
     }
@@ -94,8 +101,14 @@ class AiChat extends Component
         // We merge the full response to keep 'type' and 'payload'
         $this->messages[] = array_merge(['role' => 'assistant', 'content' => $response['message']], $response);
 
-        // 6. Check for Closure/UI Events that need auto-interaction?
-        // No, we wait for user to click.
+        // 6. Check for Session Regeneration (Reload Page)
+        if (!empty($response['should_reload'])) {
+            // Wait a moment for the user to read or just reload?
+            // The user needs to see the success message. 
+            // Turning it into a flash message might be better, but let's just reload to fix CSRF.
+            // A simple redirect to self works.
+            return redirect(request()->header('Referer'));
+        }
     }
 
     public function selectProduct($productId, $productName)
