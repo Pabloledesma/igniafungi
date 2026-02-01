@@ -40,7 +40,7 @@
             @foreach($messages as $msg)
                     <div class="flex {{ $msg['role'] === 'user' ? 'justify-end' : 'justify-start' }}">
                         <div class="max-w-[85%] rounded-lg px-4 py-2 text-sm shadow-sm break-words
-                                                                                {{ $msg['role'] === 'user'
+                                                                                                {{ $msg['role'] === 'user'
                 ? 'bg-green-100 text-green-900 rounded-br-none'
                 : 'bg-white text-gray-800 border border-gray-100 rounded-bl-none' }}">
                             {!! $msg['content'] !!}
@@ -52,13 +52,31 @@
                                     <div class="mt-3 flex flex-col gap-2">
                                         @foreach($msg['payload'] as $prod)
                                             @if(isset($prod['price']))
-                                                <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}')"
-                                                    class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">
-                                                    <span class="font-medium text-green-800 group-hover:text-green-900">🍄
-                                                        {{ $prod['name'] }}</span>
-                                                    <span
-                                                        class="text-gray-600 font-mono text-[10px] bg-gray-100 px-1 rounded">${{ number_format($prod['price']) }}</span>
-                                                </button>
+                                                {{-- Product with Quantity Selector --}}
+                                                <div x-data="{ qty: 1 }"
+                                                    class="w-full bg-white border border-green-200 rounded-lg shadow-sm p-2 flex justify-between items-center hover:bg-green-50 transition">
+                                                    <div class="flex flex-col">
+                                                        <span class="font-medium text-green-900 text-xs flex items-center gap-1">
+                                                            🍄 {{ $prod['name'] }}
+                                                        </span>
+                                                        <span class="text-gray-500 text-[10px]">${{ number_format($prod['price']) }}</span>
+                                                    </div>
+
+                                                    <div
+                                                        class="flex items-center gap-1 bg-white border border-gray-200 rounded px-1 py-0.5 shadow-sm">
+                                                        <button @click.stop="if(qty > 1) qty--"
+                                                            class="text-gray-400 hover:text-green-600 px-1.5 text-xs font-bold focus:outline-none">-</button>
+                                                        <span x-text="qty" class="text-xs font-bold text-gray-700 w-3 text-center"></span>
+                                                        <button @click.stop="qty++"
+                                                            class="text-gray-400 hover:text-green-600 px-1.5 text-xs font-bold focus:outline-none">+</button>
+                                                        <div class="w-px h-4 bg-gray-200 mx-1"></div>
+                                                        <button wire:click="selectProduct({{ $prod['id'] }}, '{{ $prod['name'] }}', qty)"
+                                                            wire:loading.attr="disabled" wire:target="selectProduct"
+                                                            class="text-green-600 hover:text-green-700 disabled:opacity-50 disabled:cursor-wait text-[10px] font-bold uppercase tracking-wide px-1">
+                                                            ADD
+                                                        </button>
+                                                    </div>
+                                                </div>
                                             @elseif(isset($prod['index']))
                                                 <button wire:click="selectOption({{ $prod['index'] }})"
                                                     class="text-left w-full bg-white border border-green-200 hover:bg-green-50 p-2 rounded shadow-sm text-xs transition flex justify-between items-center group">

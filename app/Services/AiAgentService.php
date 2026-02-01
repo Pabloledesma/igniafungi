@@ -541,12 +541,21 @@ class AiAgentService
 
         $allProducts = $query->pluck('name', 'id');
 
+        // Detect Quantity (default 1)
+        // Match specific patterns: "2x", "2 de", "2 unidades de", or just start with number "2 Orellanas"
+        $quantity = 1;
+        if (preg_match('/(\d+)\s*(?:x|de|unidades|unidad)?\s+/i', $content, $m)) {
+            $val = (int) $m[1];
+            if ($val > 0 && $val < 20)
+                $quantity = $val; // Reasonable limit
+        }
+
         // 1. Exact/Approximate & Substring
         $bestMatchName = $this->findBestMatch($content, $allProducts);
         if ($bestMatchName) {
             $product = Product::where('name', $bestMatchName)->first();
             if ($product) {
-                $this->updateProductContext($product);
+                $this->updateProductContext($product, $quantity);
                 return $product;
             }
         }
@@ -555,7 +564,7 @@ class AiAgentService
             if (stripos($content, $pName) !== false) {
                 $product = Product::find($id);
                 if ($product) {
-                    $this->updateProductContext($product);
+                    $this->updateProductContext($product, $quantity);
                     return $product;
                 }
             }
@@ -575,7 +584,7 @@ class AiAgentService
             $product = $clonedQuery->where('name', 'like', "%{$word}%")->first();
 
             if ($product) {
-                $this->updateProductContext($product);
+                $this->updateProductContext($product, $quantity);
                 return $product;
             }
         }
@@ -1119,9 +1128,19 @@ class AiAgentService
         // If we have products in context (accumulated or just detected), list them
         $confirmedIds = $context['confirmed_products'] ?? [];
         if (!empty($confirmedIds)) {
-            $products = Product::whereIn('id', $confirmedIds)->get(['name', 'price']);
-            $productNames = $products->pluck('name')->toArray();
-            $totalList = $products->sum('price');
+            $productsKeyed = Product::whereIn('id', $confirmedIds)->get(['id', 'name', 'price'])->keyBy('id');
+            $productNames = [];
+            $totalList = 0;
+            $counts = array_count_values($confirmedIds);
+
+            foreach ($counts as $pid => $qty) {
+                if (isset($productsKeyed[$pid])) {
+                    $p = $productsKeyed[$pid];
+                    $totalList += $p->price * $qty;
+                    $nameStr = ($qty > 1) ? "{$qty}x {$p->name}" : $p->name;
+                    $productNames[] = $nameStr;
+                }
+            }
             $list = implode(', ', $productNames);
 
             $message .= "<br><br>Tienes en tu lista: <strong>{$list}</strong>.<br>";
@@ -1363,7 +1382,7 @@ class AiAgentService
         return ['error' => "No tenemos tarifa registrada para {$matchedCity}."];
     }
 
-    protected function updateProductContext(Product $product): void
+    protected function updateProductContext(Product $product, int $qty = 1): void
     {
         $context = session('ai_context', []);
         $context['last_product_id'] = $product->id;
@@ -1371,9 +1390,9 @@ class AiAgentService
         $confirmed = $context['confirmed_products'] ?? [];
 
         // Allow duplicates to support quantity (User adds same product twice = 2 units)
-        // Only avoid adding if it was just added in the exact same request check? 
-        // No, let's allow it. Front-end selection triggers distinct request.
-        $confirmed[] = $product->id;
+        for ($i = 0; $i < $qty; $i++) {
+            $confirmed[] = $product->id;
+        }
 
         $context['confirmed_products'] = $confirmed;
 

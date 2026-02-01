@@ -111,10 +111,11 @@ class AiChat extends Component
         }
     }
 
-    public function selectProduct($productId, $productName)
+    public function selectProduct($productId, $productName, $qty = 1)
     {
-        // Simulate user typing
-        $this->userInput = "He seleccionado " . $productName;
+        // Simulate user typing with quantity
+        $qtyStr = ($qty > 1) ? "{$qty}x " : "";
+        $this->userInput = "He seleccionado " . $qtyStr . $productName;
         $this->sendMessage(app(AiAgentService::class));
     }
 
