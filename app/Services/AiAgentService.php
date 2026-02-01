@@ -51,6 +51,15 @@ class AiAgentService
         // MERGE SESSION CONTEXT PRIORITY
         // We ensure we have the full session history + any new explicit data passed (like IDs)
         $sessionContext = session('ai_context', []);
+
+        // Context Shielding: Don't overwrite existing city with null/empty unless explicit
+        if (!empty($sessionContext['city']) && empty($context['city'])) {
+            $context['city'] = $sessionContext['city'];
+        }
+        if (!empty($sessionContext['locality']) && empty($context['locality'])) {
+            $context['locality'] = $sessionContext['locality'];
+        }
+
         $context = array_merge($sessionContext, $context);
 
         // 1. Explicit ID Handling (Checkbox Batch) from UI
@@ -1021,10 +1030,18 @@ class AiAgentService
             }
 
             if (!$city) {
-                return [
-                    'type' => 'question',
-                    'message' => 'Para calcular el costo del envío, necesito saber ¿en qué ciudad te encuentras?'
-                ];
+                // REDUNDANCY CHECK:
+                if (session()->has('ai_context.city')) {
+                    $city = session('ai_context.city');
+                    $locality = session('ai_context.locality');
+                    // Recursion with found city? Or just drop to logic below.
+                    // Dropping below is enough as logic checks standard vars
+                } else {
+                    return [
+                        'type' => 'question',
+                        'message' => 'Para calcular el costo del envío, necesito saber ¿en qué ciudad te encuentras?'
+                    ];
+                }
             }
         }
 
@@ -1625,6 +1642,13 @@ class AiAgentService
         // IMPROVEMENT: Drive the sale forward.
         // If we don't have location, ask for it using the standard prompt.
         if (empty($city)) {
+            // Redundancy Check: If session has city, use it
+            if (session()->has('ai_context.city')) {
+                $fullContext['city'] = session('ai_context.city');
+                $fullContext['locality'] = session('ai_context.locality');
+                return $this->handleShippingQuery('costo envio', $fullContext);
+            }
+
             return [
                 'type' => 'question',
                 'message' => "¡Excelente elección! Has seleccionado **{$product->name}**. <br><br>Para calcular el costo del envío y generar tu orden, necesito saber: ¿En qué ciudad te encuentras?"
