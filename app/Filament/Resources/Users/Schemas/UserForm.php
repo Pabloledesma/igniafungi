@@ -21,6 +21,10 @@ class UserForm
                     ->maxlength(255)
                     ->unique(ignoreRecord: true)
                     ->required(),
+                TextInput::make('city')
+                    ->label('Ciudad'),
+                TextInput::make('locality')
+                    ->label('Localidad'),
                 DateTimePicker::make('email_verified_at'),
                 TextInput::make('password')
                     ->password()
