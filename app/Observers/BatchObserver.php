@@ -155,13 +155,16 @@ class BatchObserver
         }
 
         if ($batch->isDirty('quantity') && (int) $batch->quantity === 0) {
-            $batch->status = 'finalized';
+            // Only finalize if we are not actively discarding/contaminating it
+            if (!in_array($batch->status, ['contaminated', 'discarded'])) {
+                $batch->status = 'finalized';
 
-            $now = now()->format('Y-m-d H:i');
-            $user_name = auth()->user()->name ?? 'Sistema';
+                $now = now()->format('Y-m-d H:i');
+                $user_name = auth()->user()->name ?? 'Sistema';
 
-            if (!str_contains($batch->observations, 'LOTE FINALIZADO')) {
-                $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
+                if (!str_contains($batch->observations ?? '', 'LOTE FINALIZADO')) {
+                    $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
+                }
             }
         }
 

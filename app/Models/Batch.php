@@ -219,10 +219,21 @@ class Batch extends Model
     public function recordLoss($qty, $reason, $userId, $details = null)
     {
         // Obtenemos la fase actual. Si es null, buscamos la primera fase del lote.
-        $phaseId = $this->current_phase?->id ?? $this->phases()->wherePivot('finished_at', null)->first()?->id;
+        $phaseId = $this->current_phase?->id;
+
+        // Fallback: Si no hay fase activa (ej: se acaba de cerrar por descarte total),
+        // buscamos la última fase cerrada recientemente.
+        if (!$phaseId) {
+            $phaseId = $this->phases()
+                ->wherePivot('finished_at', null)
+                ->first()?->id
+                ?? $this->phases()
+                    ->orderByPivot('finished_at', 'desc')
+                    ->first()?->id;
+        }
 
         if (!$phaseId) {
-            throw new \Exception("No se puede registrar una pérdida: el lote {$this->code} no tiene una fase activa.");
+            throw new \Exception("No se puede registrar una pérdida: el lote {$this->code} no tiene una fase activa ni historial de fases.");
         }
 
         return $this->losses()->create([
