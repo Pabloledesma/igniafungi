@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Config;
 
 class AiAgentService
 {
@@ -46,428 +48,272 @@ class AiAgentService
 
     protected function generateResponse(string $content, string $ip, ?array $context = []): array
     {
-        Log::info("ProcessMessage Start: '{$content}'");
+        Log::info("Gemini ProcessMessage: '{$content}'");
 
-        // MERGE SESSION CONTEXT PRIORITY
-        // We ensure we have the full session history + any new explicit data passed (like IDs)
+        // 1. Session Context Merge
         $sessionContext = session('ai_context', []);
-
-        // Context Shielding: Don't overwrite existing city with null/empty unless explicit
-        if (!empty($sessionContext['city']) && empty($context['city'])) {
-            $context['city'] = $sessionContext['city'];
-        }
-        if (!empty($sessionContext['locality']) && empty($context['locality'])) {
-            $context['locality'] = $sessionContext['locality'];
-        }
-
         $context = array_merge($sessionContext, $context);
 
-        // 1. Explicit ID Handling (Checkbox Batch) from UI
-        if (!empty($context['explicit_product_ids'])) {
-            Log::info("Explicit IDs: " . implode(',', $context['explicit_product_ids']));
-            foreach ($context['explicit_product_ids'] as $pid) {
-                $p = Product::find($pid);
-                if ($p)
-                    $this->updateProductContext($p);
-            }
-            // Return simplified summary immediately
-            return $this->handleShippingQuery($content, $context);
-        }
-
-        // 2. GLOBAL INTERCEPTOR: Handoff Request (High Priority)
-        // If user explicitly asks for human/agent, we stop everything and trigger handoff.
+        // 2. Handoff Check
         if ($this->isHandoffRequest($content)) {
-            // Context is already merged above
-            // Ensure session matches for callLlm to pick it up (it reads from session)
             session(['ai_context' => $context]);
-
-            Log::info("Returning Handoff");
-            return $this->callLlm($content);
+            return $this->callLlm($content); // Reuse existing Handoff Notifier
         }
 
-        // 0. Load Context from Session (Persistence)
-        $sessionContext = session('ai_context', []);
-        $context = array_merge($sessionContext, $context);
-
-        // 0.1 PRE-EMPTIVE INFORMATIONAL CHECK (Priority over Registration/City)
-        // Check if user is asking a question about a product ("Como se cocina?", "Que es?")
-        $infoProduct = $this->detectProduct($content);
-        if (!$infoProduct && !empty($context['last_product_id'])) {
-            $infoProduct = Product::find($context['last_product_id']);
-        }
-
-        if ($infoProduct && $this->isInformationalQuery($content)) {
-            // RELOAD CONTEXT because detectProduct might have modified it
-            $context = session('ai_context', []);
-
-            // 6. Check for Informational Questions (Description, Usage, etc.)
-            $normalizedContent = Str::lower(preg_replace('/[^\p{L}\p{N}\s]/u', '', $content));
-            $descriptionTerms = ['que es', 'qué es', 'para que sirve', 'para qué sirve', 'sirve para', 'descripción', 'descripcion', 'beneficios', 'propiedades', 'informacion', 'información', 'detalle', 'cuentame'];
-            $usageTerms = ['como se usa', 'cómo se usa', 'como consumir', 'dosis', 'preparación', 'preparacion', 'receta', 'cocinar', 'comer', 'prepara', 'usarla', 'cocina', 'usar', 'preparar', 'uso'];
-            $keywords = array_merge($descriptionTerms, $usageTerms);
-
-            $isInfoQuery = false;
-            $isUsageQuery = false;
-            foreach ($keywords as $kw) {
-                if (str_contains($normalizedContent, $kw)) {
-                    $isInfoQuery = true;
-                    if (in_array($kw, $usageTerms)) {
-                        $isUsageQuery = true;
-                    }
-                    break;
-                }
-            }
-
-            if ($isInfoQuery) {
-                $searchKeywords = $isUsageQuery ? array_unique(array_merge($keywords, $usageTerms)) : $keywords;
-
-                // Search Posts
-                $posts = \App\Models\Post::where('product_id', $infoProduct->id)
-                    ->where('is_published', true)
-                    ->where(function ($q) use ($searchKeywords) {
-                        if (!empty($searchKeywords)) {
-                            foreach ($searchKeywords as $kw) {
-                                $q->orWhere('content', 'like', "%{$kw}%")
-                                    ->orWhere('title', 'like', "%{$kw}%")
-                                    ->orWhere('summary', 'like', "%{$kw}%");
-                            }
-                        }
-                    })->limit(3)->get();
-
-                $extraInfo = "";
-                if ($posts->isNotEmpty()) {
-                    foreach ($posts as $post) {
-                        $extraInfo .= "<br>🔹 **{$post->title}:** {$post->summary}";
-                    }
-                }
-
-                $description = $infoProduct->description ?? "Un hongo de excelente calidad.";
-
-                Log::info("Returning Info Query (0.1)");
-                return [
-                    'type' => 'answer',
-                    'message' => "ℹ️ **Sobre {$infoProduct->name}**:<br>{$description}" . ($extraInfo ? "<br><br>💡 **Información Adicional (Blog):**{$extraInfo}" : "")
-                ];
-            }
-        }
-
-        // 0.2 Check if we are waiting for User Data (Lazy Registration)
-        // BUT: If user asks a question about product (Informational), we should answer it first.
-        if (session('ai_waiting_for_user_data') && !$this->isInformationalQuery($content)) {
-            $result = $this->createOrUpdateLead($content, $context);
-
-            if ($result instanceof User) {
-                Auth::login($result);
-                session()->forget('ai_waiting_for_user_data');
-                session()->forget('ai_registration_data'); // Clear temp data
-
-                // RELOAD CONTEXT to ensure it contains everything (including city from DB/current request if updated)
-                $context = session('ai_context', []);
-                $context['city'] = $result->city;
-                $context['locality'] = $result->locality;
-                session(['ai_context' => $context]);
-
-                // FORCE UPDATE CHECKOUT SESSION
-                $shippingInfo = $this->getShippingInfo($result->city, $result->locality);
-                session()->put('checkout_shipping', [
-                    'is_bogota' => (Str::slug($result->city) === 'bogota'),
-                    'city' => $result->city,
-                    'location' => $result->locality,
-                    'cost' => $shippingInfo['price'] ?? 0,
-                    'delivery_date' => null
-                ]);
-
-                // RESTRICTION CHECK (Fresh products outside Bogota)
-                $hasFresh = false;
-                $confirmed = $context['confirmed_products'] ?? [];
-                // Robustness: Get IDs whether List or Map
-                $ids = (is_array($confirmed) && !array_is_list($confirmed)) ? array_keys($confirmed) : $confirmed;
-
-                $cartProducts = Product::whereIn('id', $ids)->get();
-                foreach ($cartProducts as $p) {
-                    if ($p->is_fresh) {
-                        $hasFresh = true;
-                        break;
-                    }
-                }
-
-                if ($hasFresh && Str::slug($result->city) !== 'bogota') {
-                    // Load Pivot Options (Dry products)
-                    $alternatives = Product::where('is_active', true)
-                        ->where('stock', '>', 0)
-                        ->where('category_id', '!=', 1) // Assuming 1 is Fresh? Better: search by name/category
-                        ->where(function ($q) {
-                            $q->where('name', 'like', '%seco%')
-                                ->orWhere('name', 'like', '%deshidratado%')
-                                ->orWhereHas('category', fn($q) => $q->where('name', 'like', '%seco%'));
-                        })
-                        ->limit(3)
-                        ->get();
-
-                    return [
-                        'type' => 'suggestion',
-                        'message' => "He registrado tus datos para **{$result->city}**. ⚠️ Sin embargo, noté que seleccionaste hongos frescos. Por calidad y transporte, **solo enviamos frescos a Bogotá**.<br><br>Para envíos nacionales te recomiendo nuestros hongos deshidratados (misma calidad, mayor duración):",
-                        'payload' => $alternatives->map(fn($p) => [
-                            'id' => $p->id,
-                            'name' => $p->name,
-                            'price' => $p->price,
-                            'image' => asset($p->first_image)
-                        ])->toArray()
-                    ];
-                }
-
-                // Proceed to generate order now that we are authenticated
-                $response = $this->handleOrderConfirmation($context);
-
-                // Enhance message with registration info
-                $response['message'] = "✅ **¡Te hemos registrado exitosamente!**<br>Hemos enviado los detalles de tu cuenta a tu correo ({$result->email}).<br><br>" . $response['message'];
-                $response['should_reload'] = true; // Signal frontend to reload logic (CSRF/Session)
-
-                Log::info("Returning Waiting for User Data (0.2)");
-                return $response;
-            } elseif (is_array($result) && isset($result['status']) && $result['status'] === 'partial') {
-                // PARTIAL DATA: Determine what to ask next
-                $missing = $result['missing'];
-                $data = $result['data'];
-
-                // Prioritize Name -> City -> Email logic or whatever flows best.
-                // If Name is missing:
-                if (in_array('name', $missing)) {
-                    $msg = (isset($data['email']) ? "Gracias, ya tengo tu correo." : "") .
-                        " Me falta un dato importante: **¿Cuál es tu nombre?**";
-                    return ['type' => 'question', 'message' => $msg];
-                }
-
-                // If City is missing:
-                if (in_array('city', $missing)) {
-                    $msg = "Gracias " . ($data['name'] ?? '') . ". Para calcular el envío y generar la orden, necesito saber: **¿Desde qué ciudad nos escribes?**";
-                    return ['type' => 'question', 'message' => $msg];
-                }
-
-                // If Email is missing:
-                if (in_array('email', $missing)) {
-                    $msg = "Gracias " . ($data['name'] ?? '') . ", ahora por favor indícame tu **correo electrónico** para enviarte el resumen de la orden.";
-                    return ['type' => 'question', 'message' => $msg];
-                }
-            }
-
-            // Fallback if structure mismatches (shouldnt happen)
-            return [
-                'type' => 'question',
-                'message' => 'Por favor, indícame tu nombre, correo y ciudad para generar la orden.'
-            ];
-        }
-
-        // 0.2 Context Inference: Check if message is just a City or Locality
-        $locationContext = $this->inferLocationFromContent($content);
-        if ($locationContext) {
-            $context['city'] = $locationContext['city'];
-            if (isset($locationContext['locality'])) {
-                $context['locality'] = $locationContext['locality'];
-            }
-            // Update Session IMMEDIATELY
-            session(['ai_context' => $context]);
-
-            // ALSO update registration data to ensure persistence across turns
-            $regData = session('ai_registration_data', []);
-            $regData['city'] = $locationContext['city'];
-            if (isset($locationContext['locality'])) {
-                $regData['locality'] = $locationContext['locality'];
-            }
-            session(['ai_registration_data' => $regData]);
-
-            // CONTINUITY LOGIC:
-            // Proceed to Shipping/Availability regardless of Auth status (Deferred Registration logic)
-            // If explicit shipping query OR implicit context flow (User providing city after product selection)
-            $hasProducts = !empty($context['confirmed_products'])
-                || !empty($context['last_product_id'])
-                || !empty($context['pending_suggestion_products']);
-
-            // Always handle shipping query if we have products and location now
-            if ($hasProducts) {
-                Log::info("Returning Location Context (0.2 Inference)");
-                return $this->handleShippingQuery($content, $context);
-            }
-        }
-
-
-
-        // 1. Rate Limiting (Keep existing)
+        // 3. Rate Limiting
         $key = 'ai_chat:' . $ip;
         if (RateLimiter::tooManyAttempts($key, 60)) {
-            return [
-                'type' => 'error',
-                'message' => 'Has excedido el límite de mensajes. Por favor intenta de nuevo en un minuto.'
-            ];
+            return ['type' => 'error', 'message' => 'Has excedido el límite de mensajes. Por favor intenta de nuevo en un minuto.'];
         }
         RateLimiter::hit($key, 60);
 
-        // 1.1 Handle "Agregar más productos" Action explicitly
-        if (str_contains(strtolower($content), 'agregar más') || str_contains(strtolower($content), 'agregar mas') || str_contains(strtolower($content), 'ver catalogo')) {
-            $response = $this->handleAvailabilityQuery();
-            $response['message'] = "¡Claro! ¿Qué otro hongo te gustaría agregar? Aquí tienes la lista de nuevo:<br><br>" . str_replace("¡Hola! Estos son los hongos que tenemos disponibles para ti hoy:<br><br>", "", $response['message']);
-            return $response;
+        // 4. Call Gemini
+        try {
+            return $this->queryGeminiWithTools($content, $context);
+        } catch (\Exception $e) {
+            Log::error("Gemini API Error: " . $e->getMessage());
+            return [
+                'type' => 'answer',
+                'message' => "Lo siento, estoy teniendo problemas para conectar con mi cerebro micuélio 🍄. ¿Podrías preguntarme de nuevo?"
+            ];
+        }
+    }
+
+    protected function queryGemini(string $content, array $context): array
+    {
+        $apiKey = config('ai.drivers.gemini.api_key');
+        $model = config('ai.drivers.gemini.model', 'gemini-1.5-flash');
+        $baseUrl = config('ai.drivers.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
+
+        if (empty($apiKey)) {
+            return ['type' => 'error', 'message' => 'Configuración incompleta: Falta API Key de Gemini.'];
         }
 
-        // 1.5 Strict Coherence Validation (Keep existing)
-        if ($this->isAffirmation($content)) {
-            // ... (Keep existing affirmation logic)
-            if (isset($context['city']) && isset($context['last_offered_product_type'])) {
-                if ($context['last_offered_product_type'] === 'fresh' && Str::slug($context['city']) !== 'bogota') {
-                    return [
-                        'type' => 'suggestion',
-                        'message' => "Entiendo que quieres continuar, pero recuerda que **en {$context['city']} solo podemos entregar productos secos**. Por favor selecciona una de las opciones sugeridas."
-                    ];
-                }
-            }
-            if (isset($context['pending_suggestion_products']) || !empty($context['confirmed_products'])) {
-                return $this->handleOrderConfirmation($context);
-            }
+        // 1. Prepare System Prompt
+        $systemPromptPath = config('ai.system_prompt_path');
+        $systemInstructions = "Eres un asistente útil.";
+        if (file_exists($systemPromptPath)) {
+            $systemInstructions = file_get_contents($systemPromptPath);
         }
 
-        // ... (Spam/Lead logic)
+        // Inject Context into System Prompt
+        $city = $context['city'] ?? 'Desconocida';
+        $userContext = "Contexto del Usuario:\n- Ciudad: $city\n";
+        if (auth()->check()) {
+            $userContext .= "- Usuario: " . auth()->user()->name . " (" . auth()->user()->email . ")\n";
+        }
+        $systemInstructions .= "\n\n" . $userContext;
 
-        // 6. Business Logic: Products/Freshness
+        // 2. Prepare History
+        $history = session('ai_chat_history', []);
 
-        // 6.0 Handle Category Selection (e.g. "1")
-        if (preg_match('/^(\d+)$/', trim($content), $matches)) {
-            $index = (int) $matches[1];
-            $pendingCats = $context['pending_suggestion_categories'] ?? [];
-            if (isset($pendingCats[$index])) {
-                $categoryData = $pendingCats[$index];
-                $catIds = is_array($categoryData) ? $categoryData : [$categoryData];
+        // Gemini Format: { role: 'user'|'model', parts: [{ text: ... }] }
+        $contents = [];
+        foreach ($history as $msg) {
+            $contents[] = [
+                'role' => $msg['role'] === 'assistant' ? 'model' : 'user',
+                'parts' => [['text' => $msg['content']]]
+            ];
+        }
 
-                // Fetch products for one or multiple categories
-                $products = Product::whereIn('category_id', $catIds)
-                    ->where('is_active', true)
-                    ->where('stock', '>', 0)
-                    ->get();
+        // Add Current Message
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [['text' => $content]]
+        ];
 
-                // Determine display name
-                $catName = "Selección";
-                if (count($catIds) === 1) {
-                    $c = \App\Models\Category::find($catIds[0]);
-                    if ($c)
-                        $catName = $c->name;
-                } else {
-                    $catName = "Hongos Frescos (Gourmet y Medicina)";
-                }
+        // 3. API Call
+        $url = "{$baseUrl}/models/{$model}:generateContent?key={$apiKey}";
 
-                if ($products->isNotEmpty()) {
-                    $list = "";
-                    $idx = 1;
-                    $ids = [];
-                    foreach ($products as $p) {
-                        $list .= "{$idx}. *{$p->name}*: $" . number_format($p->price, 0) . "<br>";
-                        $ids[] = $p->id;
-                        $idx++;
+        $payload = [
+            'contents' => $contents,
+            'systemInstruction' => [
+                'parts' => [['text' => $systemInstructions]]
+            ],
+            'generationConfig' => [
+                'temperature' => 0.7,
+                'maxOutputTokens' => 800,
+            ]
+        ];
+
+        $response = Http::post($url, $payload);
+
+        if ($response->failed()) {
+            Log::error("Gemini Request Failed: " . $response->body());
+            throw new \Exception("Error comunicando con Gemini: " . $response->status());
+        }
+
+        $json = $response->json();
+        $generatedText = $json['candidates'][0]['content']['parts'][0]['text'] ?? "Lo siento, no entendí bien.";
+
+        // 4. Update History
+        $history[] = ['role' => 'user', 'content' => $content];
+        $history[] = ['role' => 'assistant', 'content' => $generatedText];
+
+        // Keep constraints
+        if (count($history) > 20) {
+            $history = array_slice($history, -20);
+        }
+        session(['ai_chat_history' => $history]);
+
+        // 5. Output Formatting
+        // BasicMarkdown response for now. Future: Parse JSON for 'type' => 'catalog'.
+        return [
+            'type' => 'answer',
+            'message' => $generatedText
+        ];
+    }
+
+    protected function queryGeminiWithTools(string $content, array $context): array
+    {
+        $apiKey = config('ai.drivers.gemini.api_key');
+        $model = config('ai.drivers.gemini.model', 'gemini-1.5-flash-001');
+        $baseUrl = config('ai.drivers.gemini.base_url', 'https://generativelanguage.googleapis.com/v1beta');
+
+        if (empty($apiKey)) {
+            return ['type' => 'answer', 'message' => '⚠️ Error de Configuración: No se encontró la GEMINI_API_KEY en el archivo .env.'];
+        }
+
+        // 1. Prepare System Prompt
+        $systemPromptPath = config('ai.system_prompt_path');
+        $systemInstructions = "Eres un asistente útil.";
+        if (file_exists($systemPromptPath)) {
+            $systemInstructions = file_get_contents($systemPromptPath);
+        }
+
+        // Inject Context into System Prompt
+        $city = $context['city'] ?? 'Desconocida';
+        $userContext = "Contexto del Usuario:\n- Ciudad: $city\n";
+        if (auth()->check()) {
+            $userContext .= "- Usuario: " . auth()->user()->name . " (" . auth()->user()->email . ")\n";
+        }
+
+        // Inject Real Inventory to prevent hallucinations
+        // Fetch ALL active products with stock > 0
+        $availableProducts = Product::where('is_active', true)
+            ->where('stock', '>', 0)
+            ->pluck('name')
+            ->toArray();
+
+        $productListStr = implode(", ", $availableProducts);
+        $userContext .= "- Inventario Real (SOLO ofrecer estos): [{$productListStr}]\n";
+
+        $systemInstructions .= "\n\n" . $userContext;
+
+        // 2. Prepare History
+        $history = session('ai_chat_history', []);
+
+        $contents = [];
+        foreach ($history as $msg) {
+            $role = $msg['role'] === 'assistant' ? 'model' : 'user';
+            $contents[] = [
+                'role' => $role,
+                'parts' => [['text' => $msg['content']]]
+            ];
+        }
+
+        // Add Current Message
+        $contents[] = [
+            'role' => 'user',
+            'parts' => [['text' => $content]]
+        ];
+
+        // 3. Execution Loop (Max 3 turns)
+        $maxTurns = 3;
+        $finalText = "Error de comunicación.";
+
+        for ($i = 0; $i < $maxTurns; $i++) {
+            $url = "{$baseUrl}/models/{$model}:generateContent?key={$apiKey}";
+
+            $payload = [
+                'contents' => $contents,
+                'systemInstruction' => [
+                    'parts' => [['text' => $systemInstructions]]
+                ],
+                'generationConfig' => [
+                    'temperature' => $i > 0 ? 0.2 : 0.7,
+                    'maxOutputTokens' => 800,
+                ]
+            ];
+
+            $response = Http::post($url, $payload);
+
+            if ($response->failed()) {
+                Log::error("Gemini Request Failed: " . $response->body());
+                throw new \Exception("Error Gemini: " . $response->status());
+            }
+
+            $json = $response->json();
+            $generatedText = $json['candidates'][0]['content']['parts'][0]['text'] ?? "Lo siento, no entendí bien.";
+            $finalText = $generatedText;
+
+            // Check for ACTION
+            if (str_contains($generatedText, 'ACTION:')) {
+                if (preg_match('/ACTION:\s*([A-Z_]+)\s*({.*})/s', $generatedText, $matches)) {
+                    $actionName = $matches[1];
+                    $jsonStr = trim($matches[2]);
+                    $actionParams = json_decode($jsonStr, true);
+
+                    Log::info("Gemini Action: $actionName", $actionParams ?? []);
+
+                    $toolResult = "Error: Acción desconocida.";
+
+                    if ($actionName === 'GET_SHIPPING_PRICE') {
+                        $res = $this->getShippingInfo($actionParams['city'] ?? '', $actionParams['locality'] ?? null);
+                        if (isset($res['error'])) {
+                            $toolResult = "Error: " . $res['error'];
+                        } else {
+                            $toolResult = "Precio: $" . number_format($res['price'], 0, ',', '.') . " COP.";
+                        }
+                    } elseif ($actionName === 'CHECK_STOCK') {
+                        $res = $this->checkStock($actionParams['product_name'] ?? '');
+                        if (isset($res['error'])) {
+                            $toolResult = "Error: " . $res['error'];
+                        } else {
+                            $toolResult = "Producto: {$res['product']} (Stock: {$res['stock']}). Precio: $" . number_format($res['price'], 0, ',', '.') . ".";
+                        }
+                    } elseif ($actionName === 'SHOW_CATALOG') {
+                        // Special case: Immediate return of catalog structure
+                        $catalogResponse = $this->handleAvailabilityQuery();
+
+                        // Update history before returning
+                        $history[] = ['role' => 'user', 'content' => $content];
+                        $history[] = ['role' => 'assistant', 'content' => $catalogResponse['message'] ?? 'Mostrando catálogo...'];
+                        if (count($history) > 20)
+                            $history = array_slice($history, -20);
+                        session(['ai_chat_history' => $history]);
+
+                        return $catalogResponse;
                     }
 
-                    // CONTEXT PRESERVATION (CRITICAL)
-                    // Reload fresh session context to prevent overwriting city/locality
-                    $currentContext = session('ai_context', []);
-                    $currentContext['pending_suggestion_products'] = $ids;
-
-                    // Remove pending categories to clean up? Or keep?
-                    // Safe to keep, but unset for cleanliness if logic dictates.
-                    // unset($currentContext['pending_suggestion_categories']); 
-
-                    session(['ai_context' => $currentContext]);
-
-                    return [
-                        'type' => 'catalog',
-                        'message' => "Has seleccionado **{$catName}**. Aquí están los productos disponibles:<br><br>" . $list . "<br>Marca los hongos que te interesan y presiona el botón para añadirlos a tu pedido.",
-                        'payload' => $products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])->toArray()
+                    // Feed back to Gemini
+                    $contents[] = [
+                        'role' => 'model',
+                        'parts' => [['text' => $generatedText]]
                     ];
+                    $contents[] = [
+                        'role' => 'user',
+                        'parts' => [['text' => "SYSTEM OUTPUT: " . $toolResult]]
+                    ];
+                    continue; // Loop
                 }
             }
+            break; // No action, done
         }
 
-        // 2. Conditional Product Detection
-        // Only run detectProduct if we are NOT handling a location response and NOT making an affirmation
-        // This prevents double counting when user says "Bogota" or "Si"
-        $locationContext = $this->inferLocationFromContent($content);
+        // 4. Update History
+        $history[] = ['role' => 'user', 'content' => $content];
+        $history[] = ['role' => 'assistant', 'content' => $finalText];
 
-        // PERSIST INFERRED LOCATION IMMEDIATELY
-        if (!empty($locationContext)) {
-            $context = array_merge($context, $locationContext);
-            session(['ai_context' => $context]);
+        if (count($history) > 20) {
+            $history = array_slice($history, -20);
         }
+        session(['ai_chat_history' => $history]);
 
-        // Actually, logic flow:
-
-        // Actually, logic flow:
-        // 0.2 inferLocation -> Update Context.
-        // If inferred, we typically return ShippingQuery.
-        // But if we fall through, we might detect product.
-
-        // We should skip detection if it looks like a location or simple affirmation
-        $isAffirmation = $this->isAffirmation($content);
-        $looksLikeLocation = !empty($locationContext);
-
-        $product = null;
-        if (!$looksLikeLocation) {
-            $product = $this->detectProduct($content);
-        }
-
-        // Fallback: If no product detected but query is informational, assume context
-        if (!$product && $this->isInformationalQuery($content)) {
-            $product = $this->getLastProductConsulted();
-        }
-
-        if ($product) {
-            // RELOAD CONTEXT because detectProduct modified it
-            $context = session('ai_context', []);
-
-            // 6.1 Check coherence BEFORE handling SALES INTENT
-            if (isset($context['city']) && Str::slug($context['city']) !== 'bogota') {
-                $isFresh = false;
-                if ($product->category) {
-                    $slug = $product->category->slug;
-                    if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
-                        $isFresh = true;
-                    }
-                }
-                if (!$isFresh && str_contains(strtolower($product->name), 'fresco')) {
-                    $isFresh = true;
-                }
-
-                if ($isFresh) {
-                    return [
-                        'type' => 'suggestion',
-                        'message' => "Veo que te interesa *{$product->name}* (Fresco), pero en **{$context['city']}** solo podemos enviarte productos secos/deshidratados. ¿Te muestro las opciones disponibles?"
-                    ];
-                }
-            }
-            // Store for context
-            $isFresh = ($product->category && str_contains(strtolower($product->category->name), 'fresco')) || str_contains(strtolower($product->name), 'fresco');
-            $context['last_offered_product_type'] = $isFresh ? 'fresh' : 'dry';
-            session(['ai_context' => $context]);
-
-            return $this->handleProductQuery($product, $context);
-        }
-
-        // 6.5 Check strictly for informational queries about a product (even if detectProduct handled it, we intercepted it)
-        // Actually, detectProduct calls session update and return matched product.
-        // We can check intent here.
-
-        // Refactor: Logic 6 checks detectProduct.
-        // Inside logic 6, we should branch: Is it a Sales Intent ("Lo quiero") or Info Intent ("Que es?")?
-
-        // Let's modify block 6 in a larger chunk
-
-
-        // 7. General Shipping/Availability fallback check
-        if ($this->isAvailabilityQuery($content)) {
-            return $this->handleAvailabilityQuery();
-        }
-
-        if ($this->isShippingQuery($content)) {
-            return $this->handleShippingQuery($content, $context);
-        }
-
-        // 8. LLM Communication (Stub)
-        return $this->callLlm($content);
+        return [
+            'type' => 'answer',
+            'message' => $finalText
+        ];
     }
 
     protected function isAffirmation(string $content): bool
@@ -1581,6 +1427,40 @@ class AiAgentService
         }
 
         return ['error' => "No tenemos tarifa registrada para {$matchedCity}."];
+    }
+
+    /**
+     * Tool para verificar stock de un producto.
+     * @tool checkStock
+     */
+    public function checkStock(string $productName): array
+    {
+        // 1. Get all active products (even with 0 stock to report it)
+        $products = Product::where('is_active', true)->pluck('name', 'id');
+
+        // 2. Fuzzy Match
+        $bestMatch = $this->findBestMatch($productName, $products);
+
+        $product = null;
+        if ($bestMatch) {
+            $product = Product::where('name', $bestMatch)->first();
+        } else {
+            // Fallback: simple text search
+            $product = Product::where('name', 'like', "%{$productName}%")->where('is_active', true)->first();
+        }
+
+        if (!$product) {
+            return ['error' => "No encontré el producto '{$productName}' en nuestro catálogo."];
+        }
+
+        // 3. Update Context (Side Effect to keep session consistent)
+        $this->updateProductContext($product);
+
+        return [
+            'product' => $product->name,
+            'stock' => $product->stock,
+            'price' => $product->price
+        ];
     }
 
     protected function updateProductContext(Product $product): void
