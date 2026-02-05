@@ -70,6 +70,18 @@ class BatchesTable
                 SelectFilter::make('strain')
                     ->relationship('strain', 'name')
                     ->label('Filtrar por Genética'),
+                SelectFilter::make('active_phase')
+                    ->label('Fase Actual')
+                    ->options(\App\Models\Phase::all()->pluck('name', 'id'))
+                    ->query(function (\Illuminate\Database\Eloquent\Builder $query, array $data) {
+                        if (!$data['value']) {
+                            return $query;
+                        }
+                        return $query->whereHas('phases', function ($q) use ($data) {
+                            $q->where('phases.id', $data['value'])
+                                ->whereNull('batch_phases.finished_at');
+                        });
+                    }),
             ])
             ->recordActions([
                 // Botón Editar (El lápiz estándar)
