@@ -235,6 +235,19 @@ class AiAgentService
             'parts' => [['text' => $content]]
         ];
 
+        // 2.5 INTERCEPTOR: Affirmation / Order Generation
+        // If user says "Generate Order" or "Si" AND we have confirmed/pending products, DO NOT call LLM.
+        // Call handleOrderConfirmation directly.
+        if ($this->isAffirmation($content)) {
+            $hasConfirmed = !empty($context['confirmed_products']);
+            $hasPending = !empty($context['pending_suggestion_products']);
+
+            if ($hasConfirmed || $hasPending) {
+                // Check if we also have last_product_id as fallback
+                return $this->handleOrderConfirmation($context);
+            }
+        }
+
         // 3. Execution Loop (Max 3 turns)
         $maxTurns = 3;
         $finalText = "Error de comunicación.";
@@ -284,12 +297,19 @@ class AiAgentService
                         } else {
                             $toolResult = "Precio: $" . number_format($res['price'], 0, ',', '.') . " COP.";
                         }
-                    } elseif ($actionName === 'CHECK_STOCK') {
-                        $res = $this->checkStock($actionParams['product_name'] ?? '');
+                    } elseif ($actionName === 'GET_PRODUCT') {
+                        $res = $this->getProduct($actionParams['product_name'] ?? '');
                         if (isset($res['error'])) {
                             $toolResult = "Error: " . $res['error'];
                         } else {
+                            // Enhanced format for LLM
                             $toolResult = "Producto: {$res['product']} (Stock: {$res['stock']}). Precio: $" . number_format($res['price'], 0, ',', '.') . ".";
+                            if (!empty($res['description']))
+                                $toolResult .= " Descripción: {$res['description']}";
+                            if (!empty($res['short_description']))
+                                $toolResult .= " Resumen: {$res['short_description']}";
+                            if (!empty($res['category']))
+                                $toolResult .= " Categoría: {$res['category']}";
                         }
                     } elseif ($actionName === 'SHOW_CATALOG') {
                         // Special case: Immediate return of catalog structure
@@ -355,9 +375,13 @@ class AiAgentService
             'listo',
             'hágale',
             'generar orden',
+            'generemos',
+            'generar',
             'proceder',
             'confirmar',
-            'comprar'
+            'comprar',
+            'hagámosle',
+            'hágale'
         ];
 
         foreach ($affirmatives as $word) {
@@ -1317,7 +1341,11 @@ class AiAgentService
                 return [
                     'type' => 'suggestion',
                     'message' => "❌ **No pude agregar los productos.**\n\nLos hongos frescos (**" . implode(', ', $productsAdded) . "**) no están disponibles para envío a **{$city}** (solo Bogotá). ¿Te gustaría ver las versiones deshidratadas?",
-                    'payload' => $this->findDryProducts()->map(fn($p) => ['id' => $p->id, 'name' => $p->name])->toArray()
+                    'payload' => $this->findDryProducts()->map(fn($p) => [
+                        'id' => $p->id,
+                        'name' => $p->name,
+                        'price' => $p->price // Added missing key
+                    ])->toArray()
                 ];
             } else {
                 // GENERATE CHECKOUT LINK
@@ -1542,10 +1570,10 @@ class AiAgentService
     }
 
     /**
-     * Tool para verificar stock de un producto.
-     * @tool checkStock
+     * Tool para obtener detalles completos de un producto.
+     * @tool getProduct
      */
-    public function checkStock(string $productName): array
+    public function getProduct(string $productName): array
     {
         // 1. Get all active products (even with 0 stock to report it)
         $products = Product::where('is_active', true)->pluck('name', 'id');
@@ -1578,7 +1606,10 @@ class AiAgentService
             'product' => $product->name,
             'stock' => $product->stock,
             'price' => $product->price,
-            'unit_weight' => $weight ?? '1 unidad'
+            'unit_weight' => $weight ?? '1 unidad',
+            'description' => $product->description,
+            'short_description' => $product->short_description,
+            'category' => $product->category->name ?? 'Sin categoría'
         ];
     }
 
