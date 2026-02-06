@@ -423,4 +423,30 @@ class AiAgentRefinementsTest extends TestCase
         // Ensure it wasn't the OrderHandler error message
         $this->assertStringNotContainsString('no sé qué producto deseas confirmar', $response['message']);
     }
+
+    /** @test */
+    public function it_handles_imperative_order_commands()
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
+        // 1. Setup Context
+        $context = [
+            'confirmed_products' => [$this->freshProduct->id],
+            'city' => 'Bogotá',
+            'locality' => 'Engativá'
+        ];
+        session(['ai_context' => $context]);
+        $this->aiService = app(AiAgentService::class);
+
+        // 2. Act: "genera la orden porfavor" (Imperative)
+        $response = $this->aiService->processMessage("genera la orden porfavor", '127.0.0.1', $context);
+
+        // 3. Assert
+        $this->assertEquals('system', $response['type']);
+        $this->assertStringContainsString('He añadido los productos a tu carrito', $response['message']);
+
+        // Ensure OrderHandler caught it, not Gemini or ShippingHandler
+        // OrderHandler returns 'system' type directly.
+    }
 }
