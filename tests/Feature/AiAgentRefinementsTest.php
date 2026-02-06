@@ -400,4 +400,27 @@ class AiAgentRefinementsTest extends TestCase
         $this->assertStringContainsString('19.500', $response['message']);
         $this->assertStringContainsString('Usme', $response['message']);
     }
+
+    /** @test */
+    public function it_duplicates_affirmations_to_gemini_if_cart_empty()
+    {
+        // 1. Context: Empty cart
+        session(['ai_context' => ['confirmed_products' => []]]);
+        $this->aiService = app(AiAgentService::class);
+
+        // 2. Mock Gemini to handle the "Si"
+        // We use mockGeminiAnswer helper which sets up valid response
+        $this->mockGeminiAnswer('Si', 'Entendido, aquí está el catálogo...');
+
+        // 3. Act: "Si"
+        // OrderHandler should see empty cart and weak affirmation -> return false in canHandle.
+        // Pipeline falls through to Gemini.
+        $response = $this->aiService->processMessage("Si", '127.0.0.1', []);
+
+        // 4. Assert
+        $this->assertEquals('answer', $response['type']);
+        $this->assertStringContainsString('Entendido', $response['message']);
+        // Ensure it wasn't the OrderHandler error message
+        $this->assertStringNotContainsString('no sé qué producto deseas confirmar', $response['message']);
+    }
 }

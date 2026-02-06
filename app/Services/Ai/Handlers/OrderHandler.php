@@ -15,7 +15,27 @@ class OrderHandler implements IntentHandler
 
     public function canHandle(string $content, ConversationContext $context): bool
     {
-        return $this->isAffirmation($content);
+        $normalized = Str::lower(preg_replace('/[^\w\s]/u', '', $content));
+        $normalized = trim($normalized);
+
+        // 1. Strong Intent (Always Handle, even if cart empty to give feedback)
+        // e.g., "Generar orden", "Quiero comprar", "Confirmar"
+        if ($this->isStrongOrderIntent($normalized)) {
+            return true;
+        }
+
+        // 2. Weak Affirmation (Only handle if we have products pending)
+        // e.g., "Si", "De una", "Ok"
+        // If user says "Si" in response to "Do you want to see catalog?", we should NOT handle it here.
+        if ($this->isWeakAffirmation($normalized)) {
+            $hasProducts = !empty($context->getConfirmedProductIds());
+            if ($hasProducts) {
+                return true;
+            }
+            // If no products, let it fall through to Gemini/CatalogHandler
+        }
+
+        return false;
     }
 
     public function handle(string $content, ConversationContext $context): array
@@ -46,12 +66,36 @@ class OrderHandler implements IntentHandler
         return $this->processOrder($context);
     }
 
-    protected function isAffirmation(string $content): bool
+    protected function isStrongOrderIntent(string $normalized): bool
     {
-        $normalized = Str::lower(preg_replace('/[^\w\s]/u', '', $content));
-        $normalized = trim($normalized);
+        $strongKeywords = [
+            'generar orden',
+            'generemos',
+            'generar',
+            'proceder',
+            'confirmar',
+            'comprar',
+            'hagámosle',
+            'los quiero',
+            'quiero comprar',
+            'carrito',
+            'agregala',
+            'lo quiero',
+            'cobrame',
+            'facturar'
+        ];
 
-        $affirmatives = [
+        foreach ($strongKeywords as $word) {
+            if (Str::contains($normalized, $word)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected function isWeakAffirmation(string $normalized): bool
+    {
+        $weakAffirmatives = [
             'si',
             'sí',
             'dale',
@@ -64,25 +108,16 @@ class OrderHandler implements IntentHandler
             'perfecto',
             'listo',
             'hágale',
-            'generar orden',
-            'generemos',
-            'generar',
-            'proceder',
-            'confirmar',
-            'comprar',
-            'hagámosle'
+            'asi es',
+            'así es',
+            'correcto'
         ];
 
-        foreach ($affirmatives as $word) {
+        foreach ($weakAffirmatives as $word) {
             if ($normalized === $word || str_starts_with($normalized, $word . ' ')) {
                 return true;
             }
         }
-
-        if (Str::contains($normalized, ['los quiero', 'quiero comprar', 'carrito', 'agregala', 'lo quiero'])) {
-            return true;
-        }
-
         return false;
     }
 
