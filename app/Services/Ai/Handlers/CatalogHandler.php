@@ -22,7 +22,15 @@ class CatalogHandler implements IntentHandler
 
     public function canHandle(string $content, ConversationContext $context): bool
     {
-        $normalized = Str::lower($content);
+        $normalized = Str::lower(trim($content));
+
+        // 1. Numeric Selection (if context exists)
+        if (preg_match('/^\d+$/', $normalized)) {
+            $map = $context->get('catalog_selection_map');
+            if ($map && isset($map[$normalized])) {
+                return true;
+            }
+        }
 
         // Exact keywords
         if (Str::contains($normalized, ['catalogo', 'catálogo', 'lista de precios', 'portafolio'])) {
@@ -40,23 +48,70 @@ class CatalogHandler implements IntentHandler
 
     public function handle(string $content, ConversationContext $context): array
     {
+        $normalized = Str::lower(trim($content));
+
+        // Handle Selection
+        if (preg_match('/^\d+$/', $normalized)) {
+            $map = $context->get('catalog_selection_map');
+            if ($map && isset($map[$normalized])) {
+                $categoryId = $map[$normalized];
+                return $this->showCategoryProducts($categoryId);
+            }
+        }
+
         $categories = Category::with([
             'products' => function ($q) {
                 $q->where('is_active', true)->where('stock', '>', 0);
             }
         ])->where('is_active', true)->get();
 
-        $payload = $categories->map(function ($cat) {
+        $selectionMap = [];
+        $index = 1;
+
+        $payload = $categories->map(function ($cat) use (&$selectionMap, &$index) {
+            $selectionMap[$index] = $cat->id;
             return [
+                'index' => $index++,
                 'id' => $cat->id,
                 'name' => $cat->name, // e.g. "Hongos Frescos"
                 'products' => $cat->products->map(fn($p) => ['id' => $p->id, 'name' => $p->name, 'price' => $p->price])
             ];
         })->toArray();
 
-        $message = "Aquí tienes nuestro catálogo de productos frescos y deshidratados:";
-        foreach ($categories as $cat) {
-            $message .= "\n- " . $cat->name;
+        // Store map in context
+        $context->set('catalog_selection_map', $selectionMap);
+
+        $message = "Aquí tienes nuestro catálogo. Escribe el número de la categoría para ver más detalles:";
+        foreach ($categories as $i => $cat) {
+            $num = $i + 1;
+            $message .= "\n{$num}. " . $cat->name;
+        }
+
+        return [
+            'type' => 'catalog',
+            'message' => $message,
+            'payload' => $payload
+        ];
+    }
+
+    protected function showCategoryProducts($categoryId)
+    {
+        $category = Category::with(['products' => fn($q) => $q->where('is_active', true)])->find($categoryId);
+
+        if (!$category) {
+            return ['type' => 'system', 'message' => 'Categoría no encontrada.'];
+        }
+
+        $message = "Productos en **{$category->name}**:";
+        $payload = [];
+
+        foreach ($category->products as $p) {
+            $message .= "\n- {$p->name} ($" . number_format($p->price, 0, ',', '.') . ")";
+            $payload[] = [
+                'id' => $p->id,
+                'name' => $p->name,
+                'price' => $p->price
+            ];
         }
 
         return [

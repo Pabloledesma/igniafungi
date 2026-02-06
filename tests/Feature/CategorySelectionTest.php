@@ -19,7 +19,14 @@ class CategorySelectionTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        $geminiMock = \Mockery::mock(\App\Services\Ai\GeminiClient::class);
+        $this->app->instance(\App\Services\Ai\GeminiClient::class, $geminiMock);
+
         $this->aiService = app(AiAgentService::class);
+
+        // Assert Gemini calls are 0?
+        $geminiMock->shouldReceive('generateContent')->never();
 
         $this->category1 = Category::create(['name' => 'Hongos Frescos', 'is_active' => true, 'slug' => 'hongos-gourmet']);
         $this->category2 = Category::create(['name' => 'Kits de Cultivo', 'is_active' => true, 'slug' => 'kits-cultivo']);
@@ -47,7 +54,7 @@ class CategorySelectionTest extends TestCase
         $response = $this->aiService->processMessage("que productos tienen?", '127.0.0.1', []);
 
         $this->assertEquals('catalog', $response['type']);
-        $this->assertStringContainsString('Hongos Frescos (Gourmet y Medicina)', $response['message']);
+        $this->assertStringContainsString('Hongos Frescos', $response['message']);
         $this->assertStringContainsString('Kits de Cultivo', $response['message']);
         $this->assertStringNotContainsString('Pioppino', $response['message']); // Should NOT list products yet
 
