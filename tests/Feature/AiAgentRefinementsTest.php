@@ -152,4 +152,22 @@ class AiAgentRefinementsTest extends TestCase
         $this->assertStringContainsString('Hongos Frescos (Gourmet y Medicina)', $response['message']);
         $this->assertStringContainsString('Hongos Deshidratados', $response['message']);
     }
+    /** @test */
+    public function it_asks_for_city_when_fresh_product_requested_without_context()
+    {
+        // Context: Empty
+        session(['ai_context' => []]);
+
+        // Request Fresh Product
+        $response = $this->aiService->processMessage("Quiero pioppino fresco", '127.0.0.1', []);
+
+        // Should NOT be a restriction message ("Veo que estás en .")
+        // Should be a QUESTION asking for location
+        $this->assertStringNotContainsString('Veo que estás en', $response['message'], "Failed: Agent assumed empty location and restricted.");
+        $this->assertStringContainsString('ciudad', strtolower($response['message']), "Failed: Agent did not ask for city.");
+
+        // Improve Check: Accept 'question' OR 'answer' type (since LLM text response is type 'answer')
+        // The important part is the CONTENT.
+        $this->assertTrue(in_array($response['type'], ['question', 'answer']), "Failed: Response type should be question or answer.");
+    }
 }
