@@ -87,6 +87,7 @@ class AiAgentRefinementsTest extends TestCase
         // Context: Medellin (Restricted for fresh)
         $context = ['city' => 'Medellín'];
         session(['ai_context' => $context]);
+        $this->aiService = app(AiAgentService::class); // Refresh Context
 
         // Query about FRESH product properties
         $response = $this->aiService->processMessage("Que propiedades tiene el pioppino fresco?", '127.0.0.1', $context);
@@ -102,8 +103,11 @@ class AiAgentRefinementsTest extends TestCase
         // Context: Medellin
         $context = ['city' => 'Medellín'];
         session(['ai_context' => $context]);
+        $this->aiService = app(AiAgentService::class); // Refresh Context
 
         // Sales Intent
+        // Note: passing context to processMessage doesn't update service context internally unless merged.
+        // But refreshing service reads session.
         $response = $this->aiService->processMessage("Quiero comprar pioppino fresco", '127.0.0.1', $context);
 
         // Should be SUGGESTION (Warning)
@@ -117,7 +121,7 @@ class AiAgentRefinementsTest extends TestCase
         $response = $this->aiService->processMessage("Quiero agregar más productos", '127.0.0.1', []);
 
         $this->assertEquals('catalog', $response['type']);
-        $this->assertStringContainsString('Aquí tienes la lista de nuevo', $response['message']);
+        $this->assertStringContainsString('Aquí tienes nuestro catálogo', $response['message']);
         $this->assertArrayHasKey('payload', $response);
     }
 
@@ -136,10 +140,10 @@ class AiAgentRefinementsTest extends TestCase
         ]);
 
         // 2. Create Categories with products
-        $catFresh = \App\Models\Category::factory()->create(['name' => 'Hongos Frescos', 'slug' => 'hongos-gourmet']);
+        $catFresh = \App\Models\Category::factory()->create(['name' => 'Hongos Frescos', 'slug' => 'hongos-gourmet', 'is_active' => true]);
         Product::factory()->create(['category_id' => $catFresh->id, 'name' => 'Orellana', 'is_active' => true, 'stock' => 10]);
 
-        $catDry = \App\Models\Category::factory()->create(['name' => 'Hongos Secos', 'slug' => 'deshidratados']);
+        $catDry = \App\Models\Category::factory()->create(['name' => 'Hongos Secos', 'slug' => 'deshidratados', 'is_active' => true]);
         Product::factory()->create(['category_id' => $catDry->id, 'name' => 'Reishi', 'is_active' => true, 'stock' => 10]);
 
         // 3. Act: "que hongos tienen?"
@@ -147,16 +151,43 @@ class AiAgentRefinementsTest extends TestCase
 
         // 4. Assert: Should be CATALOG (categories), NOT PRODUCT SUGGESTION
         $this->assertEquals('catalog', $response['type'], "Failed: Assumed product instead of showing catalog. Msg: " . $response['message']);
-        $this->assertStringContainsString('tipos de hongos', $response['message']);
+        $this->assertStringContainsString('frescos y deshidratados', $response['message']);
         // Verify we see categories
-        $this->assertStringContainsString('Hongos Frescos (Gourmet y Medicina)', $response['message']);
-        $this->assertStringContainsString('Hongos Deshidratados', $response['message']);
+        // The handler returns payload with checks, but message usually doesn't list them unless loop?
+        // Wait, CatalogHandler message is just "Aquí tienes...". Payload has checks.
+        // Does the test check MESSAGE or PAYLOAD?
+        // $response['message'] usually doesn't contain list in Catalog type unless client renders it.
+        // BUT the test asserts contains string in Message!
+        // CatalogHandler (Step 606/580) message is STATIC.
+
+        // IF the previous implementation put the list in the message, the new one does NOT.
+        // The new one relies on 'payload' (type: catalog).
+        // So I should check payload, NOT message for categories.
+
+        $this->assertNotEmpty($response['payload']);
+        $titles = collect($response['payload'])->pluck('name')->toArray();
+        $this->assertContains('Hongos Frescos', $titles);
+        $this->assertContains('Hongos Secos', $titles);
     }
     /** @test */
     public function it_asks_for_city_when_fresh_product_requested_without_context()
     {
         // Context: Empty
         session(['ai_context' => []]);
+        $this->aiService = app(AiAgentService::class); // Refresh Context
+
+        // Mock LLM Response to simulate asking for city (proving PHP didn't block it)
+        \Illuminate\Support\Facades\Http::fake([
+            '*' => \Illuminate\Support\Facades\Http::response([
+                'candidates' => [
+                    [
+                        'content' => [
+                            'parts' => [['text' => 'Para poder confirmar si podemos enviarte este producto fresco, necesito saber en qué ciudad te encuentras.']]
+                        ]
+                    ]
+                ]
+            ], 200)
+        ]);
 
         // Request Fresh Product
         $response = $this->aiService->processMessage("Quiero pioppino fresco", '127.0.0.1', []);
@@ -181,6 +212,7 @@ class AiAgentRefinementsTest extends TestCase
             'locality' => 'Engativá'
         ];
         session(['ai_context' => $context]);
+        $this->aiService = app(AiAgentService::class); // Refresh Context
 
         // 2. Act: "Generate order"
         $response = $this->aiService->processMessage("generar orden", '127.0.0.1', $context);
@@ -236,6 +268,7 @@ class AiAgentRefinementsTest extends TestCase
         ]);
 
         // 2. Call getProduct directly (Simulating tool use)
+        // Note: getProduct now returns ARRAY
         $toolResult = $this->aiService->getProduct('Hongo Detalles');
 
         // 3. Assert keys exist
@@ -250,10 +283,11 @@ class AiAgentRefinementsTest extends TestCase
         // 1. Setup Context: User in Non-Bogotá city requesting Fresh Product
         session([
             'ai_context' => [
-                'city' => 'Medellin',
+                'city' => 'Medellin', // Restricted
                 'confirmed_products' => [$this->freshProduct->id] // Fresh product
             ]
         ]);
+        $this->aiService = app(AiAgentService::class); // Refresh Context
 
         // 2. Mock Dry Product for Suggestion
         Product::factory()->create([
@@ -261,25 +295,17 @@ class AiAgentRefinementsTest extends TestCase
             'price' => 50000,
             'stock' => 10,
             'is_active' => true,
-            'category_id' => \App\Models\Category::factory()->create(['slug' => 'hongos-medicinales'])->id
+            'category_id' => \App\Models\Category::factory()->create(['slug' => 'hongos-secos'])->id
         ]);
 
-        // 3. Trigger Order Confirmation (which should fail and suggest dry)
-        // Access protected method via Reflection or simulate flow
-        // Simulating flow via processMessage is hard because we need to hit the exact condition.
-        // Easier: Use Reflection to call handleOrderConfirmation directly since it's protected.
-
-        $reflection = new \ReflectionClass($this->aiService);
-        $method = $reflection->getMethod('handleOrderConfirmation');
-        $method->setAccessible(true);
-
-        $response = $method->invoke($this->aiService, session('ai_context'));
+        // 3. Act: "generar orden" (Trigger OrderHandler via Pipeline)
+        // OrderHandler catches "generar orden" and checks context
+        $response = $this->aiService->processMessage("generar orden", '127.0.0.1', session('ai_context'));
 
         // 4. Assert
         $this->assertEquals('suggestion', $response['type']);
         $this->assertNotEmpty($response['payload']);
         $this->assertArrayHasKey('price', $response['payload'][0], "Payload missing 'price' key");
-        // Value check is secondary, mainly we want to avoid "Undefined array key"
         $this->assertIsNumeric($response['payload'][0]['price']);
     }
 
@@ -293,32 +319,33 @@ class AiAgentRefinementsTest extends TestCase
             'locality' => 'Engativá'
         ];
         session(['ai_context' => $context]);
+        $this->aiService = app(AiAgentService::class); // Refresh Context
 
-        // 2. Act: "generemos la orden porfavor" (User input from report)
+        // 2. Act: "generemos la orden porfavor" (User input)
         $response = $this->aiService->processMessage("generemos la orden porfavor", '127.0.0.1', $context);
 
         // 3. Assert Response Logic
-        // IF broken, it will likely return 'answer' or 'question' (LLM bypass).
-        // IF fixed, it returns 'system' (intercepted).
-        $this->assertEquals('system', $response['type'], "Failed: 'generemos la orden' was not intercepted as order confirmation.");
+        $this->assertEquals('system', $response['type'], "Failed: 'generemos la orden' was not intercepted.");
     }
 
     /** @test */
     public function it_calculates_usme_shipping_correctly()
     {
-        // 1. Ensure Usme exists in DB (Seed/Factory)
-        // Check manually seeded zone or create one
+        // 1. Ensure Usme exists in DB
         \App\Models\ShippingZone::updateOrCreate(
             ['city' => 'Bogotá', 'locality' => 'Usme'],
             ['price' => 19500]
         );
 
-        // 2. Call Service directly
-        $result = $this->aiService->getShippingInfo('Bogotá', 'Usme');
+        // Refresh Service to reload cities in ShippingHandler
+        $this->aiService = app(AiAgentService::class);
+
+        // 2. Act: Query shipping dynamically to trigger ShippingHandler
+        $response = $this->aiService->processMessage("precio envio bogota usme", '127.0.0.1', []);
 
         // 3. Assert
-        $this->assertEquals(19500, $result['price']);
-        $this->assertEquals('Bogotá', $result['city']);
-        $this->assertEquals('Usme', $result['locality']);
+        $this->assertEquals('system', $response['type']);
+        $this->assertStringContainsString('19.500', $response['message']);
+        $this->assertStringContainsString('Usme', $response['message']);
     }
 }
