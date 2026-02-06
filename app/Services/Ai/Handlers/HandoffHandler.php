@@ -40,6 +40,21 @@ class HandoffHandler implements IntentHandler
         // Simulate Slack Notification
         Log::info("HANDOFF TRIGGERED: " . $content);
 
+        try {
+            $user = auth()->user();
+            $notificationData = [
+                'city' => $context->get('city') ?? ($user->city ?? 'Desconocida'),
+                'user' => $user ? "{$user->name} ({$user->email})" : 'Invitado',
+                'cart' => implode(', ', $context->getConfirmedProductIds())
+            ];
+
+            \Illuminate\Support\Facades\Notification::route('slack', config('services.slack.notifications.channel'))
+                ->notify(new \App\Notifications\AiAgentHandoffNotification($content, $notificationData));
+
+        } catch (\Exception $e) {
+            Log::error("Failed to send Handoff Notification: " . $e->getMessage());
+        }
+
         return [
             'type' => 'system',
             'message' => 'He notificado a un asesor humano. Te responderemos pronto.'

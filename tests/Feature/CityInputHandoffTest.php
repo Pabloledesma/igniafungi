@@ -15,11 +15,18 @@ class CityInputHandoffTest extends TestCase
     use RefreshDatabase;
 
     protected $aiService;
+    protected $geminiMock;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->aiService = app(AiAgentService::class);
+
+        // Mock Gemini to prevent external calls
+        $this->geminiMock = \Mockery::mock(\App\Services\Ai\GeminiClient::class);
+        $this->app->instance(\App\Services\Ai\GeminiClient::class, $this->geminiMock);
+
+        // Ensure Slack config exists for notifications
+        Config::set('services.slack.notifications.channel', 'https://hooks.slack.com/services/TEST/TOKEN');
 
         Product::factory()->create([
             'name' => 'Melena de León',
@@ -30,6 +37,18 @@ class CityInputHandoffTest extends TestCase
 
         \App\Models\ShippingZone::create(['city' => 'Bogotá', 'locality' => 'Usaquén', 'price' => 5000]);
         \App\Models\ShippingZone::create(['city' => 'Cali', 'price' => 10000]);
+
+        // Instantiate AFTER seeding
+        $this->aiService = app(AiAgentService::class);
+
+        // Fake Notifications globally
+        \Illuminate\Support\Facades\Notification::fake();
+    }
+
+    protected function tearDown(): void
+    {
+        \Mockery::close();
+        parent::tearDown();
     }
 
     /** @test */
@@ -89,8 +108,7 @@ class CityInputHandoffTest extends TestCase
     /** @test */
     public function it_sends_structured_slack_notification()
     {
-        // Fake Notifications
-        \Illuminate\Support\Facades\Notification::fake();
+        // Fake Notifications handled in setUp
 
         // Simulate a context with product
         $product = Product::first();

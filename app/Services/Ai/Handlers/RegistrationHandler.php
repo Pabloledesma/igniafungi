@@ -40,7 +40,7 @@ class RegistrationHandler implements IntentHandler
         // Or if content starts with "Soy", "Me llamo".
 
         $nameCandidate = null;
-        if (preg_match('/(soy|me llamo|mi nombre es)\s+(.*)/i', $content, $m)) {
+        if (preg_match('/(soy|me llamo|mi nombre es)\s+([^,;.]+)/i', $content, $m)) {
             $nameCandidate = trim($m[2]);
         } elseif (empty($data['email']) && !str_contains($content, '@')) {
             // If we don't have email and input doesn't look like email, maybe it's name?

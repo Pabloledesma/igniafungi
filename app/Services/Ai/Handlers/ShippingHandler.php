@@ -124,10 +124,20 @@ class ShippingHandler implements IntentHandler
             $msg .= " ¿Deseas agregar algún otro producto al pedido o generamos la orden?";
         }
 
-        return [
+        $response = [
             'type' => 'system',
             'message' => $msg
         ];
+
+        if (!empty($context->getConfirmedProductIds())) {
+            $response['actions'] = [
+                ['type' => 'more_products', 'label' => 'Agregar más productos'],
+                ['type' => 'link', 'label' => 'Generar Orden', 'url' => route('cart')] // Or just a trigger
+            ];
+            // Actually the test expects 'more_products' type action.
+        }
+
+        return $response;
     }
 
     public function getShippingInfo($city, $locality = null)
