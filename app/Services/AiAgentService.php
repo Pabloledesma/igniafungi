@@ -9,8 +9,8 @@ use App\Services\Ai\Handlers\CatalogHandler;
 use App\Services\Ai\Handlers\HandoffHandler;
 use App\Services\Ai\Handlers\OrderHandler;
 use App\Services\Ai\Handlers\ShippingHandler;
+use App\Services\Ai\Handlers\RegistrationHandler;
 use App\Services\Ai\Handlers\SpamHandler;
-use App\Models\Product;
 use Illuminate\Support\Facades\Log;
 
 class AiAgentService
@@ -28,6 +28,7 @@ class AiAgentService
     public function __construct(
         ConversationContext $context,
         GeminiClient $gemini,
+        RegistrationHandler $registrationHandler,
         SpamHandler $spamHandler,
         HandoffHandler $handoffHandler,
         OrderHandler $orderHandler,
@@ -44,6 +45,7 @@ class AiAgentService
         $this->handlers = [
             $spamHandler,
             $handoffHandler,
+            $registrationHandler,
             $orderHandler,
             $catalogHandler,
             $shippingHandler
@@ -52,6 +54,9 @@ class AiAgentService
 
     public function processMessage(string $content, string $ip, array $sessionContext = []): array
     {
+        // Refresh Context (Crucial for Tests/State)
+        $this->context->reload();
+
         // 0. Deduplication Guard
         $msgHash = md5($content . $ip);
         $lastHash = session('ai_last_msg_hash');
@@ -100,21 +105,26 @@ class AiAgentService
         // System Prompt
         $systemPrompt = file_get_contents(resource_path('markdown/GEMINI.md'));
 
-        // Initial Query
-        $response = $this->gemini->generateContent($userMessage, $systemPrompt);
-
         // Action Loop
         $maxSteps = 5;
         $currentStep = 0;
 
+        // Initial Query (Expecting JSON)
+        $nextPrompt = $userMessage;
+
         while ($currentStep < $maxSteps) {
-            $parsed = $this->parseAction($response);
+            // Call Gemini forcing JSON
+            $rawResponse = $this->gemini->generateContent($nextPrompt, $systemPrompt, true);
+            $parsed = $this->parseJsonAction($rawResponse);
 
-            if ($parsed['has_action']) {
-                $toolResult = $this->executeTool($parsed['action_name'], $parsed['action_params']);
+            if ($parsed['needs_action'] && !empty($parsed['action_name'])) {
+                // Execute Tool
+                $toolResult = $this->executeTool($parsed['action_name'], $parsed['action_params'] ?? []);
 
-                // Add Assistant Action Request to history
-                $this->context->addHistoryMessage('assistant', $response);
+                // Add Assistant Action to history (We reconstruct what the assistant 'thought')
+                // Ideally we should store the raw JSON response as the assistant message, 
+                // but for readability we might want to store a summary or the raw JSON.
+                $this->context->addHistoryMessage('assistant', $rawResponse);
 
                 // Add System Tool Output to history
                 $this->context->addHistoryMessage('user', "SYSTEM_TOOL_OUTPUT: " . $toolResult);
@@ -123,14 +133,25 @@ class AiAgentService
                 $this->gemini->setHistory($this->context->getHistory());
 
                 // Re-query Gemini with tool result
-                $response = $this->gemini->generateContent("(Tool Output Received)", $systemPrompt);
+                $nextPrompt = "(Tool Output Received)";
                 $currentStep++;
             } else {
-                // Final Answer
-                $this->context->addHistoryMessage('assistant', $response);
+                // Final Answer (Response is in $parsed['response']) or fallback if parsing failed
+                $finalText = $parsed['response'] ?? $rawResponse;
+
+                // If it's a JSON object string, try to extract 'response' field if possible, 
+                // otherwise just use the text.
+                // parseJsonAction already tried to extract 'response'.
+
+                if (empty($finalText) && isset($parsed['error'])) {
+                    $finalText = "Lo siento, tuve un problema interno. ¿Podrías intentar de nuevo?";
+                }
+
+                $this->context->addHistoryMessage('assistant', $rawResponse); // Save raw JSON logic
+
                 return [
                     'type' => 'answer',
-                    'message' => $response
+                    'message' => $finalText
                 ];
             }
         }
@@ -141,19 +162,33 @@ class AiAgentService
         ];
     }
 
-    protected function parseAction(string $response): array
+    protected function parseJsonAction(string $response): array
     {
-        if (preg_match('/ACTION:\s*(\w+)\s*({.*})?/s', $response, $matches)) {
-            $actionName = $matches[1];
-            $jsonParams = $matches[2] ?? '{}';
-            $params = json_decode($jsonParams, true) ?? [];
+        $data = json_decode($response, true);
+
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            // Backup: Try to find JSON block in markdown ```json ... ```
+            if (preg_match('/```json\s*(\{.*\})\s*```/s', $response, $matches)) {
+                $data = json_decode($matches[1], true);
+            }
+        }
+
+        if (is_array($data)) {
             return [
-                'has_action' => true,
-                'action_name' => $actionName,
-                'action_params' => $params
+                'needs_action' => $data['needs_action'] ?? false,
+                'action_name' => $data['action_name'] ?? null,
+                'action_params' => $data['action_params'] ?? [],
+                'response' => $data['response'] ?? null
             ];
         }
-        return ['has_action' => false];
+
+        // Fallback if not JSON (Old format or error)
+        Log::warning("Gemini Non-JSON Response: " . $response);
+        return [
+            'needs_action' => false,
+            'response' => $response,
+            'error' => true
+        ];
     }
 
     protected function executeTool(string $actionName, array $params): string
@@ -162,13 +197,20 @@ class AiAgentService
 
         switch ($actionName) {
             case 'GET_SHIPPING_PRICE':
-                // Delegate to ShippingHandler Logic
+                // Delegate to ShippingHandler
                 $city = $params['city'] ?? '';
                 $locality = $params['locality'] ?? null;
-                return $this->callProtectedMethod($this->shippingHandler, 'getShippingInfo', [$city, $locality]);
+                $res = $this->shippingHandler->getShippingInfo($city, $locality);
+
+                if (isset($res['error']))
+                    return "Error: " . $res['error'];
+                return json_encode($res);
 
             case 'GET_PRODUCT':
-                $res = $this->getProduct($params['product_name'] ?? '');
+                // Delegate to CatalogHandler
+                $name = $params['product_name'] ?? '';
+                $res = $this->catalogHandler->findProduct($name, $this->context);
+
                 if (isset($res['error']))
                     return "Error: " . $res['error'];
 
@@ -189,40 +231,5 @@ class AiAgentService
             default:
                 return "Error: Tool {$actionName} not found.";
         }
-    }
-
-    public function getProduct(string $productName): array
-    {
-        // Simple Product Search
-        $p = Product::where('name', 'like', "%{$productName}%")->where('is_active', true)->first();
-        if (!$p)
-            return ['error' => "Producto no encontrado."];
-
-        // Track context
-        $this->context->addProduct($p->id);
-
-        return [
-            'product' => $p->name,
-            'stock' => $p->stock,
-            'price' => $p->price,
-            'description' => $p->description,
-            'short_description' => $p->short_description,
-            'category' => $p->category->name ?? ''
-        ];
-    }
-
-    // Helper to call protected methods
-    protected function callProtectedMethod($object, $method, array $args = [])
-    {
-        $reflection = new \ReflectionClass($object);
-        $m = $reflection->getMethod($method);
-        $m->setAccessible(true);
-        $res = $m->invokeArgs($object, $args);
-
-        if (isset($res['error']))
-            return "Error: " . $res['error'];
-        if (isset($res['price']))
-            return "Precio: " . $res['price'];
-        return json_encode($res);
     }
 }

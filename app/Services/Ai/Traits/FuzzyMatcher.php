@@ -48,6 +48,7 @@ trait FuzzyMatcher
         // Strategy 1: Look for "en [City]" or "a [City]"
         if (preg_match('/(en|a|para|hacia)\s+([a-zá-ú\s]+)/u', $normalized, $matches)) {
             $candidate = trim($matches[2]);
+            $candidate = $this->resolveCityAlias($candidate);
             $match = $this->findBestMatch($candidate, $knownCities);
             if ($match) {
                 return ['city' => $match];
@@ -76,5 +77,22 @@ trait FuzzyMatcher
         }
 
         return null; // No confident match
+    }
+
+    protected function resolveCityAlias(string $input): string
+    {
+        $aliases = [
+            'villao' => 'Villavicencio',
+            'medallo' => 'Medellín',
+            'bog' => 'Bogotá',
+            'bogota' => 'Bogotá',
+            'medellin' => 'Medellín',
+            'ibague' => 'Ibagué',
+            'popayan' => 'Popayán',
+            'cali' => 'Cali' // Identity but good for lower case
+        ];
+
+        $lower = Str::lower($input);
+        return $aliases[$lower] ?? $input;
     }
 }

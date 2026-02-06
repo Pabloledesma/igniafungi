@@ -19,13 +19,13 @@ class StrictRegistrationTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->aiService = app(AiAgentService::class);
-
         // Seed Data
         ShippingZone::create(['city' => 'Villavicencio', 'price' => 15000]);
         ShippingZone::create(['city' => 'Bogotá', 'locality' => 'Usaquén', 'price' => 5000]);
 
         Product::factory()->create(['name' => 'Orellana Florida', 'is_active' => true, 'stock' => 10]);
+
+        $this->aiService = app(AiAgentService::class);
     }
 
     /** @test */

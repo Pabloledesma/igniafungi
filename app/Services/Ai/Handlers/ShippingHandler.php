@@ -130,7 +130,7 @@ class ShippingHandler implements IntentHandler
         ];
     }
 
-    protected function getShippingInfo($city, $locality = null)
+    public function getShippingInfo($city, $locality = null)
     {
         $query = ShippingZone::where('city', $city);
 

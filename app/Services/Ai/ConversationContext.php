@@ -11,6 +11,11 @@ class ConversationContext
 
     public function __construct()
     {
+        $this->reload();
+    }
+
+    public function reload(): void
+    {
         $this->data = session('ai_context', []);
         $this->history = session('ai_chat_history', []);
     }

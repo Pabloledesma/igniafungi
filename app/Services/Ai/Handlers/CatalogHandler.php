@@ -54,10 +54,45 @@ class CatalogHandler implements IntentHandler
             ];
         })->toArray();
 
+        $message = "Aquí tienes nuestro catálogo de productos frescos y deshidratados:";
+        foreach ($categories as $cat) {
+            $message .= "\n- " . $cat->name;
+        }
+
         return [
             'type' => 'catalog',
-            'message' => 'Aquí tienes nuestro catálogo de productos frescos y deshidratados:',
+            'message' => $message,
             'payload' => $payload
+        ];
+    }
+
+    public function findProduct(string $productName, ConversationContext $context): array
+    {
+        $p = \App\Models\Product::where('name', 'like', "%{$productName}%")->where('is_active', true)->first();
+        if (!$p)
+            return ['error' => "Producto no encontrado."];
+
+        // Track context
+        $context->addProduct($p->id);
+
+        $description = $p->description;
+
+        // Append Posts info
+        $posts = \App\Models\Post::where('product_id', $p->id)->where('is_published', true)->take(3)->get();
+        if ($posts->isNotEmpty()) {
+            $description .= "\n\n💡 Información Adicional (Blog):";
+            foreach ($posts as $post) {
+                $description .= "\n- [{$post->title}]: " . ($post->summary ?? Str::limit($post->content, 100));
+            }
+        }
+
+        return [
+            'product' => $p->name,
+            'stock' => $p->stock,
+            'price' => $p->price,
+            'description' => $description,
+            'short_description' => $p->short_description,
+            'category' => $p->category->name ?? ''
         ];
     }
 }

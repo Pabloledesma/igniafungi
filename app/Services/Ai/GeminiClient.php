@@ -22,7 +22,7 @@ class GeminiClient
         $this->history = $history;
     }
 
-    public function generateContent(string $prompt, string $systemPrompt): string
+    public function generateContent(string $prompt, string $systemPrompt, bool $expectJson = false): string
     {
         $url = "https://generativelanguage.googleapis.com/v1beta/models/{$this->model}:generateContent?key={$this->apiKey}";
 
@@ -52,12 +52,16 @@ class GeminiClient
             ]
         ];
 
+        if ($expectJson) {
+            $payload['generationConfig']['responseMimeType'] = 'application/json';
+        }
+
         $response = Http::withHeaders(['Content-Type' => 'application/json'])
             ->post($url, $payload);
 
         if ($response->failed()) {
             Log::error("Gemini API Error: " . $response->body());
-            return "Lo siento, tengo problemas de conexión en este momento.";
+            return json_encode(['error' => "Lo siento, tengo problemas de conexión en este momento."]); // Return JSON error if JSON expected? Or string.
         }
 
         $data = $response->json();

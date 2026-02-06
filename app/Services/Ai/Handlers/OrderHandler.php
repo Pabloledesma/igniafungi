@@ -34,6 +34,15 @@ class OrderHandler implements IntentHandler
             ];
         }
 
+        // 2. Check Auth for Lazy Registration
+        if (!auth()->check()) {
+            session(['ai_waiting_for_user_data' => true]);
+            return [
+                'type' => 'question',
+                'message' => '¡Excelente! Tengo todo listo para tu pedido. Para enviarte el resumen y generar la orden... dime tu nombre y correo.'
+            ];
+        }
+
         return $this->processOrder($context);
     }
 
@@ -77,7 +86,7 @@ class OrderHandler implements IntentHandler
         return false;
     }
 
-    protected function processOrder(ConversationContext $context): array
+    public function processOrder(ConversationContext $context): array
     {
         // Logic extracted from handleOrderConfirmation
         $city = $context->get('city');
