@@ -118,6 +118,25 @@ class OrderHandler implements IntentHandler
             }
         }
 
+        // Calculate Cost (Pre-calculation for persistence)
+        $cost = 0;
+        if ($city) {
+            $zone = ShippingZone::where('city', $city);
+            if ($locality) {
+                $zone->where('locality', 'like', "%{$locality}%");
+            }
+            $cost = $zone->first()->price ?? 0;
+        }
+
+        // Persist Session (Even if we block later)
+        session()->put('checkout_shipping', [
+            'is_bogota' => $isBogota,
+            'city' => $city,
+            'location' => $locality,
+            'cost' => $cost,
+            'delivery_date' => null
+        ]);
+
         // If failure due to fresh products
         if ($ignoredFresh && empty($productsAdded)) {
             return [
@@ -133,24 +152,6 @@ class OrderHandler implements IntentHandler
 
         // Success - Generate Link
         $cartUrl = route('cart');
-
-        // Calculate Cost
-        $cost = 0;
-        if ($city) {
-            $zone = ShippingZone::where('city', $city);
-            if ($locality) {
-                $zone->where('locality', 'like', "%{$locality}%");
-            }
-            $cost = $zone->first()->price ?? 0;
-        }
-
-        session()->put('checkout_shipping', [
-            'is_bogota' => $isBogota,
-            'city' => $city,
-            'location' => $locality,
-            'cost' => $cost,
-            'delivery_date' => null
-        ]);
 
         // Add confirmed products to Cart Cookie via Helper execution context? 
         // Actually, in the Service, it called `CartManagement::addItemToCartWithCookie($product->id, 1);`

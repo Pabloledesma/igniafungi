@@ -67,6 +67,6 @@ class RestrictionPersistenceTest extends TestCase
         // Should NOT be 'system' (order link) or 'question' (unrelated)
         // Should be SUGGESTION (pivot)
         $this->assertEquals('suggestion', $response['type'], 'Should suggest alternatives and block checkount.');
-        $this->assertStringContainsString('solo enviamos frescos', strtolower($response['message']));
+        $this->assertStringContainsString('no están disponibles', strtolower($response['message']));
     }
 }

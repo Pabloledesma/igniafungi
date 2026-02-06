@@ -9,8 +9,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
 
+use App\Services\Ai\Traits\FuzzyMatcher;
+use App\Models\ShippingZone;
+
 class RegistrationHandler implements IntentHandler
 {
+    use FuzzyMatcher;
+
     protected OrderHandler $orderHandler;
 
     public function __construct(OrderHandler $orderHandler)
@@ -75,6 +80,17 @@ class RegistrationHandler implements IntentHandler
                 'type' => 'question',
                 'message' => '¿Cuál es tu nombre completo para el registro?'
             ];
+        }
+
+        // 3b. Infer Location (Robustness)
+        // Even if we are registering, user might say "Soy Juan from Bogota"
+        $cities = ShippingZone::pluck('city')->unique()->values()->toArray();
+        $locData = $this->inferLocationFromContent($content, $cities);
+        if (!empty($locData['city'])) {
+            $context->set('city', $locData['city']);
+            if (!empty($locData['locality'])) {
+                $context->set('locality', $locData['locality']);
+            }
         }
 
         // 4. Create User
