@@ -39,6 +39,10 @@ class Batch extends Model
         'origin_code'
     ];
 
+    protected $attributes = [
+        'contaminated_quantity' => 0,
+    ];
+
     public $lossReason = null;
     public $lossDetails = null;
     public $phase_id;

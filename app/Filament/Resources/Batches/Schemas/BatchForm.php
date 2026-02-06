@@ -340,7 +340,6 @@ class BatchForm
                                     ->numeric()
                                     ->default(0)
                                     ->live(onBlur: true)
-                                    ->live(onBlur: true)
                                     ->afterStateUpdated(function ($state, $old, Set $set, Get $get, $record) {
                                         // Deterministic Calculation to avoid recursion
                                         $newContaminated = intval($state);
