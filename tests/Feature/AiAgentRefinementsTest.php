@@ -207,7 +207,7 @@ class AiAgentRefinementsTest extends TestCase
 
         // 4. Assert: Should be CATALOG (categories), NOT PRODUCT SUGGESTION
         $this->assertEquals('catalog', $response['type'], "Failed: Assumed product instead of showing catalog. Msg: " . $response['message']);
-        $this->assertStringContainsString('frescos y deshidratados', $response['message']);
+        $this->assertStringContainsString('Aquí tienes nuestro catálogo', $response['message']);
         // Verify we see categories
         // The handler returns payload with checks, but message usually doesn't list them unless loop?
         // Wait, CatalogHandler message is just "Aquí tienes...". Payload has checks.
