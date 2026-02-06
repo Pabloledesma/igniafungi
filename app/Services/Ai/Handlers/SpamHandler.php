@@ -42,7 +42,8 @@ class SpamHandler implements IntentHandler
         }
 
         // Layer 2: Daily Cost Control (50 per day)
-        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($keyDaily, 50)) {
+        // Disabled in Local Environment
+        if (!app()->isLocal() && \Illuminate\Support\Facades\RateLimiter::tooManyAttempts($keyDaily, 50)) {
             $this->blockMessage = 'Has alcanzado el límite diario de mensajes gratuitos. Si necesitas soporte urgente, contáctanos directamente por WhatsApp.';
             return true;
         }
