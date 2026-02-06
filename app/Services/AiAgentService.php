@@ -61,11 +61,23 @@ class AiAgentService
         }
 
         // 3. Rate Limiting
-        $key = 'ai_chat:' . $ip;
-        if (RateLimiter::tooManyAttempts($key, 60)) {
-            return ['type' => 'error', 'message' => 'Has excedido el límite de mensajes. Por favor intenta de nuevo en un minuto.'];
+        // 3. Rate Limiting (Dual Layer)
+        $keyMinute = 'ai_chat:' . $ip;
+        $keyDaily = 'ai_chat_daily:' . $ip;
+
+        // Layer 1: Burst Protection (10 per minute)
+        if (RateLimiter::tooManyAttempts($keyMinute, 10)) {
+            $seconds = RateLimiter::availableIn($keyMinute);
+            return ['type' => 'error', 'message' => "¡Vas muy rápido! 🏎️ Por favor espera {$seconds} segundos antes de enviar otro mensaje."];
         }
-        RateLimiter::hit($key, 60);
+
+        // Layer 2: Daily Cost Control (50 per day)
+        if (RateLimiter::tooManyAttempts($keyDaily, 50)) {
+            return ['type' => 'error', 'message' => 'Has alcanzado el límite diario de mensajes gratuitos. Si necesitas soporte urgente, contáctanos directamente por WhatsApp.'];
+        }
+
+        RateLimiter::hit($keyMinute, 60); // Decay 60 seconds
+        RateLimiter::hit($keyDaily, 86400); // Decay 24 hours
 
         // 4. Call Gemini
         try {
@@ -198,6 +210,11 @@ class AiAgentService
         $productListStr = implode(", ", $availableProducts);
         $userContext .= "- Inventario Real (SOLO ofrecer estos): [{$productListStr}]\n";
 
+        // System Hint: PHP Detected Product (Overrides LLM hallucination for typos)
+        if (!empty($context['detected_product_name'])) {
+            $userContext .= "- SISTEMA: El usuario preguntó por '{$context['detected_product_name']}'. Úsalo como producto principal.\n";
+        }
+
         $systemInstructions .= "\n\n" . $userContext;
 
         // 2. Prepare History
@@ -249,10 +266,12 @@ class AiAgentService
 
             // Check for ACTION
             if (str_contains($generatedText, 'ACTION:')) {
-                if (preg_match('/ACTION:\s*([A-Z_]+)\s*({.*})/s', $generatedText, $matches)) {
+                // Regex updated to allow optional JSON parameters
+                // Matches: ACTION: NAME [{...}]
+                if (preg_match('/ACTION:\s*([A-Z_]+)(?:\s*(\{.*\}))?/s', $generatedText, $matches)) {
                     $actionName = $matches[1];
-                    $jsonStr = trim($matches[2]);
-                    $actionParams = json_decode($jsonStr, true);
+                    $jsonStr = isset($matches[2]) ? trim($matches[2]) : '{}';
+                    $actionParams = json_decode($jsonStr, true) ?? [];
 
                     Log::info("Gemini Action: $actionName", $actionParams ?? []);
 
@@ -450,7 +469,36 @@ class AiAgentService
 
     protected function detectProduct(string $content): ?Product
     {
-        // 0. Check for Numeric Selection
+        // 0. Manual Alias Map (Handle common typos/variations)
+        $aliases = [
+            'eringi' => 'Eryngii',
+            'eringii' => 'Eryngii',
+            'melena' => 'Melena de León',
+            'reishi' => 'Reishi', // If exists
+            'ganoderma' => 'Reishi',
+            'shiitake' => 'Shiitake',
+            'shitake' => 'Shiitake',
+            'orellana' => 'Orellana',
+            'ostra' => 'Orellana',
+            'cardo' => 'Eryngii'
+        ];
+
+        $lowerContent = mb_strtolower($content);
+        foreach ($aliases as $aliasKey => $targetName) {
+            if (str_contains($lowerContent, $aliasKey)) {
+                // Find product by target name (approximate)
+                // We use LIKE to match "Melena de León Fresca" if target is "Melena de León"
+                $p = Product::where('name', 'like', "%{$targetName}%")
+                    ->where('is_active', true)
+                    ->first();
+                if ($p) {
+                    $this->updateProductContext($p);
+                    return $p;
+                }
+            }
+        }
+
+        // 0.5 Check for Numeric Selection
         if (preg_match('/^(\d+)$/', trim($content), $matches) || preg_match('/opcion (\d+)/i', $content, $matches) || preg_match('/el (\d+)/i', $content, $matches)) {
             $index = (int) end($matches);
             $context = session('ai_context', []);
@@ -466,8 +514,11 @@ class AiAgentService
             }
         }
 
+        // ... existing logic ...
+        // I will return to original method structure for the rest, 
+        // effectively checking aliases BEFORE regex.
+
         // PRE-FILTER: Detect Qualifiers
-        $lowerContent = mb_strtolower($content);
         $wantsDry = str_contains($lowerContent, 'seco') || str_contains($lowerContent, 'deshidratado');
         $wantsFresh = str_contains($lowerContent, 'fresco');
 
@@ -479,15 +530,13 @@ class AiAgentService
                     ->orWhere('name', 'like', '%deshidratado%')
                     ->orWhereHas(
                         'category',
-                        fn($c) => $c->where('slug', 'deshidratados') // Adjust slug if different
+                        fn($c) => $c->where('slug', 'deshidratados')
                             ->orWhere('name', 'like', '%deshidratado%')
                             ->orWhere('name', 'like', '%sec%')
                     );
             });
         } elseif ($wantsFresh) {
-            // If user explicitly asks for Fresh, prioritize it.
-            // Note: Often Fresh products don't have "Fresco" in the name, but rely on category.
-            // But avoiding negation filters is safer.
+            // Fresh logic
         }
 
         $allProducts = $query->pluck('name', 'id');
@@ -517,11 +566,6 @@ class AiAgentService
         $potentialKeywords = array_filter($words, fn($w) => mb_strlen($w) > 3 && !in_array($w, $this->stopWords));
 
         foreach ($potentialKeywords as $word) {
-            // Re-apply query filter logic here too check only against filtered candidates?
-            // Actually, we can reuse $query
-            // But strict WHERE name LIKE %word% might miss if we filtered too hard.
-            // Let's use the BASE query logic.
-
             $clonedQuery = clone $query;
             $product = $clonedQuery->where('name', 'like', "%{$word}%")->first();
 
@@ -533,6 +577,8 @@ class AiAgentService
 
         return null;
     }
+
+
 
     protected function isAvailabilityQuery(string $content): bool
     {
@@ -558,92 +604,92 @@ class AiAgentService
 
     protected function handleAvailabilityQuery(): array
     {
-        // 1. Fetch Categories with Active Products and Stock
-        // Use eager loading for products to check counts/stock
-        $categories = \App\Models\Category::whereHas('products', function ($q) {
-            $q->where('is_active', true)->where('stock', '>', 0);
-        })->with([
-                    'products' => function ($q) {
-                        $q->where('is_active', true)->where('stock', '>', 0);
-                    }
-                ])->get();
+        // 1. Fetch Active Products with Stock, grouped by Category
+        $products = Product::where('is_active', true)
+            ->where('stock', '>', 0)
+            ->with('category')
+            ->get();
 
-        if ($categories->isEmpty()) {
+        if ($products->isEmpty()) {
             return [
                 'type' => 'answer',
                 'message' => "Lo sentimos, en este momento no tenemos stock disponible. Vuelve pronto."
             ];
         }
 
-        // Logic to prioritize or alias categories as "Hongos Gourmet" (Fresh) and "Deshidratados" (Dry)
-        // Check if we have specific matches or just list them.
-        // User request: "buscar las categorias hongos gurmet y deshidratados"
-        // Since names might vary (e.g. "Hongos Frescos"), I will try to map them or just use the names we have.
-        // But I will group them or ensure the message logic is clean.
+        // 2. Group for Display
+        $groups = [
+            'frescos' => [
+                'title' => '🍄 Hongos Gourmet (Frescos)',
+                'products' => []
+            ],
+            'secos' => [
+                'title' => '🍂 Hongos Deshidratados (Secos)',
+                'products' => []
+            ],
+            'cultivo' => [
+                'title' => '🌱 Para Cultivo Casero',
+                'products' => []
+            ],
+            'otros' => [
+                'title' => '✨ Otros Productos',
+                'products' => []
+            ]
+        ];
 
-        // 2. Build List
-        $list = "";
-        $index = 1;
-        $categoryMap = [];
+        foreach ($products as $product) {
+            $catSlug = $product->category->slug ?? '';
+            $catName = strtolower($product->category->name ?? '');
+            $pName = strtolower($product->name);
 
-        // GROUPING LOGIC
-        $freshGroupIds = [];
-        $otherCategories = [];
-
-        foreach ($categories as $category) {
-            $slug = $category->slug;
-            if (in_array($slug, ['hongos-gourmet', 'medicina-ancestral'])) {
-                $freshGroupIds[] = $category->id;
+            // Logic to assign group
+            if (in_array($catSlug, ['hongos-gourmet', 'medicina-ancestral']) || str_contains($pName, 'fresc')) {
+                $groups['frescos']['products'][] = $product;
+            } elseif (str_contains($catSlug, 'deshidratado') || str_contains($catName, 'seco') || str_contains($pName, 'seco') || str_contains($pName, 'deshidratado')) {
+                $groups['secos']['products'][] = $product;
+            } elseif (str_contains($catSlug, 'cultivo') || str_contains($catSlug, 'semilla') || str_contains($catName, 'cultivo') || str_contains($pName, 'sustrato') || str_contains($pName, 'semilla')) {
+                $groups['cultivo']['products'][] = $product;
             } else {
-                $otherCategories[] = $category;
+                $groups['otros']['products'][] = $product;
             }
         }
 
-        $list = "";
-        $index = 1;
-        $categoryMap = [];
+        // 3. Build Message & Payload
+        $messageList = "";
+        $payload = [];
+        $displayedIds = [];
 
-        // 1. Add Fresh Group if exists
-        if (!empty($freshGroupIds)) {
-            $list .= "{$index}. **🍄 Hongos Frescos (Gourmet y Medicina)**\n";
-            $categoryMap[$index] = $freshGroupIds; // Store array of IDs
-            $index++;
-        }
+        foreach ($groups as $key => $group) {
+            if (empty($group['products']))
+                continue;
 
-        // 2. Add Others
-        foreach ($otherCategories as $category) {
-            if ($category->products->count() > 0) {
-                $displayName = $category->name;
-                if (stripos($category->name, 'seco') !== false || stripos($category->name, 'deshidratado') !== false) {
-                    $displayName = "🍂 Hongos Deshidratados (Secos)";
-                }
-                $list .= "{$index}. **{$displayName}**\n";
-                $categoryMap[$index] = $category->id; // Store single ID
-                $index++;
+            $messageList .= "* **{$group['title']}:**\n";
+
+            foreach ($group['products'] as $product) {
+                // Formatting for message: * **Name:** Description (optional)
+                // Use Short Description if available, else just name
+                $desc = $product->short_description ? ": " . Str::limit($product->short_description, 60) : "";
+                $messageList .= "  * **{$product->name}**{$desc}\n";
+
+                $payload[] = [
+                    'id' => $product->id,
+                    'name' => $product->name,
+                    'price' => $product->price, // Optional, can be useful for UI
+                    'category' => $group['title']
+                ];
+                $displayedIds[] = $product->id;
             }
         }
 
-        // 3. Update Context (Preserve existing keys if needed, but here we set new pending)
-        // We merged session at start of generateResponse, so $context has old data.
-        // But we want to ensure we don't wipe it when saving.
+        // 4. Update Context
         $context = session('ai_context', []);
-        $context['pending_suggestion_categories'] = $categoryMap;
+        $context['pending_suggestion_products'] = $displayedIds; // Store IDs shown
         session(['ai_context' => $context]);
 
         return [
             'type' => 'catalog',
-            'message' => "¡Excelente elección! Estos son los tipos de hongos que tenemos disponibles:<br><br>" . nl2br($list) . "<br>Selecciona la categoría que te interesa para ver los productos.",
-            'payload' => collect($categoryMap)->map(function ($val, $idx) use ($categories) {
-                // Determine name for Payload
-                $name = "Categoría {$idx}";
-                if (is_array($val)) {
-                    $name = "Hongos Frescos (Gourmet y Medicina)";
-                } else {
-                    $cat = $categories->firstWhere('id', $val);
-                    $name = $cat ? $cat->name : $name;
-                }
-                return ['id' => 0, 'name' => $name, 'index' => $idx]; // ID 0 for group/placeholder
-            })->values()->toArray()
+            'message' => "🍄 **¡Claro! En Ignia Fungi tenemos una variedad de hongos deliciosos y beneficiosos.**\n\nAquí te presento nuestro catálogo:\n\n" . nl2br($messageList) . "\n**¿Te gustaría saber más sobre alguno en particular o necesitas ayuda para elegir?**",
+            'payload' => $payload
         ];
     }
 
@@ -1003,11 +1049,21 @@ class AiAgentService
             if ($product->is_fresh) {
                 $isFreshRequest = true;
             }
+            // Pass strict detection to LLM
+            $context['detected_product_name'] = $product->name;
         } elseif ($lastProduct = $this->getLastProductConsulted()) {
-            // Fallback to memory
-            $product = $lastProduct; // Weak binding, might need confirmation if msg didn't mention it
-            if ($lastProduct->is_fresh) {
-                $isFreshRequest = true;
+            // Fallback to memory ONLY if intent is NOT specific to a new item
+            // e.g. "cuanto vale?" uses memory. "quiero melena" uses detection.
+            // If detection failed but user said "quiero" or "agrega", DO NOT fallback to old product.
+
+            $intentWords = ['quiero', 'dame', 'agrega', 'comprar', 'busco', 'tienes', 'vendes', 'pedido'];
+            $hasNewIntent = Str::contains(Str::lower($content), $intentWords);
+
+            if (!$hasNewIntent) {
+                $product = $lastProduct;
+                if ($lastProduct->is_fresh) {
+                    $isFreshRequest = true;
+                }
             }
         }
 
@@ -1161,9 +1217,12 @@ class AiAgentService
         // Robustness: Get IDs whether List or Map
         $ids = (is_array($confirmed) && !array_is_list($confirmed)) ? array_keys($confirmed) : $confirmed;
 
+        Log::info("Order Confirmation Debug: Initial IDs from context: " . json_encode($ids));
+
         // Fallback: If no confirmed list but we have a last product (e.g. direct flow)
         if (empty($ids) && isset($context['last_product_id'])) {
             $ids = [$context['last_product_id']];
+            Log::info("Order Confirmation Debug: Fallback to Last Product ID: " . $context['last_product_id']);
         }
 
         if (empty($ids) && isset($context['pending_suggestion_products'])) {
@@ -1186,9 +1245,9 @@ class AiAgentService
 
 
         // PRE-FILL SHIPPING DATA FOR CHECKOUT FIRST TO KNOW CONTEXT
-        $city = $context['city'] ?? 'Bogotá';
+        $city = $context['city'] ?? null;
         $location = $context['locality'] ?? null;
-        $isBogota = (Str::slug($city) === 'bogota');
+        $isBogota = ($city && Str::slug($city) === 'bogota');
 
         // FILTER PRODUCTS BASED ON CITY
         $productsAdded = [];
@@ -1226,7 +1285,10 @@ class AiAgentService
 
             \App\Helpers\CartManagement::addItemsToCart($id, 1);
             $productsAdded[] = $p->name;
+            Log::info("Order Confirmation Debug: Added to cart -> {$p->name} (ID: $id)");
         }
+
+        Log::info("Order Confirmation Debug: Loop finished. Products Added: " . implode(', ', $productsAdded));
 
         // Calculate estimated cost using Helper
         $shippingInfo = $this->getShippingInfo($city, $location);
@@ -1296,8 +1358,16 @@ class AiAgentService
 
         // PERSISTENCE PRE-CHECKOUT (CRITICAL)
         // Ensure checkout_shipping has the final location data before generating link
-        $finalCity = session('ai_context.city') ?? $context['city'] ?? 'Bogotá';
+        $finalCity = session('ai_context.city') ?? $context['city'] ?? null;
         $finalLocality = session('ai_context.locality') ?? $context['locality'] ?? null;
+
+        if (!$finalCity) {
+            return [
+                'type' => 'question',
+                'message' => "Para poder calcular el envío y generar tu orden, necesito saber: ¿En qué ciudad te encuentras?"
+            ];
+        }
+
         $shippingInfo = $this->getShippingInfo($finalCity, $finalLocality);
 
         session()->put('checkout_shipping', [
@@ -1398,8 +1468,45 @@ class AiAgentService
             return ['error' => "Lo siento, no cubrimos esa ciudad en nuestra base de datos. (No encontré coincidencias cercanas para '{$city}')"];
         }
 
+        // 2.5 RESTRICTION CHECK (Fresh vs City)
+        // If City is NOT Bogota, check if we have Fresh products in context
+        if (Str::slug($matchedCity) !== 'bogota') {
+            $context = session('ai_context', []);
+            $confirmed = $context['confirmed_products'] ?? [];
+            // Normalize to list of IDs
+            $ids = (is_array($confirmed) && !array_is_list($confirmed)) ? array_keys($confirmed) : $confirmed;
+
+            // Also check last consulted if confirmed is empty
+            if (empty($ids) && isset($context['last_product_id'])) {
+                $ids = [$context['last_product_id']];
+            }
+
+            if (!empty($ids)) {
+                $hasFresh = false;
+                foreach ($ids as $pid) {
+                    $p = Product::find($pid);
+                    if ($p) {
+                        $isFreshProduct = ($p->category && in_array($p->category->slug, ['hongos-gourmet', 'medicina-ancestral'])) || str_contains(strtolower($p->name), 'fresc');
+                        if ($isFreshProduct) {
+                            $hasFresh = true;
+                            break;
+                        }
+                    }
+                }
+
+                if ($hasFresh) {
+                    // BLOCK
+                    return [
+                        'error' => "Restricción: Veo que estás en {$matchedCity}. Por la delicadeza de nuestros productos frescos, solo los enviamos en Bogotá. Te invito a probar nuestras versiones deshidratadas que sí llegan a todo el país."
+                    ];
+                }
+            }
+        }
+
         // Logic for Bogotá
         if (Str::slug($matchedCity) === 'bogota') {
+            Log::info("Shipping Debug: Matched City BOGOTA. Locality provided: " . ($locality ?? 'NULL'));
+
             if (!$locality) {
                 return ['error' => "¿En qué localidad de Bogotá te encuentras? (ej. Usaquén, Chapinero)"];
             }
@@ -1409,12 +1516,17 @@ class AiAgentService
             $matchedLocality = $this->findBestMatch($locality, $dbLocalities);
 
             if (!$matchedLocality) {
-                return ['error' => "No encontramos cobertura específica para esa localidad ('{$locality}')."];
+                Log::warning("Shipping Debug: Invalid Locality '{$locality}'");
+                return ['error' => "No encontramos cobertura específica para esa localidad ('{$locality}'). Las localidades válidas son: " . $dbLocalities->take(5)->implode(', ') . "..."];
             }
 
             $zone = ShippingZone::where('city', $matchedCity)
                 ->where('locality', $matchedLocality)
                 ->first();
+
+            if (!$zone) {
+                return ['error' => "Error interno: Zona no encontrada para {$matchedCity} - {$matchedLocality}"];
+            }
 
             return ['price' => $zone->price, 'city' => $matchedCity, 'locality' => $matchedLocality];
         }
@@ -1456,10 +1568,17 @@ class AiAgentService
         // 3. Update Context (Side Effect to keep session consistent)
         $this->updateProductContext($product);
 
+        // Parse weight from name (e.g. "500 gr", "1 kilo", "250g")
+        $weight = null;
+        if (preg_match('/(\d+(\.\d+)?)\s*(kilo|kg|gr|g|gramos)/i', $product->name, $matches)) {
+            $weight = $matches[0];
+        }
+
         return [
             'product' => $product->name,
             'stock' => $product->stock,
-            'price' => $product->price
+            'price' => $product->price,
+            'unit_weight' => $weight ?? '1 unidad'
         ];
     }
 
