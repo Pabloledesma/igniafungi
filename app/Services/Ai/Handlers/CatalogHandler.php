@@ -44,7 +44,7 @@ class CatalogHandler implements IntentHandler, ToolExecutor
             return true;
         }
 
-        return preg_match('/(que|qué|cuales|cuáles|ver|mostrar).*(venden|tienen|ofrecen|productos|hay|disponibles)/i', $content) === 1;
+        return preg_match('/(que|qué|cuales|cuáles|ver|mostrar).*(vend(?:en|es)|tien(?:en|es)|ofrec(?:en|es)|maneja[ns]?|productos|hay|disponibles)/i', $content) === 1;
     }
 
     public function handle(string $content, ConversationContext $context): array
