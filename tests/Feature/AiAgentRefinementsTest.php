@@ -449,4 +449,25 @@ class AiAgentRefinementsTest extends TestCase
         // Ensure OrderHandler caught it, not Gemini or ShippingHandler
         // OrderHandler returns 'system' type directly.
     }
+
+    /** @test */
+    public function it_handles_embedded_genera_command()
+    {
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+
+        $context = [
+            'confirmed_products' => [$this->freshProduct->id],
+            'city' => 'Bogotá',
+            'locality' => 'Engativá'
+        ];
+        session(['ai_context' => $context]);
+        $this->aiService = app(AiAgentService::class);
+
+        // "ya te dije donde vivo, genera la orden porfavor"
+        $response = $this->aiService->processMessage("ya te dije donde vivo, genera la orden porfavor", '127.0.0.1', $context);
+
+        $this->assertEquals('system', $response['type']);
+        $this->assertStringContainsString('He añadido los productos', $response['message']);
+    }
 }
