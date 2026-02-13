@@ -276,6 +276,11 @@ class AiAgentRefinementsTest extends TestCase
         $cookie = \App\Helpers\CartManagement::getCartItemsFromCookie();
         $this->assertCount(1, $cookie, "Cart should have 1 item");
         $this->assertEquals($this->freshProduct->id, $cookie[0]['product_id']);
+
+        // Check session fallback for pending cart products
+        $pending = session('pending_cart_products');
+        $this->assertNotNull($pending, "Session should have pending_cart_products");
+        $this->assertContains($this->freshProduct->id, $pending);
     }
 
     /** @test */

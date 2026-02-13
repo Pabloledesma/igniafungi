@@ -195,14 +195,18 @@ class OrderHandler implements IntentHandler
         // Success - Generate Link
         $cartUrl = route('cart');
 
-        // Add confirmed products to Cart Cookie via Helper execution context? 
-        // Actually, in the Service, it called `CartManagement::addItemToCartWithCookie($product->id, 1);`
-        // We do that here:
+        // Collect product IDs to add to cart
+        $cartProductIds = [];
         foreach ($products as $p) {
             if (!$this->isFreshProduct($p) || $isBogota) {
+                $cartProductIds[] = $p->id;
                 \App\Helpers\CartManagement::addItemsToCart($p->id, 1);
             }
         }
+
+        // Persist pending cart items in session as fallback
+        // Cookie::queue() may not reach the browser reliably in Livewire AJAX context
+        session()->put('pending_cart_products', $cartProductIds);
 
         // Clear confirmed context
         $context->forget('confirmed_products');

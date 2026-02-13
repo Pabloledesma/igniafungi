@@ -207,6 +207,15 @@ class CartPage extends Component
 
     public function mount()
     {
+        // Load pending cart products from session (set by AI agent's OrderHandler)
+        // This is the reliable fallback since Cookie::queue() in Livewire AJAX
+        // may not deliver the cookie to the browser before the user navigates here.
+        if ($pending = session()->pull('pending_cart_products')) {
+            foreach ($pending as $productId) {
+                CartManagement::addItemsToCart($productId, 1);
+            }
+        }
+
         $this->refreshCart(CartManagement::getCartItemsFromCookie());
         $this->cities = CartManagement::getColombiaCities();
         sort($this->cities);
