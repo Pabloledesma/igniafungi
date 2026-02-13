@@ -54,6 +54,13 @@ class AiAgentService
     {
         $this->context->reload();
 
+        // Apply explicit product IDs from UI selections (catalog checkboxes/buttons)
+        if (! empty($sessionContext['explicit_product_ids'])) {
+            foreach ($sessionContext['explicit_product_ids'] as $productId) {
+                $this->context->addProduct((int) $productId);
+            }
+        }
+
         if ($cached = $this->deduplicate($content, $ip)) {
             return $cached;
         }

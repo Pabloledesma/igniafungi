@@ -475,4 +475,82 @@ class AiAgentRefinementsTest extends TestCase
         $this->assertEquals('system', $response['type']);
         $this->assertStringContainsString('He añadido los productos', $response['message']);
     }
+
+    /** @test */
+    public function it_registers_explicit_product_ids_from_ui_selection()
+    {
+        $this->aiService = app(AiAgentService::class);
+
+        // Simulate product selection from catalog UI via explicit_product_ids
+        $this->mockGeminiAnswer('He seleccionado', 'He agregado Pioppino Fresco y Melena de León Seca a tu lista.');
+
+        $response = $this->aiService->processMessage(
+            'He seleccionado: Pioppino Fresco, Melena de León Seca',
+            '127.0.0.1',
+            ['explicit_product_ids' => [$this->freshProduct->id, $this->dryProduct->id]]
+        );
+
+        // Verify products were added to confirmed_products in context
+        $confirmed = session('ai_context')['confirmed_products'] ?? [];
+        $this->assertContains($this->freshProduct->id, $confirmed, 'Fresh product should be in confirmed_products');
+        $this->assertContains($this->dryProduct->id, $confirmed, 'Dry product should be in confirmed_products');
+    }
+
+    /** @test */
+    public function it_catches_locality_and_returns_structured_actions()
+    {
+        $user = User::factory()->create();
+        $this->actingAs($user);
+
+        // Setup: products confirmed, city set to Bogotá, no locality
+        session(['ai_context' => [
+            'confirmed_products' => [$this->dryProduct->id],
+            'city' => 'Bogotá',
+        ]]);
+        $this->aiService = app(AiAgentService::class);
+
+        // Act: user responds with locality
+        $response = $this->aiService->processMessage('engativa', '127.0.0.1', []);
+
+        // Assert: ShippingHandler catches it and returns structured response
+        $this->assertEquals('system', $response['type']);
+        $this->assertStringContainsString('Engativá', $response['message']);
+        $this->assertArrayHasKey('actions', $response);
+
+        // Verify actions contain generate_order (not link)
+        $actionTypes = array_column($response['actions'], 'type');
+        $this->assertContains('generate_order', $actionTypes, 'Should have generate_order action');
+        $this->assertContains('more_products', $actionTypes, 'Should have more_products action');
+    }
+
+    /** @test */
+    public function it_preserves_products_through_full_flow()
+    {
+        $user = User::factory()->create(['city' => 'Bogotá']);
+        $this->actingAs($user);
+
+        // Step 1: Simulate UI product selection via explicit_product_ids
+        $this->mockGeminiAnswer('He seleccionado', 'He agregado los productos a tu lista.');
+        $this->aiService->processMessage(
+            'He seleccionado: Melena de León Seca',
+            '127.0.0.1',
+            ['explicit_product_ids' => [$this->dryProduct->id]]
+        );
+
+        // Step 2: Provide city
+        $this->aiService = app(AiAgentService::class);
+        $this->aiService->processMessage('Bogotá', '127.0.0.1', []);
+
+        // Step 3: Provide locality
+        $this->aiService = app(AiAgentService::class);
+        $this->aiService->processMessage('engativa', '127.0.0.1', []);
+
+        // Step 4: Generate order
+        $this->aiService = app(AiAgentService::class);
+        $response = $this->aiService->processMessage('generar orden', '127.0.0.1', []);
+
+        // Assert: Order was generated successfully (not "no sé qué producto")
+        $this->assertEquals('system', $response['type']);
+        $this->assertStringContainsString('He añadido los productos', $response['message']);
+    }
 }

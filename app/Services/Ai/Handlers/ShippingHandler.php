@@ -49,12 +49,45 @@ class ShippingHandler implements IntentHandler, ToolExecutor
         }
 
         // Also handle if user just dropped a known city name (implicit location update)
-        // This was logic in AiAgentService::processMessage "Maybe just a city name?"
         if ($this->inferLocationFromContent($content, $this->cities)) {
             return true;
         }
 
+        // Catch locality responses: city is Bogotá but no locality yet
+        if ($context->get('city') && ! $context->get('locality') && Str::slug($context->get('city')) === 'bogota') {
+            $match = $this->matchLocality($content);
+            if ($match) {
+                return true;
+            }
+        }
+
         return false;
+    }
+
+    /**
+     * Try to match user input against known Bogotá localities.
+     */
+    protected function matchLocality(string $content): ?string
+    {
+        $zones = ShippingZone::where('city', 'Bogotá')->whereNotNull('locality')->get();
+
+        foreach ($zones as $zone) {
+            if (Str::contains(strtolower($content), strtolower($zone->locality))) {
+                return $zone->locality;
+            }
+
+            // Fuzzy match (e.g. "engativa" → "Engativá")
+            $distance = levenshtein(
+                Str::slug(trim($content), ' '),
+                Str::slug($zone->locality, ' ')
+            );
+
+            if ($distance <= 2) {
+                return $zone->locality;
+            }
+        }
+
+        return null;
     }
 
     public function handle(string $content, ConversationContext $context): array
@@ -85,20 +118,12 @@ class ShippingHandler implements IntentHandler, ToolExecutor
         $location = null;
 
         if ($isBogota) {
-            // Try to extract locality from content
-            // Very basic heuristic for now or use DB match
-            $zones = ShippingZone::where('city', 'Bogotá')->get();
-            foreach ($zones as $zone) {
-                if (Str::contains(strtolower($content), strtolower($zone->locality))) {
-                    $location = $zone->locality;
-                    break;
-                }
-            }
+            // Try to extract locality from content using shared method
+            $location = $this->matchLocality($content);
 
             if ($location) {
                 $context->set('locality', $location);
             } elseif (! $context->get('locality')) {
-                // If we don't know locality yet
                 return [
                     'type' => 'question',
                     'message' => 'Para Bogotá, el precio varía según la localidad. ¿En qué localidad te encuentras?',
@@ -138,9 +163,15 @@ class ShippingHandler implements IntentHandler, ToolExecutor
         }
         $msg .= " tiene un costo de \${$formattedPrice}.";
 
-        // Append order closure prompt if we have items
-        if (! empty($context->getConfirmedProductIds())) {
-            $msg .= ' ¿Deseas agregar algún otro producto al pedido o generamos la orden?';
+        // Append product list and closure prompt if we have items
+        $confirmedIds = $context->getConfirmedProductIds();
+        if (! empty($confirmedIds)) {
+            $products = \App\Models\Product::whereIn('id', $confirmedIds)->pluck('name');
+            $msg .= "\n\nEn tu lista tienes:\n";
+            foreach ($products as $name) {
+                $msg .= "- {$name}\n";
+            }
+            $msg .= "\n¿Qué deseas hacer?";
         }
 
         $response = [
@@ -148,12 +179,11 @@ class ShippingHandler implements IntentHandler, ToolExecutor
             'message' => $msg,
         ];
 
-        if (! empty($context->getConfirmedProductIds())) {
+        if (! empty($confirmedIds)) {
             $response['actions'] = [
-                ['type' => 'more_products', 'label' => 'Agregar más productos'],
-                ['type' => 'link', 'label' => 'Generar Orden', 'url' => route('cart')], // Or just a trigger
+                ['type' => 'generate_order', 'label' => '🛒 Generar Orden'],
+                ['type' => 'more_products', 'label' => '➕ Agregar más productos'],
             ];
-            // Actually the test expects 'more_products' type action.
         }
 
         return $response;
