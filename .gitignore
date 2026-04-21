@@ -24,3 +24,6 @@ Homestead.yaml
 Thumbs.db
 docker-compose.yml
 Deckerfile.ai
+
+# Salesforce CLI
+.sfdx/

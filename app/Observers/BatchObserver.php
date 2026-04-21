@@ -1,16 +1,20 @@
 <?php
+
 namespace App\Observers;
 
+use App\Jobs\SyncBatchToSalesforce;
 use App\Models\Batch;
 use App\Models\Phase;
-use Illuminate\Support\Facades\Log;
 use Filament\Notifications\Notification;
+use Illuminate\Support\Facades\Log;
 
 class BatchObserver
 {
     protected static $processing = null;
+
     // Propiedad para evitar duplicidad
     protected static array $processedBatches = [];
+
     public static $isSyncingLoss = false;
 
     public static function clearProcessed(): void
@@ -27,14 +31,12 @@ class BatchObserver
             $batch->user_id = auth()->id();
         }
 
-
-        if (!$batch->code) {
+        if (! $batch->code) {
             $batch->code = $this->generateBatchCode($batch);
         }
 
-
         // Aseguramos que el status inicial sea preparación si no viene uno definido
-        if (!$batch->status) {
+        if (! $batch->status) {
             $batch->status = 'active';
         }
     }
@@ -70,6 +72,8 @@ class BatchObserver
         if (in_array($batch->status, ['discarded', 'contaminated'])) {
             $this->createHistoricalLossRecord($batch);
         }
+
+        SyncBatchToSalesforce::dispatch($batch->id);
     }
 
     /**
@@ -78,7 +82,7 @@ class BatchObserver
     public function updated(Batch $batch): void
     {
         // --- CONTAMINATION SYNC (Batch -> BatchLoss) ---
-        if (!self::$isSyncingLoss && $batch->isDirty('contaminated_quantity')) {
+        if (! self::$isSyncingLoss && $batch->isDirty('contaminated_quantity')) {
             $newVal = $batch->contaminated_quantity;
             $oldVal = $batch->getOriginal('contaminated_quantity');
             $diff = $newVal - $oldVal;
@@ -121,21 +125,23 @@ class BatchObserver
                     // Expected: currentQty = originalQty - diff.
                     // If currentQty == originalQty, then it wasn't deducted.
 
-                    /* 
+                    /*
                     // Comentado para evitar doble descuento si el formulario ya lo hizo.
                     // Solo activamos si detectamos que no se bajó.
                     if ($batch->quantity == $batch->getOriginal('quantity')) {
-                         $batch->decrement('quantity', $diff); 
+                         $batch->decrement('quantity', $diff);
                     }
                     */
 
                 } catch (\Exception $e) {
-                    Log::warning("Error creando pérdida automática: " . $e->getMessage());
+                    Log::warning('Error creando pérdida automática: '.$e->getMessage());
                 }
 
                 self::$isSyncingLoss = false;
             }
         }
+
+        SyncBatchToSalesforce::dispatch($batch->id);
     }
 
     /**
@@ -156,13 +162,13 @@ class BatchObserver
 
         if ($batch->isDirty('quantity') && (int) $batch->quantity === 0) {
             // Only finalize if we are not actively discarding/contaminating it
-            if (!in_array($batch->status, ['contaminated', 'discarded'])) {
+            if (! in_array($batch->status, ['contaminated', 'discarded'])) {
                 $batch->status = 'finalized';
 
                 $now = now()->format('Y-m-d H:i');
                 $user_name = auth()->user()->name ?? 'Sistema';
 
-                if (!str_contains($batch->observations ?? '', 'LOTE FINALIZADO')) {
+                if (! str_contains($batch->observations ?? '', 'LOTE FINALIZADO')) {
                     $batch->observations .= "\n- [{$now}] {$user_name}: El lote ha llegado a 0 unidades y se ha finalizado automáticamente.";
                 }
             }
@@ -200,9 +206,8 @@ class BatchObserver
             }
         }
 
-
         // --- NEW LOGIC: Delayed Spawn Deduction ---
-        if ($batch->isDirty('strain_id') && $batch->strain_id && !$batch->getOriginal('strain_id')) {
+        if ($batch->isDirty('strain_id') && $batch->strain_id && ! $batch->getOriginal('strain_id')) {
             $this->deductSpawnFromUpdate($batch);
         }
     }
@@ -220,8 +225,9 @@ class BatchObserver
         $phase = \App\Models\Phase::where('name', 'like', "%{$phaseName}%")->first()
             ?? \App\Models\Phase::orderBy('order')->first();
 
-        if (!$phase) {
+        if (! $phase) {
             Log::warning("No se pudo registrar pérdida histórica para Lote {$batch->code}: No hay fases en el sistema.");
+
             return;
         }
 
@@ -230,7 +236,7 @@ class BatchObserver
         $reason = 'Legado / Histórico';
 
         // "Motivo Detallado" (details) comes from observations
-        $details = !empty($batch->observations)
+        $details = ! empty($batch->observations)
             ? $batch->observations
             : 'Registro Histórico / Contaminación Inicial';
 
@@ -240,7 +246,7 @@ class BatchObserver
             'phase_id' => $phase->id,
             'quantity' => $batch->quantity,
             'reason' => $reason,
-            'details' => $details . ". Original Date: " . ($batch->inoculation_date?->format('Y-m-d') ?? 'N/A'),
+            'details' => $details.'. Original Date: '.($batch->inoculation_date?->format('Y-m-d') ?? 'N/A'),
             'user_id' => auth()->id() ?? $batch->user_id,
             'created_at' => $batch->inoculation_date ?? now(),
             'updated_at' => now(),
@@ -254,12 +260,12 @@ class BatchObserver
      */
     private function setEstimatedHarvestDate(Batch $batch): void
     {
-        if (!$batch->inoculation_date) {
+        if (! $batch->inoculation_date) {
             return;
         }
 
         $strain = $batch->strain;
-        if (!$strain && $batch->strain_id) {
+        if (! $strain && $batch->strain_id) {
             $strain = \App\Models\Strain::find($batch->strain_id);
         }
 
@@ -282,7 +288,7 @@ class BatchObserver
         $phaseId = $batch->phase_id;
 
         // 2. Si es null, buscamos en la estructura compleja de Livewire/Filament
-        if (!$phaseId) {
+        if (! $phaseId) {
             $snapshot = request()->input('components.0.snapshot');
             if ($snapshot) {
                 $decoded = json_decode($snapshot, true);
@@ -320,7 +326,7 @@ class BatchObserver
         // Histórico: Si el estado NO es activo (es decir, completado, descartado, etc.) al crear
         if ($batch->status !== 'active') {
             // Opcional: Prefijo H- para históricos
-            // $prefix = "H-" . $prefix; 
+            // $prefix = "H-" . $prefix;
         }
 
         // 2. Determinar la fecha (Inoculation Date o Now)
@@ -342,7 +348,7 @@ class BatchObserver
                 ->where('id', '!=', $batch->id) // Ignorar el mismo lote
                 ->exists();
 
-            if (!$exists) {
+            if (! $exists) {
                 return $candidateCode;
             }
             // Si existe, fallamos al método estándar (buscar el último + 1)
@@ -376,14 +382,16 @@ class BatchObserver
         // Historical batches (completed/finalized) should NOT affect current stock.
         if ($batch->status !== 'active') {
             Log::info("Lote {$batch->code}: Omitiendo descuento de inventario por ser histórico/no-activo (Status: {$batch->status}).");
+
             return;
         }
 
         // Forzamos la carga de la receta si no está presente
         $recipe = $batch->recipe()->with('supplies')->first();
 
-        if (!$recipe || $recipe->supplies->isEmpty()) {
+        if (! $recipe || $recipe->supplies->isEmpty()) {
             Log::warning("El lote {$batch->id} no tiene receta o insumos vinculados.");
+
             return;
         }
 
@@ -395,10 +403,10 @@ class BatchObserver
         // Peso Sólido (Materia Seca)
         $dryWeight = $wetWeight * $dryRatio;
 
-        Log::info("Cálculo de inventario (Nuevo Modelo):", [
+        Log::info('Cálculo de inventario (Nuevo Modelo):', [
             'peso_humedo_input' => $wetWeight,
             'ratio_solidos' => $dryRatio,
-            'masa_seca_calculada' => $dryWeight
+            'masa_seca_calculada' => $dryWeight,
         ]);
 
         foreach ($recipe->supplies as $supply) {
@@ -421,15 +429,16 @@ class BatchObserver
                 // --- LAZY DEDUCTION LOGIC ---
                 // If the supply seems to be "Spawn/Semilla" and we don't have a strain yet, SKIP IT.
                 // We will deduct it later when the strain is assigned (in updating event).
-                if (!$batch->strain_id && (stripos($supply->name, 'Semilla') !== false || stripos($supply->name, 'Inoculo') !== false)) {
+                if (! $batch->strain_id && (stripos($supply->name, 'Semilla') !== false || stripos($supply->name, 'Inoculo') !== false)) {
                     $batch->observations .= "\n- [Info] Deducción de {$supply->name} pospuesta hasta asignación de cepa.";
+
                     continue;
                 }
 
                 // USAR decrement() directamente en la base de datos
                 $supply->decrement('quantity', $amountToDeduct);
 
-                $batch->observations .= "\n- [Insumo] {$supply->name}: " . round($amountToDeduct, 4) . " {$supply->unit} descontados.";
+                $batch->observations .= "\n- [Insumo] {$supply->name}: ".round($amountToDeduct, 4)." {$supply->unit} descontados.";
             }
         }
 
@@ -468,7 +477,7 @@ class BatchObserver
         // 3. CALCULAR Y GUARDAR COSTO DE PRODUCCIÓN
         $estimatedCost = $recipe->getEstimatedCost($totalHydratedWeight, $batch->quantity);
         $batch->production_cost = $estimatedCost;
-        $batch->observations .= "\n- [Financiero] Costo Estimado: $" . number_format($estimatedCost, 0);
+        $batch->observations .= "\n- [Financiero] Costo Estimado: $".number_format($estimatedCost, 0);
 
         $batch->saveQuietly();
     }
@@ -480,10 +489,11 @@ class BatchObserver
     {
         $recipe = $batch->recipe()->with('supplies')->first();
 
-        if (!$recipe)
+        if (! $recipe) {
             return;
+        }
 
-        // Calculate Dry Weight again 
+        // Calculate Dry Weight again
         $wetWeight = $batch->initial_wet_weight;
         $dryRatio = $recipe->dry_weight_ratio ?? 0.40;
         $dryWeight = $wetWeight * $dryRatio;
@@ -500,17 +510,19 @@ class BatchObserver
                     $amountToDeduct = $supply->pivot->value * $batch->quantity;
                 }
 
-                if ($amountToDeduct <= 0)
+                if ($amountToDeduct <= 0) {
                     continue;
+                }
 
                 // Ensure we have the strain model
                 $strain = $batch->strain;
-                if (!$strain && $batch->strain_id) {
+                if (! $strain && $batch->strain_id) {
                     $strain = \App\Models\Strain::find($batch->strain_id);
                 }
 
-                if (!$strain) {
+                if (! $strain) {
                     Log::warning("Batch {$batch->code}: Strain ID {$batch->strain_id} set but Strain model not found.");
+
                     continue;
                 }
 
@@ -524,7 +536,7 @@ class BatchObserver
 
                 if ($specificSupply) {
                     $specificSupply->decrement('quantity', $amountToDeduct);
-                    $batch->observations .= "\n- [Insumo Diferido] {$specificSupply->name}: " . round($amountToDeduct, 4) . " {$specificSupply->unit} descontados (vía {$supply->name}).";
+                    $batch->observations .= "\n- [Insumo Diferido] {$specificSupply->name}: ".round($amountToDeduct, 4)." {$specificSupply->unit} descontados (vía {$supply->name}).";
                 } else {
                     $batch->observations .= "\n- [Alerta] No se encontró el insumo específico '{$specificName}'. No se descontó inventario para la semilla.";
                     Log::warning("Batch {$batch->code}: No specific spawn found for '{$specificName}'.");

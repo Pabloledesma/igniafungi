@@ -2,9 +2,9 @@
 
 namespace App\Observers;
 
+use App\Jobs\SyncHarvestToSalesforce;
 use App\Models\Harvest;
 use App\Models\Product;
-use Illuminate\Support\Facades\Log;
 
 class HarvestObserver
 {
@@ -27,6 +27,8 @@ class HarvestObserver
                 $product->increment('stock', $harvest->weight);
             });
         }
+
+        SyncHarvestToSalesforce::dispatch($harvest->id);
     }
 
     /**
