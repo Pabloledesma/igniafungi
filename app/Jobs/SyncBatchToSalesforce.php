@@ -31,5 +31,7 @@ class SyncBatchToSalesforce implements ShouldQueue
             'quantity' => $batch->quantity,
             'initial_wet_weight' => $batch->initial_wet_weight,
         ]);
+
+        PullBatchFromSalesforce::dispatch($this->batchId)->delay(now()->addSeconds(5));
     }
 }

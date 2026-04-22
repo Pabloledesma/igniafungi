@@ -36,7 +36,12 @@ class Batch extends Model
         'expected_yield',
         'estimated_harvest_date',
         'is_historical',
-        'origin_code'
+        'origin_code',
+        'sf_eficiencia_biologica',
+        'sf_total_cosechado_kg',
+        'sf_cantidad_cosechas',
+        'sf_archivado',
+        'sf_synced_at',
     ];
 
     protected $attributes = [

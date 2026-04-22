@@ -74,6 +74,61 @@ class SalesforceService
         return $records[0]['Id'];
     }
 
+    private function apexClient(): \Illuminate\Http\Client\PendingRequest
+    {
+        $token = $this->getAccessToken();
+        $this->baseUrl = $token['instance_url'];
+
+        return Http::withToken($token['access_token'])
+            ->baseUrl("{$this->baseUrl}/services/apexrest/ignia/");
+    }
+
+    /**
+     * Apex REST devuelve el body como un string JSON codificado dos veces.
+     * Este método normaliza la respuesta a un array PHP.
+     */
+    private function parseApexResponse(\Illuminate\Http\Client\Response $response, string $context): array
+    {
+        if ($response->failed()) {
+            throw new RuntimeException("Salesforce {$context} failed: ".$response->body());
+        }
+
+        $raw = $response->body();
+        $decoded = json_decode($raw, true);
+
+        // Si el resultado es un string, está doblemente codificado
+        if (is_string($decoded)) {
+            $decoded = json_decode($decoded, true);
+        }
+
+        if (! ($decoded['success'] ?? false)) {
+            throw new RuntimeException("Salesforce {$context} error: ".($decoded['error'] ?? 'unknown'));
+        }
+
+        return $decoded['data'] ?? [];
+    }
+
+    public function getLote(int $igniaId): array
+    {
+        $response = $this->apexClient()->get("lotes/{$igniaId}");
+
+        return $this->parseApexResponse($response, 'getLote');
+    }
+
+    public function getAllLotes(): array
+    {
+        $response = $this->apexClient()->get('lotes/');
+
+        return $this->parseApexResponse($response, 'getAllLotes');
+    }
+
+    public function patchLote(int $igniaId, array $data): array
+    {
+        $response = $this->apexClient()->patch("lotes/{$igniaId}", $data);
+
+        return $this->parseApexResponse($response, 'patchLote');
+    }
+
     public function upsertBatch(array $data): array
     {
         $igniaId = $data['id'];
