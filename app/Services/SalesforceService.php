@@ -129,6 +129,13 @@ class SalesforceService
         return $this->parseApexResponse($response, 'patchLote');
     }
 
+    public function patchLoteBySfId(string $sfId, array $data): array
+    {
+        $response = $this->apexClient()->patch("lotes/{$sfId}", $data);
+
+        return $this->parseApexResponse($response, 'patchLoteBySfId');
+    }
+
     public function upsertBatch(array $data): array
     {
         $igniaId = $data['id'];
