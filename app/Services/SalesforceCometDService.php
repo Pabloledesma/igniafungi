@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use GuzzleHttp\Cookie\CookieJar;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -16,10 +17,15 @@ class SalesforceCometDService
 
     private string $accessToken = '';
 
+    private CookieJar $cookieJar;
+
     /** @var array<string, int> channel => replayId */
     private array $subscriptions = [];
 
-    public function __construct(private readonly SalesforceService $salesforce) {}
+    public function __construct(private readonly SalesforceService $salesforce)
+    {
+        $this->cookieJar = new CookieJar;
+    }
 
     private function nextId(): string
     {
@@ -36,6 +42,7 @@ class SalesforceCometDService
     {
         $response = Http::timeout(120)
             ->withToken($this->accessToken)
+            ->withOptions(['cookies' => $this->cookieJar])
             ->post($this->cometdUrl(), $messages);
 
         if ($response->status() === 401) {
@@ -45,6 +52,7 @@ class SalesforceCometDService
 
             $response = Http::timeout(120)
                 ->withToken($this->accessToken)
+                ->withOptions(['cookies' => $this->cookieJar])
                 ->post($this->cometdUrl(), $messages);
         }
 
@@ -60,6 +68,9 @@ class SalesforceCometDService
         $token = $this->salesforce->getToken();
         $this->instanceUrl = $token['instance_url'];
         $this->accessToken = $token['access_token'];
+
+        // Fresh cookie jar for each new Bayeux session so BAYEUX_BROWSER is reset
+        $this->cookieJar = new CookieJar;
 
         $response = $this->post([[
             'id' => $this->nextId(),
