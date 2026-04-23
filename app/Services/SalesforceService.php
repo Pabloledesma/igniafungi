@@ -23,6 +23,15 @@ class SalesforceService
         $this->loginUrl = config('salesforce.login_url', 'https://login.salesforce.com');
     }
 
+    public function getToken(bool $forceRefresh = false): array
+    {
+        if ($forceRefresh) {
+            Cache::forget('salesforce_token');
+        }
+
+        return $this->getAccessToken();
+    }
+
     private function getAccessToken(): array
     {
         return Cache::remember('salesforce_token', 3500, function () {
